@@ -7,6 +7,7 @@ import (
 	"github.com/sivchari/awsim/internal/server"
 	// Register services via init().
 	_ "github.com/sivchari/awsim/internal/service/s3"
+	_ "github.com/sivchari/awsim/internal/service/sqs"
 )
 
 func main() {
