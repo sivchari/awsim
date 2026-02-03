@@ -41,6 +41,7 @@ type Server struct {
 }
 
 // New creates a new server with the given configuration.
+// Services registered via init() are automatically loaded.
 func New(config Config) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: config.LogLevel,
@@ -49,12 +50,19 @@ func New(config Config) *Server {
 	registry := service.NewRegistry()
 	router := NewRouter(logger)
 
-	return &Server{
+	srv := &Server{
 		config:   config,
 		router:   router,
 		registry: registry,
 		logger:   logger,
 	}
+
+	// Auto-register services from global registry
+	for _, svc := range service.Services() {
+		srv.RegisterService(svc)
+	}
+
+	return srv
 }
 
 // Registry returns the service registry.
