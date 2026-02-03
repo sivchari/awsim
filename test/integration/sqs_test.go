@@ -27,7 +27,7 @@ func newSQSClient(t *testing.T) *sqs.Client {
 	}
 
 	return sqs.NewFromConfig(cfg, func(o *sqs.Options) {
-		o.BaseEndpoint = aws.String(awsimEndpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
 
