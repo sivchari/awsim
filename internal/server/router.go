@@ -24,11 +24,20 @@ type Router struct {
 
 // NewRouter creates a new router.
 func NewRouter(logger *slog.Logger) *Router {
-	return &Router{
+	r := &Router{
 		mux:    http.NewServeMux(),
 		routes: make([]Route, 0),
 		logger: logger,
 	}
+
+	// Register health endpoint
+	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+	})
+
+	return r
 }
 
 // Handle registers a handler for the given method and pattern.
