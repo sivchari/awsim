@@ -4,6 +4,20 @@ import (
 	"sync"
 )
 
+// globalRegistry is the default registry for auto-registration via init().
+var globalRegistry = NewRegistry()
+
+// Register adds a service to the global registry.
+// This is typically called from init() in each service package.
+func Register(svc Service) {
+	globalRegistry.Register(svc)
+}
+
+// Services returns all services from the global registry.
+func Services() []Service {
+	return globalRegistry.All()
+}
+
 // Registry manages service registration and discovery.
 type Registry struct {
 	mu       sync.RWMutex
