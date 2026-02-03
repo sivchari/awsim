@@ -1,0 +1,10 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates
+
+COPY awsim /usr/local/bin/awsim
+
+EXPOSE 4566
+
+ENTRYPOINT ["awsim"]
+CMD ["--host", "0.0.0.0", "--port", "4566"]

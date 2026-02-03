@@ -1,0 +1,47 @@
+name: Integration Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build Docker image
+        run: docker compose build
+
+      - name: Start awsim
+        run: docker compose up -d
+
+      - name: Wait for awsim to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:4566/health | grep -q "healthy"; then
+              echo "awsim is ready"
+              exit 0
+            fi
+            echo "Waiting for awsim..."
+            sleep 1
+          done
+          echo "awsim failed to start"
+          exit 1
+
+      - name: Run integration tests
+        run: make test-integration
+
+      - name: Stop awsim
+        if: always()
+        run: docker compose down

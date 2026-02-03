@@ -1,0 +1,80 @@
+version: 2
+
+project_name: awsim
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: awsim
+    main: ./cmd/awsim
+    binary: awsim
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - id: awsim
+    formats: ['tar.gz']
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ['zip']
+    files:
+      - LICENSE
+      - README.md
+    ids:
+      - awsim
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+
+changelog:
+  sort: asc
+
+release:
+  use_existing_draft: true
+
+dockers:
+  - image_templates:
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
+    use: buildx
+    goos: linux
+    goarch: amd64
+    dockerfile: docker/Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/sivchari/awsim"
+
+  - image_templates:
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
+    use: buildx
+    goos: linux
+    goarch: arm64
+    dockerfile: docker/Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/sivchari/awsim"
+
+docker_manifests:
+  - name_template: "ghcr.io/sivchari/awsim:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/sivchari/awsim:latest"
+    image_templates:
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
+      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"

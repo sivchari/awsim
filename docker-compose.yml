@@ -1,0 +1,16 @@
+services:
+  awsim:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "4566:4566"
+    environment:
+      - AWSIM_HOST=0.0.0.0
+      - AWSIM_PORT=4566
+      - AWSIM_LOG_LEVEL=debug
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4566/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

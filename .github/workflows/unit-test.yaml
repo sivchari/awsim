@@ -1,0 +1,87 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - run: |
+          go mod download
+      - name: Run tests
+        run: make test
+      - name: Check coverage
+        id: coverage
+        run: |
+          go test -coverprofile=coverage.out -coverpkg=./... ./...
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Coverage: $COVERAGE**" >> $GITHUB_STEP_SUMMARY
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request_target'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.coverage }}';
+
+            let comment = `## 📊 Coverage Report\n\n`;
+            comment += `**Total Coverage: ${coverage}**\n\n`;
+
+            try {
+              const comments = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              const coverageComments = comments.data.filter(c =>
+                c.body.includes('📊 Coverage Report') &&
+                c.user.type === 'Bot'
+              );
+
+              for (const oldComment of coverageComments) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: oldComment.id
+                });
+              }
+            } catch (error) {
+              console.warn('Failed to delete previous comments:', error.message);
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.error('Failed to post coverage comment:', error.message);
+              throw error;
+            }
