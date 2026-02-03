@@ -7,15 +7,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
 
 const (
-	xmlHeader     = `<?xml version="1.0" encoding="UTF-8"?>`
-	s3Namespace   = "http://s3.amazonaws.com/doc/2006-03-01/"
-	timeFormatISO = "2006-01-02T15:04:05.000Z"
+	xmlHeader      = `<?xml version="1.0" encoding="UTF-8"?>`
+	s3Namespace    = "http://s3.amazonaws.com/doc/2006-03-01/"
+	timeFormatISO  = "2006-01-02T15:04:05.000Z"
+	timeFormatHTTP = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
 // ListBuckets handles GET / - list all buckets.
@@ -290,7 +290,7 @@ func (s *Service) GetObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", obj.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
 	w.Header().Set("ETag", obj.ETag)
-	w.Header().Set("Last-Modified", obj.LastModified.Format(time.RFC1123))
+	w.Header().Set("Last-Modified", obj.LastModified.UTC().Format(timeFormatHTTP))
 
 	// Set metadata headers
 	for k, v := range obj.Metadata {
@@ -373,7 +373,7 @@ func (s *Service) HeadObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", obj.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
 	w.Header().Set("ETag", obj.ETag)
-	w.Header().Set("Last-Modified", obj.LastModified.Format(time.RFC1123))
+	w.Header().Set("Last-Modified", obj.LastModified.UTC().Format(timeFormatHTTP))
 
 	// Set metadata headers
 	for k, v := range obj.Metadata {
