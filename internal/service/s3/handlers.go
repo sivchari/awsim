@@ -27,21 +27,21 @@ func (s *Service) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketInfos := make([]ListBucketsResponseBucket, len(buckets))
+	bucketInfos := make([]BucketInfo, len(buckets))
 	for i, b := range buckets {
-		bucketInfos[i] = ListBucketsResponseBucket{
+		bucketInfos[i] = BucketInfo{
 			Name:         b.Name,
 			CreationDate: b.CreationDate.Format(timeFormatISO),
 		}
 	}
 
-	result := ListBucketsResponse{
+	result := ListAllMyBucketsResult{
 		Xmlns: s3Namespace,
-		Owner: ListBucketsResponseOwner{
+		Owner: Owner{
 			ID:          "owner-id",
 			DisplayName: "owner",
 		},
-		Buckets: ListBucketsResponseBuckets{
+		Buckets: Buckets{
 			Bucket: bucketInfos,
 		},
 	}
@@ -172,9 +172,9 @@ func (s *Service) ListObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contents := make([]ListObjectsResponseContent, len(objects))
+	contents := make([]ObjectInfo, len(objects))
 	for i, obj := range objects {
-		contents[i] = ListObjectsResponseContent{
+		contents[i] = ObjectInfo{
 			Key:          obj.Key,
 			LastModified: obj.LastModified.Format(timeFormatISO),
 			ETag:         obj.ETag,
@@ -183,12 +183,12 @@ func (s *Service) ListObjects(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	prefixes := make([]ListObjectsResponsePrefix, len(commonPrefixes))
+	prefixes := make([]CommonPrefix, len(commonPrefixes))
 	for i, p := range commonPrefixes {
-		prefixes[i] = ListObjectsResponsePrefix{Prefix: p}
+		prefixes[i] = CommonPrefix{Prefix: p}
 	}
 
-	result := ListObjectsResponse{
+	result := ListBucketResult{
 		Xmlns:          s3Namespace,
 		Name:           bucket,
 		Prefix:         prefix,
