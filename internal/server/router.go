@@ -30,13 +30,6 @@ func NewRouter(logger *slog.Logger) *Router {
 		logger: logger,
 	}
 
-	// Register health endpoint
-	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy"}`))
-	})
-
 	return r
 }
 
@@ -89,6 +82,15 @@ func (r *Router) wrapHandler(method, pattern string, handler http.HandlerFunc) h
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// Handle health endpoint before ServeMux to avoid route conflicts.
+	if req.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+
+		return
+	}
+
 	r.mux.ServeHTTP(w, req)
 }
 
