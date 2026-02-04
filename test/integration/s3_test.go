@@ -4,7 +4,6 @@ package integration
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"testing"
 
@@ -17,7 +16,7 @@ import (
 func newS3Client(t *testing.T) *s3.Client {
 	t.Helper()
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
+	cfg, err := config.LoadDefaultConfig(t.Context(),
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			"test", "test", "",
@@ -35,7 +34,7 @@ func newS3Client(t *testing.T) *s3.Client {
 
 func TestS3_CreateAndDeleteBucket(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 	bucketName := "test-create-delete-bucket"
 
 	// Create bucket
@@ -65,7 +64,7 @@ func TestS3_CreateAndDeleteBucket(t *testing.T) {
 
 func TestS3_ListBuckets(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	// Create a bucket first
 	bucketName := "test-list-buckets"
@@ -76,11 +75,11 @@ func TestS3_ListBuckets(t *testing.T) {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
-	}()
+	})
 
 	// List buckets
 	result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
@@ -104,7 +103,7 @@ func TestS3_ListBuckets(t *testing.T) {
 
 func TestS3_PutAndGetObject(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 	bucketName := "test-put-get-object"
 	key := "test-key.txt"
 	content := "Hello, awsim!"
@@ -117,7 +116,7 @@ func TestS3_PutAndGetObject(t *testing.T) {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
@@ -125,7 +124,7 @@ func TestS3_PutAndGetObject(t *testing.T) {
 		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
-	}()
+	})
 
 	// Put object
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
@@ -159,7 +158,7 @@ func TestS3_PutAndGetObject(t *testing.T) {
 
 func TestS3_HeadObject(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 	bucketName := "test-head-object"
 	key := "test-key.txt"
 	content := "Hello, awsim!"
@@ -172,7 +171,7 @@ func TestS3_HeadObject(t *testing.T) {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
@@ -180,7 +179,7 @@ func TestS3_HeadObject(t *testing.T) {
 		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
-	}()
+	})
 
 	// Put object
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
@@ -208,7 +207,7 @@ func TestS3_HeadObject(t *testing.T) {
 
 func TestS3_DeleteObject(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 	bucketName := "test-delete-object"
 	key := "test-key.txt"
 	content := "Hello, awsim!"
@@ -221,11 +220,11 @@ func TestS3_DeleteObject(t *testing.T) {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
-	}()
+	})
 
 	// Put object
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
@@ -258,7 +257,7 @@ func TestS3_DeleteObject(t *testing.T) {
 
 func TestS3_ListObjects(t *testing.T) {
 	client := newS3Client(t)
-	ctx := context.TODO()
+	ctx := t.Context()
 	bucketName := "test-list-objects"
 
 	// Create bucket
@@ -269,7 +268,7 @@ func TestS3_ListObjects(t *testing.T) {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		// Clean up objects
 		for _, key := range []string{"file1.txt", "file2.txt", "dir/file3.txt"} {
 			_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
@@ -280,7 +279,7 @@ func TestS3_ListObjects(t *testing.T) {
 		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
-	}()
+	})
 
 	// Put multiple objects
 	keys := []string{"file1.txt", "file2.txt", "dir/file3.txt"}
