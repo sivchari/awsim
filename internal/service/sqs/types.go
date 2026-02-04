@@ -40,6 +40,7 @@ type MessageAttributeValue struct {
 }
 
 // JSON Request/Response Types for AWS JSON 1.0 Protocol
+// AWS SQS API uses PascalCase for JSON field names.
 
 // CreateQueueRequest is the request for CreateQueue.
 type CreateQueueRequest struct {
@@ -84,19 +85,12 @@ type GetQueueURLResponse struct {
 
 // SendMessageRequest is the request for SendMessage.
 type SendMessageRequest struct {
-	QueueURL               string                                `json:"QueueUrl"`
-	MessageBody            string                                `json:"MessageBody"`
-	DelaySeconds           int                                   `json:"DelaySeconds,omitempty"`
-	MessageAttributes      map[string]MessageAttributeValueInput `json:"MessageAttributes,omitempty"`
-	MessageDeduplicationID string                                `json:"MessageDeduplicationId,omitempty"`
-	MessageGroupID         string                                `json:"MessageGroupId,omitempty"`
-}
-
-// MessageAttributeValueInput represents input message attribute.
-type MessageAttributeValueInput struct {
-	DataType    string `json:"DataType"`
-	StringValue string `json:"StringValue,omitempty"`
-	BinaryValue []byte `json:"BinaryValue,omitempty"`
+	QueueURL               string                           `json:"QueueUrl"`
+	MessageBody            string                           `json:"MessageBody"`
+	DelaySeconds           int                              `json:"DelaySeconds,omitempty"`
+	MessageAttributes      map[string]MessageAttributeValue `json:"MessageAttributes,omitempty"`
+	MessageDeduplicationID string                           `json:"MessageDeduplicationId,omitempty"`
+	MessageGroupID         string                           `json:"MessageGroupId,omitempty"`
 }
 
 // SendMessageResponse is the response for SendMessage.
@@ -163,8 +157,8 @@ type SetQueueAttributesRequest struct {
 	Attributes map[string]string `json:"Attributes"`
 }
 
-// SQSErrorResponse represents an SQS error response in JSON format.
-type SQSErrorResponse struct {
+// ErrorResponse represents an SQS error response in JSON format.
+type ErrorResponse struct {
 	Type    string `json:"__type"`
 	Message string `json:"message"`
 }

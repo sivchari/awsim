@@ -3,6 +3,7 @@ package sqs
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -39,7 +40,7 @@ func (s *Service) CreateQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, CreateQueueResponse{
+	writeJSONResponse(w, CreateQueueResponse{
 		QueueURL: queue.URL,
 	})
 }
@@ -72,7 +73,7 @@ func (s *Service) DeleteQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, struct{}{})
+	writeJSONResponse(w, struct{}{})
 }
 
 // ListQueues handles the ListQueues action.
@@ -91,7 +92,7 @@ func (s *Service) ListQueues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, ListQueuesResponse{
+	writeJSONResponse(w, ListQueuesResponse{
 		QueueUrls: urls,
 	})
 }
@@ -125,7 +126,7 @@ func (s *Service) GetQueueURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, GetQueueURLResponse{
+	writeJSONResponse(w, GetQueueURLResponse{
 		QueueURL: url,
 	})
 }
@@ -151,9 +152,7 @@ func (s *Service) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messageAttributes := convertMessageAttributes(req.MessageAttributes)
-
-	msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, req.MessageBody, req.DelaySeconds, messageAttributes)
+	msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, req.MessageBody, req.DelaySeconds, req.MessageAttributes)
 	if err != nil {
 		var qErr *QueueError
 		if errors.As(err, &qErr) {
@@ -167,29 +166,10 @@ func (s *Service) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, SendMessageResponse{
+	writeJSONResponse(w, SendMessageResponse{
 		MessageID:        msg.MessageID,
 		MD5OfMessageBody: msg.MD5OfBody,
 	})
-}
-
-// convertMessageAttributes converts request message attributes to storage format.
-func convertMessageAttributes(input map[string]MessageAttributeValueInput) map[string]MessageAttributeValue {
-	if input == nil {
-		return nil
-	}
-
-	result := make(map[string]MessageAttributeValue, len(input))
-
-	for k, v := range input {
-		result[k] = MessageAttributeValue{
-			DataType:    v.DataType,
-			StringValue: v.StringValue,
-			BinaryValue: v.BinaryValue,
-		}
-	}
-
-	return result
 }
 
 // ReceiveMessage handles the ReceiveMessage action.
@@ -230,7 +210,7 @@ func (s *Service) ReceiveMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, ReceiveMessageResponse{
+	writeJSONResponse(w, ReceiveMessageResponse{
 		Messages: convertMessagesToResponse(messages),
 	})
 }
@@ -287,7 +267,7 @@ func (s *Service) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, struct{}{})
+	writeJSONResponse(w, struct{}{})
 }
 
 // PurgeQueue handles the PurgeQueue action.
@@ -318,7 +298,7 @@ func (s *Service) PurgeQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, struct{}{})
+	writeJSONResponse(w, struct{}{})
 }
 
 // GetQueueAttributes handles the GetQueueAttributes action.
@@ -350,7 +330,7 @@ func (s *Service) GetQueueAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, GetQueueAttributesResponse{
+	writeJSONResponse(w, GetQueueAttributesResponse{
 		Attributes: attrs,
 	})
 }
@@ -383,28 +363,32 @@ func (s *Service) SetQueueAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, struct{}{})
+	writeJSONResponse(w, struct{}{})
 }
 
 // readJSONRequest reads and decodes JSON request body.
 func readJSONRequest(r *http.Request, v any) error {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read request body: %w", err)
 	}
 
 	if len(body) == 0 {
 		return nil
 	}
 
-	return json.Unmarshal(body, v)
+	if err := json.Unmarshal(body, v); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return nil
 }
 
-// writeJSONResponse writes a JSON response.
-func writeJSONResponse(w http.ResponseWriter, status int, v any) {
+// writeJSONResponse writes a JSON response with HTTP 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
@@ -413,7 +397,7 @@ func writeSQSError(w http.ResponseWriter, code, message string, status int) {
 	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(SQSErrorResponse{
+	_ = json.NewEncoder(w).Encode(ErrorResponse{
 		Type:    code,
 		Message: message,
 	})

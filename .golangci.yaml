@@ -85,6 +85,12 @@ linters:
         - name: unreachable-code
         - name: redefines-builtin-id
         - name: bool-literal-in-expr
+issues:
+  exclude-rules:
+    # AWS SQS API requires PascalCase JSON field names.
+    - path: internal/service/sqs/types\.go
+      linters:
+        - tagliatelle
 formatters:
   enable:
     - gofmt
