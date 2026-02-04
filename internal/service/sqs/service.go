@@ -1,8 +1,6 @@
 package sqs
 
 import (
-	"net/http"
-
 	"github.com/sivchari/awsim/internal/service"
 )
 
@@ -38,25 +36,6 @@ func (s *Service) Prefix() string {
 
 // RegisterRoutes registers the SQS routes.
 func (s *Service) RegisterRoutes(r service.Router) {
-	// SQS uses POST with Action parameter for all operations.
-	// The root endpoint handles all actions.
+	// SQS uses POST with X-Amz-Target header for all operations (AWS JSON 1.0 protocol).
 	r.HandleFunc("POST", "/", s.dispatchAction)
-
-	// Also handle queue-specific paths for SDK compatibility.
-	r.HandleFunc("POST", "/{accountID}/{queueName}", s.handleQueueAction)
-}
-
-// handleQueueAction handles actions on a specific queue URL path.
-func (s *Service) handleQueueAction(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		writeSQSError(w, "InvalidParameterValue", "Failed to parse form", http.StatusBadRequest)
-
-		return
-	}
-
-	// Construct queue URL from path.
-	queueURL := s.baseURL + r.URL.Path
-	r.Form.Set("QueueUrl", queueURL)
-
-	s.dispatchAction(w, r)
 }

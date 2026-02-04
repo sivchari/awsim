@@ -2,7 +2,6 @@
 package sqs
 
 import (
-	"encoding/xml"
 	"time"
 )
 
@@ -35,172 +34,137 @@ type Message struct {
 
 // MessageAttributeValue represents a message attribute.
 type MessageAttributeValue struct {
-	DataType    string
-	StringValue string
-	BinaryValue []byte
+	DataType    string `json:"DataType"`
+	StringValue string `json:"StringValue,omitempty"`
+	BinaryValue []byte `json:"BinaryValue,omitempty"`
 }
 
-// XML Response Types
+// JSON Request/Response Types for AWS JSON 1.0 Protocol
 
-// CreateQueueResult is the response for CreateQueue.
-type CreateQueueResult struct {
-	XMLName  xml.Name `xml:"CreateQueueResult"`
-	QueueURL string   `xml:"QueueUrl"`
+// CreateQueueRequest is the request for CreateQueue.
+type CreateQueueRequest struct {
+	QueueName  string            `json:"QueueName"`
+	Attributes map[string]string `json:"Attributes,omitempty"`
+	Tags       map[string]string `json:"tags,omitempty"`
 }
 
-// CreateQueueResponse wraps CreateQueueResult.
+// CreateQueueResponse is the response for CreateQueue.
 type CreateQueueResponse struct {
-	XMLName           xml.Name          `xml:"CreateQueueResponse"`
-	Xmlns             string            `xml:"xmlns,attr"`
-	CreateQueueResult CreateQueueResult `xml:"CreateQueueResult"`
-	ResponseMetadata  ResponseMetadata  `xml:"ResponseMetadata"`
+	QueueURL string `json:"QueueUrl"`
 }
 
-// DeleteQueueResponse is the response for DeleteQueue.
-type DeleteQueueResponse struct {
-	XMLName          xml.Name         `xml:"DeleteQueueResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+// DeleteQueueRequest is the request for DeleteQueue.
+type DeleteQueueRequest struct {
+	QueueURL string `json:"QueueUrl"`
 }
 
-// ListQueuesResult is the result for ListQueues.
-type ListQueuesResult struct {
-	XMLName  xml.Name `xml:"ListQueuesResult"`
-	QueueURL []string `xml:"QueueUrl"`
+// ListQueuesRequest is the request for ListQueues.
+type ListQueuesRequest struct {
+	QueueNamePrefix string `json:"QueueNamePrefix,omitempty"`
+	MaxResults      int    `json:"MaxResults,omitempty"`
+	NextToken       string `json:"NextToken,omitempty"`
 }
 
-// ListQueuesResponse wraps ListQueuesResult.
+// ListQueuesResponse is the response for ListQueues.
 type ListQueuesResponse struct {
-	XMLName          xml.Name         `xml:"ListQueuesResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ListQueuesResult ListQueuesResult `xml:"ListQueuesResult"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+	QueueUrls []string `json:"QueueUrls,omitempty"`
+	NextToken string   `json:"NextToken,omitempty"`
 }
 
-// GetQueueURLResult is the result for GetQueueUrl.
-type GetQueueURLResult struct {
-	XMLName  xml.Name `xml:"GetQueueURLResult"`
-	QueueURL string   `xml:"QueueUrl"`
+// GetQueueURLRequest is the request for GetQueueUrl.
+type GetQueueURLRequest struct {
+	QueueName              string `json:"QueueName"`
+	QueueOwnerAWSAccountID string `json:"QueueOwnerAWSAccountId,omitempty"`
 }
 
-// GetQueueURLResponse wraps GetQueueURLResult.
+// GetQueueURLResponse is the response for GetQueueUrl.
 type GetQueueURLResponse struct {
-	XMLName           xml.Name          `xml:"GetQueueURLResponse"`
-	Xmlns             string            `xml:"xmlns,attr"`
-	GetQueueURLResult GetQueueURLResult `xml:"GetQueueURLResult"`
-	ResponseMetadata  ResponseMetadata  `xml:"ResponseMetadata"`
+	QueueURL string `json:"QueueUrl"`
 }
 
-// SendMessageResult is the result for SendMessage.
-type SendMessageResult struct {
-	XMLName                xml.Name `xml:"SendMessageResult"`
-	MessageID              string   `xml:"MessageId"`
-	MD5OfMessageBody       string   `xml:"MD5OfMessageBody"`
-	MD5OfMessageAttributes string   `xml:"MD5OfMessageAttributes,omitempty"`
+// SendMessageRequest is the request for SendMessage.
+type SendMessageRequest struct {
+	QueueURL               string                                `json:"QueueUrl"`
+	MessageBody            string                                `json:"MessageBody"`
+	DelaySeconds           int                                   `json:"DelaySeconds,omitempty"`
+	MessageAttributes      map[string]MessageAttributeValueInput `json:"MessageAttributes,omitempty"`
+	MessageDeduplicationID string                                `json:"MessageDeduplicationId,omitempty"`
+	MessageGroupID         string                                `json:"MessageGroupId,omitempty"`
 }
 
-// SendMessageResponse wraps SendMessageResult.
+// MessageAttributeValueInput represents input message attribute.
+type MessageAttributeValueInput struct {
+	DataType    string `json:"DataType"`
+	StringValue string `json:"StringValue,omitempty"`
+	BinaryValue []byte `json:"BinaryValue,omitempty"`
+}
+
+// SendMessageResponse is the response for SendMessage.
 type SendMessageResponse struct {
-	XMLName           xml.Name          `xml:"SendMessageResponse"`
-	Xmlns             string            `xml:"xmlns,attr"`
-	SendMessageResult SendMessageResult `xml:"SendMessageResult"`
-	ResponseMetadata  ResponseMetadata  `xml:"ResponseMetadata"`
+	MessageID                    string `json:"MessageId"`
+	MD5OfMessageBody             string `json:"MD5OfMessageBody"`
+	MD5OfMessageAttributes       string `json:"MD5OfMessageAttributes,omitempty"`
+	MD5OfMessageSystemAttributes string `json:"MD5OfMessageSystemAttributes,omitempty"`
+	SequenceNumber               string `json:"SequenceNumber,omitempty"`
 }
 
-// ReceiveMessageResult is the result for ReceiveMessage.
-type ReceiveMessageResult struct {
-	XMLName xml.Name      `xml:"ReceiveMessageResult"`
-	Message []MessageInfo `xml:"Message"`
+// ReceiveMessageRequest is the request for ReceiveMessage.
+type ReceiveMessageRequest struct {
+	QueueURL                string   `json:"QueueUrl"`
+	AttributeNames          []string `json:"AttributeNames,omitempty"`
+	MaxNumberOfMessages     int      `json:"MaxNumberOfMessages,omitempty"`
+	MessageAttributeNames   []string `json:"MessageAttributeNames,omitempty"`
+	ReceiveRequestAttemptID string   `json:"ReceiveRequestAttemptId,omitempty"`
+	VisibilityTimeout       int      `json:"VisibilityTimeout,omitempty"`
+	WaitTimeSeconds         int      `json:"WaitTimeSeconds,omitempty"`
 }
 
-// MessageInfo represents message information in XML response.
-type MessageInfo struct {
-	MessageID        string                 `xml:"MessageId"`
-	ReceiptHandle    string                 `xml:"ReceiptHandle"`
-	MD5OfBody        string                 `xml:"MD5OfBody"`
-	Body             string                 `xml:"Body"`
-	Attribute        []AttributeInfo        `xml:"Attribute,omitempty"`
-	MessageAttribute []MessageAttributeInfo `xml:"MessageAttribute,omitempty"`
-}
-
-// AttributeInfo represents an attribute in XML response.
-type AttributeInfo struct {
-	Name  string `xml:"Name"`
-	Value string `xml:"Value"`
-}
-
-// MessageAttributeInfo represents a message attribute in XML response.
-type MessageAttributeInfo struct {
-	Name  string                    `xml:"Name"`
-	Value MessageAttributeValueInfo `xml:"Value"`
-}
-
-// MessageAttributeValueInfo represents a message attribute value in XML response.
-type MessageAttributeValueInfo struct {
-	DataType    string `xml:"DataType"`
-	StringValue string `xml:"StringValue,omitempty"`
-	BinaryValue []byte `xml:"BinaryValue,omitempty"`
-}
-
-// ReceiveMessageResponse wraps ReceiveMessageResult.
+// ReceiveMessageResponse is the response for ReceiveMessage.
 type ReceiveMessageResponse struct {
-	XMLName              xml.Name             `xml:"ReceiveMessageResponse"`
-	Xmlns                string               `xml:"xmlns,attr"`
-	ReceiveMessageResult ReceiveMessageResult `xml:"ReceiveMessageResult"`
-	ResponseMetadata     ResponseMetadata     `xml:"ResponseMetadata"`
+	Messages []MessageResponse `json:"Messages,omitempty"`
 }
 
-// DeleteMessageResponse is the response for DeleteMessage.
-type DeleteMessageResponse struct {
-	XMLName          xml.Name         `xml:"DeleteMessageResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+// MessageResponse represents a message in response.
+type MessageResponse struct {
+	MessageID              string                           `json:"MessageId"`
+	ReceiptHandle          string                           `json:"ReceiptHandle"`
+	MD5OfBody              string                           `json:"MD5OfBody"`
+	Body                   string                           `json:"Body"`
+	Attributes             map[string]string                `json:"Attributes,omitempty"`
+	MD5OfMessageAttributes string                           `json:"MD5OfMessageAttributes,omitempty"`
+	MessageAttributes      map[string]MessageAttributeValue `json:"MessageAttributes,omitempty"`
 }
 
-// PurgeQueueResponse is the response for PurgeQueue.
-type PurgeQueueResponse struct {
-	XMLName          xml.Name         `xml:"PurgeQueueResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+// DeleteMessageRequest is the request for DeleteMessage.
+type DeleteMessageRequest struct {
+	QueueURL      string `json:"QueueUrl"`
+	ReceiptHandle string `json:"ReceiptHandle"`
 }
 
-// GetQueueAttributesResult is the result for GetQueueAttributes.
-type GetQueueAttributesResult struct {
-	XMLName   xml.Name        `xml:"GetQueueAttributesResult"`
-	Attribute []AttributeInfo `xml:"Attribute"`
+// PurgeQueueRequest is the request for PurgeQueue.
+type PurgeQueueRequest struct {
+	QueueURL string `json:"QueueUrl"`
 }
 
-// GetQueueAttributesResponse wraps GetQueueAttributesResult.
+// GetQueueAttributesRequest is the request for GetQueueAttributes.
+type GetQueueAttributesRequest struct {
+	QueueURL       string   `json:"QueueUrl"`
+	AttributeNames []string `json:"AttributeNames,omitempty"`
+}
+
+// GetQueueAttributesResponse is the response for GetQueueAttributes.
 type GetQueueAttributesResponse struct {
-	XMLName                  xml.Name                 `xml:"GetQueueAttributesResponse"`
-	Xmlns                    string                   `xml:"xmlns,attr"`
-	GetQueueAttributesResult GetQueueAttributesResult `xml:"GetQueueAttributesResult"`
-	ResponseMetadata         ResponseMetadata         `xml:"ResponseMetadata"`
+	Attributes map[string]string `json:"Attributes,omitempty"`
 }
 
-// SetQueueAttributesResponse is the response for SetQueueAttributes.
-type SetQueueAttributesResponse struct {
-	XMLName          xml.Name         `xml:"SetQueueAttributesResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+// SetQueueAttributesRequest is the request for SetQueueAttributes.
+type SetQueueAttributesRequest struct {
+	QueueURL   string            `json:"QueueUrl"`
+	Attributes map[string]string `json:"Attributes"`
 }
 
-// ResponseMetadata contains the request ID.
-type ResponseMetadata struct {
-	RequestID string `xml:"RequestId"`
-}
-
-// ErrorResponse represents an SQS error response.
-type ErrorResponse struct {
-	XMLName   xml.Name  `xml:"ErrorResponse"`
-	Xmlns     string    `xml:"xmlns,attr"`
-	Error     ErrorInfo `xml:"Error"`
-	RequestID string    `xml:"RequestId"`
-}
-
-// ErrorInfo contains error details.
-type ErrorInfo struct {
-	Type    string `xml:"Type"`
-	Code    string `xml:"Code"`
-	Message string `xml:"Message"`
+// SQSErrorResponse represents an SQS error response in JSON format.
+type SQSErrorResponse struct {
+	Type    string `json:"__type"`
+	Message string `json:"message"`
 }
