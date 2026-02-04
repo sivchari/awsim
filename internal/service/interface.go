@@ -32,3 +32,15 @@ type Handler interface {
 	// ServeHTTP handles the HTTP request.
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
+
+// JSONProtocolService is an optional interface for services using AWS JSON 1.0 protocol.
+// Services implementing this interface will have their handlers dispatched via
+// a unified POST / endpoint based on the X-Amz-Target header.
+type JSONProtocolService interface {
+	// TargetPrefix returns the X-Amz-Target prefix for this service.
+	// e.g., "AmazonSQS" for SQS, "DynamoDB_20120810" for DynamoDB
+	TargetPrefix() string
+
+	// DispatchAction handles the JSON protocol request after routing.
+	DispatchAction(w http.ResponseWriter, r *http.Request)
+}

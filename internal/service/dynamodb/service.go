@@ -33,7 +33,13 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers the DynamoDB routes.
-func (s *Service) RegisterRoutes(r service.Router) {
-	// DynamoDB uses POST with X-Amz-Target header for all operations (AWS JSON 1.0 protocol).
-	r.HandleFunc("POST", "/", s.dispatchAction)
+// Note: DynamoDB uses AWS JSON 1.0 protocol via the JSONProtocolService interface,
+// so no direct routes are registered here.
+func (s *Service) RegisterRoutes(_ service.Router) {
+	// No routes to register - DynamoDB uses JSON protocol dispatcher
+}
+
+// TargetPrefix returns the X-Amz-Target header prefix for DynamoDB.
+func (s *Service) TargetPrefix() string {
+	return "DynamoDB_20120810"
 }
