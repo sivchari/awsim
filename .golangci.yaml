@@ -46,6 +46,12 @@ linters:
     - whitespace
     - wrapcheck
     - wsl
+  exclusions:
+    rules:
+      # AWS SQS API requires PascalCase JSON field names.
+      - path: internal/service/sqs/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
@@ -53,7 +59,6 @@ linters:
         - importShadow
         - unnamedResult
     nolintlint:
-      allow-used: false
       require-specific: true
       require-explanation: true
     cyclop:
@@ -85,12 +90,6 @@ linters:
         - name: unreachable-code
         - name: redefines-builtin-id
         - name: bool-literal-in-expr
-issues:
-  exclude-rules:
-    # AWS SQS API requires PascalCase JSON field names.
-    - path: "internal/service/sqs/types.go"
-      linters:
-        - tagliatelle
 formatters:
   enable:
     - gofmt
