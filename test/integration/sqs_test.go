@@ -72,11 +72,11 @@ func TestSQS_ListQueues(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// List queues.
 	listOutput, err := client.ListQueues(ctx, &sqs.ListQueuesInput{})
@@ -112,11 +112,11 @@ func TestSQS_GetQueueUrl(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// Get queue URL.
 	getOutput, err := client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
@@ -145,11 +145,11 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// Send message.
 	sendOutput, err := client.SendMessage(ctx, &sqs.SendMessageInput{
@@ -206,11 +206,11 @@ func TestSQS_PurgeQueue(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// Send multiple messages.
 	for i := 0; i < 3; i++ {
@@ -261,11 +261,11 @@ func TestSQS_GetQueueAttributes(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// Get queue attributes.
 	getOutput, err := client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
@@ -300,11 +300,11 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	defer func() {
+	t.Cleanup(func() {
 		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
-	}()
+	})
 
 	// Set queue attributes.
 	_, err = client.SetQueueAttributes(ctx, &sqs.SetQueueAttributesInput{
