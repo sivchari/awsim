@@ -88,7 +88,7 @@ linters:
 issues:
   exclude-rules:
     # AWS SQS API requires PascalCase JSON field names.
-    - path: internal/service/sqs/types\.go
+    - path: "internal/service/sqs/types.go"
       linters:
         - tagliatelle
 formatters:
