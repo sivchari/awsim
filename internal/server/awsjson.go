@@ -27,9 +27,9 @@ func NewJSONProtocolDispatcher() *JSONProtocolDispatcher {
 }
 
 // Register registers a service handler for the given target prefix.
-// The prefix is the part before the dot in X-Amz-Target header.
-// e.g., "AmazonSQS" for "AmazonSQS.CreateQueue"
-// e.g., "DynamoDB_20120810" for "DynamoDB_20120810.CreateTable"
+// The prefix is the part before the dot in X-Amz-Target header,
+// e.g., "AmazonSQS" for "AmazonSQS.CreateQueue" or
+// "DynamoDB_20120810" for "DynamoDB_20120810.CreateTable".
 func (d *JSONProtocolDispatcher) Register(prefix string, handler JSONServiceHandler) {
 	d.handlers[prefix] = handler
 }
