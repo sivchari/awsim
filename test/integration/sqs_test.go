@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,7 +15,7 @@ import (
 func newSQSClient(t *testing.T) *sqs.Client {
 	t.Helper()
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
+	cfg, err := config.LoadDefaultConfig(t.Context(),
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			"test", "test", "",
@@ -33,7 +32,7 @@ func newSQSClient(t *testing.T) *sqs.Client {
 
 func TestSQS_CreateAndDeleteQueue(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-create-delete"
 
 	// Create queue.
@@ -61,7 +60,7 @@ func TestSQS_CreateAndDeleteQueue(t *testing.T) {
 
 func TestSQS_ListQueues(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-list"
 
 	// Create queue.
@@ -101,7 +100,7 @@ func TestSQS_ListQueues(t *testing.T) {
 
 func TestSQS_GetQueueUrl(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-get-url"
 
 	// Create queue.
@@ -133,7 +132,7 @@ func TestSQS_GetQueueUrl(t *testing.T) {
 
 func TestSQS_SendAndReceiveMessage(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-send-receive"
 	messageBody := "Hello, SQS!"
 
@@ -195,7 +194,7 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 
 func TestSQS_PurgeQueue(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-purge"
 
 	// Create queue.
@@ -247,7 +246,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 
 func TestSQS_GetQueueAttributes(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-attributes"
 
 	// Create queue with custom attributes.
@@ -289,7 +288,7 @@ func TestSQS_GetQueueAttributes(t *testing.T) {
 
 func TestSQS_SetQueueAttributes(t *testing.T) {
 	client := newSQSClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	queueName := "test-queue-set-attributes"
 
 	// Create queue.
