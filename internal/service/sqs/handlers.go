@@ -403,8 +403,9 @@ func writeSQSError(w http.ResponseWriter, code, message string, status int) {
 	})
 }
 
-// dispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
-func (s *Service) dispatchAction(w http.ResponseWriter, r *http.Request) {
+// DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
+// This method implements the JSONProtocolService interface.
+func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
 	action := strings.TrimPrefix(target, "AmazonSQS.")
 

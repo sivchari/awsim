@@ -33,11 +33,12 @@ func DefaultConfig() Config {
 
 // Server is the main HTTP server for awsim.
 type Server struct {
-	config   Config
-	router   *Router
-	registry *service.Registry
-	logger   *slog.Logger
-	server   *http.Server
+	config         Config
+	router         *Router
+	registry       *service.Registry
+	jsonDispatcher *JSONProtocolDispatcher
+	logger         *slog.Logger
+	server         *http.Server
 }
 
 // New creates a new server with the given configuration.
@@ -49,17 +50,25 @@ func New(config Config) *Server {
 
 	registry := service.NewRegistry()
 	router := NewRouter(logger)
+	jsonDispatcher := NewJSONProtocolDispatcher()
 
 	srv := &Server{
-		config:   config,
-		router:   router,
-		registry: registry,
-		logger:   logger,
+		config:         config,
+		router:         router,
+		registry:       registry,
+		jsonDispatcher: jsonDispatcher,
+		logger:         logger,
 	}
 
 	// Auto-register services from global registry
 	for _, svc := range service.Services() {
 		srv.RegisterService(svc)
+	}
+
+	// Register JSON protocol dispatcher if any services use it
+	if len(jsonDispatcher.handlers) > 0 {
+		router.HandleFunc("POST", "/", jsonDispatcher.ServeHTTP)
+		logger.Debug("registered JSON protocol dispatcher for POST /")
 	}
 
 	return srv
@@ -79,6 +88,13 @@ func (s *Server) Router() *Router {
 func (s *Server) RegisterService(svc service.Service) {
 	s.registry.Register(svc)
 	svc.RegisterRoutes(s.router)
+
+	// Check if service implements JSON protocol
+	if jsonSvc, ok := svc.(service.JSONProtocolService); ok {
+		s.jsonDispatcher.Register(jsonSvc.TargetPrefix(), jsonSvc.DispatchAction)
+		s.logger.Debug("registered JSON protocol service", "name", svc.Name(), "prefix", jsonSvc.TargetPrefix())
+	}
+
 	s.logger.Info("registered service", "name", svc.Name())
 }
 
