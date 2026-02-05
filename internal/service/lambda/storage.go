@@ -82,22 +82,23 @@ func (s *MemoryStorage) buildFunction(req *CreateFunctionRequest) *Function {
 	}
 
 	return &Function{
-		FunctionName:  req.FunctionName,
-		FunctionArn:   fmt.Sprintf("arn:aws:lambda:%s:%s:function:%s", s.region, s.accountID, req.FunctionName),
-		Runtime:       req.Runtime,
-		Role:          req.Role,
-		Handler:       req.Handler,
-		Description:   req.Description,
-		Timeout:       timeout,
-		MemorySize:    memorySize,
-		CodeSize:      int64(len(req.Code.ZipFile)),
-		CodeSha256:    codeSha256,
-		Version:       "$LATEST",
-		LastModified:  time.Now().UTC(),
-		State:         "Active",
-		PackageType:   packageType,
-		Architectures: architectures,
-		Environment:   req.Environment,
+		FunctionName:   req.FunctionName,
+		FunctionArn:    fmt.Sprintf("arn:aws:lambda:%s:%s:function:%s", s.region, s.accountID, req.FunctionName),
+		Runtime:        req.Runtime,
+		Role:           req.Role,
+		Handler:        req.Handler,
+		Description:    req.Description,
+		Timeout:        timeout,
+		MemorySize:     memorySize,
+		CodeSize:       int64(len(req.Code.ZipFile)),
+		CodeSha256:     codeSha256,
+		Version:        "$LATEST",
+		LastModified:   time.Now().UTC(),
+		State:          "Active",
+		PackageType:    packageType,
+		Architectures:  architectures,
+		Environment:    req.Environment,
+		InvokeEndpoint: req.InvokeEndpoint,
 		Code: &FunctionCode{
 			ZipFile:         req.Code.ZipFile,
 			S3Bucket:        req.Code.S3Bucket,
@@ -268,6 +269,10 @@ func (s *MemoryStorage) UpdateFunctionConfiguration(_ context.Context, name stri
 
 	if req.Environment != nil {
 		fn.Environment = req.Environment
+	}
+
+	if req.InvokeEndpoint != "" {
+		fn.InvokeEndpoint = req.InvokeEndpoint
 	}
 
 	fn.LastModified = time.Now().UTC()

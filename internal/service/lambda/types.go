@@ -26,6 +26,7 @@ type Function struct {
 	Architectures   []string
 	Environment     *Environment
 	Code            *FunctionCode
+	InvokeEndpoint  string // awsim extension: HTTP endpoint to proxy invocations
 }
 
 // Environment represents the function's environment variables.
@@ -44,19 +45,20 @@ type FunctionCode struct {
 
 // CreateFunctionRequest is the request for CreateFunction.
 type CreateFunctionRequest struct {
-	FunctionName  string            `json:"FunctionName"`
-	Runtime       string            `json:"Runtime,omitempty"`
-	Role          string            `json:"Role"`
-	Handler       string            `json:"Handler,omitempty"`
-	Code          FunctionCode      `json:"Code"`
-	Description   string            `json:"Description,omitempty"`
-	Timeout       int               `json:"Timeout,omitempty"`
-	MemorySize    int               `json:"MemorySize,omitempty"`
-	Publish       bool              `json:"Publish,omitempty"`
-	PackageType   string            `json:"PackageType,omitempty"`
-	Architectures []string          `json:"Architectures,omitempty"`
-	Environment   *Environment      `json:"Environment,omitempty"`
-	Tags          map[string]string `json:"Tags,omitempty"`
+	FunctionName   string            `json:"FunctionName"`
+	Runtime        string            `json:"Runtime,omitempty"`
+	Role           string            `json:"Role"`
+	Handler        string            `json:"Handler,omitempty"`
+	Code           FunctionCode      `json:"Code"`
+	Description    string            `json:"Description,omitempty"`
+	Timeout        int               `json:"Timeout,omitempty"`
+	MemorySize     int               `json:"MemorySize,omitempty"`
+	Publish        bool              `json:"Publish,omitempty"`
+	PackageType    string            `json:"PackageType,omitempty"`
+	Architectures  []string          `json:"Architectures,omitempty"`
+	Environment    *Environment      `json:"Environment,omitempty"`
+	Tags           map[string]string `json:"Tags,omitempty"`
+	InvokeEndpoint string            `json:"InvokeEndpoint,omitempty"` // awsim extension
 }
 
 // CreateFunctionResponse is the response for CreateFunction.
@@ -153,13 +155,14 @@ type UpdateFunctionCodeRequest struct {
 
 // UpdateFunctionConfigurationRequest is the request for UpdateFunctionConfiguration.
 type UpdateFunctionConfigurationRequest struct {
-	Description string       `json:"Description,omitempty"`
-	Handler     string       `json:"Handler,omitempty"`
-	MemorySize  int          `json:"MemorySize,omitempty"`
-	Role        string       `json:"Role,omitempty"`
-	Runtime     string       `json:"Runtime,omitempty"`
-	Timeout     int          `json:"Timeout,omitempty"`
-	Environment *Environment `json:"Environment,omitempty"`
+	Description    string       `json:"Description,omitempty"`
+	Handler        string       `json:"Handler,omitempty"`
+	MemorySize     int          `json:"MemorySize,omitempty"`
+	Role           string       `json:"Role,omitempty"`
+	Runtime        string       `json:"Runtime,omitempty"`
+	Timeout        int          `json:"Timeout,omitempty"`
+	Environment    *Environment `json:"Environment,omitempty"`
+	InvokeEndpoint string       `json:"InvokeEndpoint,omitempty"` // awsim extension
 }
 
 // FunctionError represents a Lambda error.
