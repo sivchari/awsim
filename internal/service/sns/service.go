@@ -37,6 +37,11 @@ func (s *Service) RegisterRoutes(_ service.Router) {
 	// SNS uses JSON protocol, routing is handled by DispatchAction.
 }
 
+// TargetPrefix returns the X-Amz-Target header prefix for SNS.
+func (s *Service) TargetPrefix() string {
+	return "AmazonSimpleNotificationService"
+}
+
 // Storage returns the SNS storage.
 // This can be used to set up cross-service integration (e.g., SNS to SQS).
 func (s *Service) Storage() Storage {
