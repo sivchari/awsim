@@ -45,3 +45,6 @@ func (s *Service) RegisterRoutes(_ service.Router) {
 func (s *Service) TargetPrefix() string {
 	return "secretsmanager"
 }
+
+// isJSONProtocol is a marker method that indicates Secrets Manager uses AWS JSON 1.1 protocol.
+func (s *Service) isJSONProtocol() {}
