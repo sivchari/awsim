@@ -147,6 +147,148 @@ type ErrorResponse struct {
 	Message string `json:"Message"`
 }
 
+// XML response types for Query protocol.
+
+// XMLCreateTopicResponse is the XML response for CreateTopic.
+type XMLCreateTopicResponse struct {
+	XMLName           struct{}             `xml:"CreateTopicResponse"`
+	Xmlns             string               `xml:"xmlns,attr"`
+	CreateTopicResult XMLCreateTopicResult `xml:"CreateTopicResult"`
+	ResponseMetadata  ResponseMetadata     `xml:"ResponseMetadata"`
+}
+
+// XMLCreateTopicResult contains the CreateTopic result.
+type XMLCreateTopicResult struct {
+	TopicArn string `xml:"TopicArn"`
+}
+
+// XMLDeleteTopicResponse is the XML response for DeleteTopic.
+type XMLDeleteTopicResponse struct {
+	XMLName          struct{}         `xml:"DeleteTopicResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+}
+
+// XMLListTopicsResponse is the XML response for ListTopics.
+type XMLListTopicsResponse struct {
+	XMLName          struct{}            `xml:"ListTopicsResponse"`
+	Xmlns            string              `xml:"xmlns,attr"`
+	ListTopicsResult XMLListTopicsResult `xml:"ListTopicsResult"`
+	ResponseMetadata ResponseMetadata    `xml:"ResponseMetadata"`
+}
+
+// XMLListTopicsResult contains the ListTopics result.
+type XMLListTopicsResult struct {
+	Topics    XMLTopics `xml:"Topics"`
+	NextToken string    `xml:"NextToken,omitempty"`
+}
+
+// XMLTopics is a wrapper for topic members.
+type XMLTopics struct {
+	Member []XMLTopicMember `xml:"member"`
+}
+
+// XMLTopicMember represents a topic in the list.
+type XMLTopicMember struct {
+	TopicArn string `xml:"TopicArn"`
+}
+
+// XMLSubscribeResponse is the XML response for Subscribe.
+type XMLSubscribeResponse struct {
+	XMLName          struct{}           `xml:"SubscribeResponse"`
+	Xmlns            string             `xml:"xmlns,attr"`
+	SubscribeResult  XMLSubscribeResult `xml:"SubscribeResult"`
+	ResponseMetadata ResponseMetadata   `xml:"ResponseMetadata"`
+}
+
+// XMLSubscribeResult contains the Subscribe result.
+type XMLSubscribeResult struct {
+	SubscriptionArn string `xml:"SubscriptionArn"`
+}
+
+// XMLUnsubscribeResponse is the XML response for Unsubscribe.
+type XMLUnsubscribeResponse struct {
+	XMLName          struct{}         `xml:"UnsubscribeResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+}
+
+// XMLPublishResponse is the XML response for Publish.
+type XMLPublishResponse struct {
+	XMLName          struct{}         `xml:"PublishResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	PublishResult    XMLPublishResult `xml:"PublishResult"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+}
+
+// XMLPublishResult contains the Publish result.
+type XMLPublishResult struct {
+	MessageID      string `xml:"MessageId"`
+	SequenceNumber string `xml:"SequenceNumber,omitempty"`
+}
+
+// XMLListSubscriptionsResponse is the XML response for ListSubscriptions.
+type XMLListSubscriptionsResponse struct {
+	XMLName                 struct{}                   `xml:"ListSubscriptionsResponse"`
+	Xmlns                   string                     `xml:"xmlns,attr"`
+	ListSubscriptionsResult XMLListSubscriptionsResult `xml:"ListSubscriptionsResult"`
+	ResponseMetadata        ResponseMetadata           `xml:"ResponseMetadata"`
+}
+
+// XMLListSubscriptionsResult contains the ListSubscriptions result.
+type XMLListSubscriptionsResult struct {
+	Subscriptions XMLSubscriptions `xml:"Subscriptions"`
+	NextToken     string           `xml:"NextToken,omitempty"`
+}
+
+// XMLListSubscriptionsByTopicResponse is the XML response for ListSubscriptionsByTopic.
+type XMLListSubscriptionsByTopicResponse struct {
+	XMLName                        struct{}                          `xml:"ListSubscriptionsByTopicResponse"`
+	Xmlns                          string                            `xml:"xmlns,attr"`
+	ListSubscriptionsByTopicResult XMLListSubscriptionsByTopicResult `xml:"ListSubscriptionsByTopicResult"`
+	ResponseMetadata               ResponseMetadata                  `xml:"ResponseMetadata"`
+}
+
+// XMLListSubscriptionsByTopicResult contains the ListSubscriptionsByTopic result.
+type XMLListSubscriptionsByTopicResult struct {
+	Subscriptions XMLSubscriptions `xml:"Subscriptions"`
+	NextToken     string           `xml:"NextToken,omitempty"`
+}
+
+// XMLSubscriptions is a wrapper for subscription members.
+type XMLSubscriptions struct {
+	Member []XMLSubscriptionMember `xml:"member"`
+}
+
+// XMLSubscriptionMember represents a subscription in the list.
+type XMLSubscriptionMember struct {
+	SubscriptionArn string `xml:"SubscriptionArn"`
+	Owner           string `xml:"Owner"`
+	Protocol        string `xml:"Protocol"`
+	Endpoint        string `xml:"Endpoint"`
+	TopicArn        string `xml:"TopicArn"`
+}
+
+// ResponseMetadata contains the response metadata.
+type ResponseMetadata struct {
+	RequestID string `xml:"RequestId"`
+}
+
+// XMLErrorResponse is the XML error response.
+type XMLErrorResponse struct {
+	XMLName   struct{}       `xml:"ErrorResponse"`
+	Xmlns     string         `xml:"xmlns,attr"`
+	Error     XMLErrorDetail `xml:"Error"`
+	RequestID string         `xml:"RequestId"`
+}
+
+// XMLErrorDetail contains error details.
+type XMLErrorDetail struct {
+	Type    string `xml:"Type"`
+	Code    string `xml:"Code"`
+	Message string `xml:"Message"`
+}
+
 // TopicError represents an SNS error.
 type TopicError struct {
 	Code    string
