@@ -202,7 +202,7 @@ type DescribeSecretResponse struct {
 	DeletedDate        *float64            `json:"DeletedDate,omitempty"`
 	NextRotationDate   *float64            `json:"NextRotationDate,omitempty"`
 	Tags               []Tag               `json:"Tags,omitempty"`
-	VersionIdsToStages map[string][]string `json:"VersionIdsToStages,omitempty"`
+	VersionIDsToStages map[string][]string `json:"VersionIdsToStages,omitempty"`
 	OwningService      string              `json:"OwningService,omitempty"`
 	CreatedDate        float64             `json:"CreatedDate"`
 	PrimaryRegion      string              `json:"PrimaryRegion,omitempty"`
