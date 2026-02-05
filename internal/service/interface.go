@@ -44,3 +44,17 @@ type JSONProtocolService interface {
 	// DispatchAction handles the JSON protocol request after routing.
 	DispatchAction(w http.ResponseWriter, r *http.Request)
 }
+
+// QueryProtocolService is an optional interface for services using AWS Query protocol.
+// Services implementing this interface will have their handlers dispatched via
+// a unified POST / endpoint, with form data converted to JSON before dispatch.
+type QueryProtocolService interface {
+	// TargetPrefix returns the target prefix for this service.
+	// This is used to set the X-Amz-Target header after converting
+	// the Query request to JSON format.
+	// e.g., "AmazonSimpleNotificationService" for SNS
+	TargetPrefix() string
+
+	// DispatchAction handles the request after Query-to-JSON conversion.
+	DispatchAction(w http.ResponseWriter, r *http.Request)
+}

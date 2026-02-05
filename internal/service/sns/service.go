@@ -32,9 +32,9 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers routes with the router.
-// SNS uses JSON protocol, so routes are registered via DispatchAction.
+// SNS uses Query protocol, so routes are registered via DispatchAction.
 func (s *Service) RegisterRoutes(_ service.Router) {
-	// SNS uses JSON protocol, routing is handled by DispatchAction.
+	// SNS uses Query protocol, routing is handled by DispatchAction.
 }
 
 // TargetPrefix returns the X-Amz-Target header prefix for SNS.

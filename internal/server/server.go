@@ -33,12 +33,13 @@ func DefaultConfig() Config {
 
 // Server is the main HTTP server for awsim.
 type Server struct {
-	config         Config
-	router         *Router
-	registry       *service.Registry
-	jsonDispatcher *JSONProtocolDispatcher
-	logger         *slog.Logger
-	server         *http.Server
+	config          Config
+	router          *Router
+	registry        *service.Registry
+	jsonDispatcher  *JSONProtocolDispatcher
+	queryDispatcher *QueryProtocolDispatcher
+	logger          *slog.Logger
+	server          *http.Server
 }
 
 // New creates a new server with the given configuration.
@@ -51,13 +52,15 @@ func New(config Config) *Server {
 	registry := service.NewRegistry()
 	router := NewRouter(logger)
 	jsonDispatcher := NewJSONProtocolDispatcher()
+	queryDispatcher := NewQueryProtocolDispatcher()
 
 	srv := &Server{
-		config:         config,
-		router:         router,
-		registry:       registry,
-		jsonDispatcher: jsonDispatcher,
-		logger:         logger,
+		config:          config,
+		router:          router,
+		registry:        registry,
+		jsonDispatcher:  jsonDispatcher,
+		queryDispatcher: queryDispatcher,
+		logger:          logger,
 	}
 
 	// Auto-register services from global registry
@@ -65,13 +68,31 @@ func New(config Config) *Server {
 		srv.RegisterService(svc)
 	}
 
-	// Register JSON protocol dispatcher if any services use it
-	if len(jsonDispatcher.handlers) > 0 {
-		router.HandleFunc("POST", "/", jsonDispatcher.ServeHTTP)
-		logger.Debug("registered JSON protocol dispatcher for POST /")
+	// Register unified protocol dispatcher for POST /
+	hasJSONServices := len(jsonDispatcher.handlers) > 0
+	hasQueryServices := len(queryDispatcher.handlers) > 0
+
+	if hasJSONServices || hasQueryServices {
+		router.HandleFunc("POST", "/", srv.unifiedDispatcher)
+		logger.Debug("registered unified protocol dispatcher for POST /")
 	}
 
 	return srv
+}
+
+// unifiedDispatcher routes requests to JSON or Query protocol handlers based on Content-Type.
+func (s *Server) unifiedDispatcher(w http.ResponseWriter, r *http.Request) {
+	contentType := r.Header.Get("Content-Type")
+
+	// Query protocol uses form-urlencoded.
+	if contentType == "application/x-www-form-urlencoded" {
+		s.queryDispatcher.ServeHTTP(w, r)
+
+		return
+	}
+
+	// Default to JSON protocol.
+	s.jsonDispatcher.ServeHTTP(w, r)
 }
 
 // Registry returns the service registry.
@@ -89,10 +110,16 @@ func (s *Server) RegisterService(svc service.Service) {
 	s.registry.Register(svc)
 	svc.RegisterRoutes(s.router)
 
-	// Check if service implements JSON protocol
+	// Check if service implements JSON protocol.
 	if jsonSvc, ok := svc.(service.JSONProtocolService); ok {
 		s.jsonDispatcher.Register(jsonSvc.TargetPrefix(), jsonSvc.DispatchAction)
 		s.logger.Debug("registered JSON protocol service", "name", svc.Name(), "prefix", jsonSvc.TargetPrefix())
+	}
+
+	// Check if service implements Query protocol.
+	if querySvc, ok := svc.(service.QueryProtocolService); ok {
+		s.queryDispatcher.Register(querySvc.TargetPrefix(), querySvc.DispatchAction)
+		s.logger.Debug("registered Query protocol service", "name", svc.Name(), "prefix", querySvc.TargetPrefix())
 	}
 
 	s.logger.Info("registered service", "name", svc.Name())
