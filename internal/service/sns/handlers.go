@@ -2,6 +2,7 @@ package sns
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+const snsXMLNS = "http://sns.amazonaws.com/doc/2010-03-31/"
 
 // Error codes for SNS.
 const (
@@ -48,8 +51,14 @@ func (s *Service) CreateTopic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, CreateTopicResponse{
-		TopicARN: topic.ARN,
+	writeXMLResponse(w, XMLCreateTopicResponse{
+		Xmlns: snsXMLNS,
+		CreateTopicResult: XMLCreateTopicResult{
+			TopicArn: topic.ARN,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
@@ -88,7 +97,12 @@ func (s *Service) DeleteTopic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// DeleteTopic returns empty response on success.
-	writeJSONResponse(w, struct{}{})
+	writeXMLResponse(w, XMLDeleteTopicResponse{
+		Xmlns: snsXMLNS,
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
+	})
 }
 
 // ListTopics handles the ListTopics action.
@@ -107,16 +121,24 @@ func (s *Service) ListTopics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topicEntries := make([]TopicEntry, 0, len(topics))
+	topicMembers := make([]XMLTopicMember, 0, len(topics))
 	for _, topic := range topics {
-		topicEntries = append(topicEntries, TopicEntry{
-			TopicARN: topic.ARN,
+		topicMembers = append(topicMembers, XMLTopicMember{
+			TopicArn: topic.ARN,
 		})
 	}
 
-	writeJSONResponse(w, ListTopicsResponse{
-		Topics:    topicEntries,
-		NextToken: nextToken,
+	writeXMLResponse(w, XMLListTopicsResponse{
+		Xmlns: snsXMLNS,
+		ListTopicsResult: XMLListTopicsResult{
+			Topics: XMLTopics{
+				Member: topicMembers,
+			},
+			NextToken: nextToken,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
@@ -160,8 +182,14 @@ func (s *Service) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, SubscribeResponse{
-		SubscriptionARN: subscription.ARN,
+	writeXMLResponse(w, XMLSubscribeResponse{
+		Xmlns: snsXMLNS,
+		SubscribeResult: XMLSubscribeResult{
+			SubscriptionArn: subscription.ARN,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
@@ -200,7 +228,12 @@ func (s *Service) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Unsubscribe returns empty response on success.
-	writeJSONResponse(w, struct{}{})
+	writeXMLResponse(w, XMLUnsubscribeResponse{
+		Xmlns: snsXMLNS,
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
+	})
 }
 
 // Publish handles the Publish action.
@@ -248,8 +281,14 @@ func (s *Service) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, PublishResponse{
-		MessageID: messageID,
+	writeXMLResponse(w, XMLPublishResponse{
+		Xmlns: snsXMLNS,
+		PublishResult: XMLPublishResult{
+			MessageID: messageID,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
@@ -269,11 +308,19 @@ func (s *Service) ListSubscriptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries := convertSubscriptionsToEntries(subscriptions)
+	members := convertSubscriptionsToXMLMembers(subscriptions)
 
-	writeJSONResponse(w, ListSubscriptionsResponse{
-		Subscriptions: entries,
-		NextToken:     nextToken,
+	writeXMLResponse(w, XMLListSubscriptionsResponse{
+		Xmlns: snsXMLNS,
+		ListSubscriptionsResult: XMLListSubscriptionsResult{
+			Subscriptions: XMLSubscriptions{
+				Member: members,
+			},
+			NextToken: nextToken,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
@@ -311,29 +358,37 @@ func (s *Service) ListSubscriptionsByTopic(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	entries := convertSubscriptionsToEntries(subscriptions)
+	members := convertSubscriptionsToXMLMembers(subscriptions)
 
-	writeJSONResponse(w, ListSubscriptionsByTopicResponse{
-		Subscriptions: entries,
-		NextToken:     nextToken,
+	writeXMLResponse(w, XMLListSubscriptionsByTopicResponse{
+		Xmlns: snsXMLNS,
+		ListSubscriptionsByTopicResult: XMLListSubscriptionsByTopicResult{
+			Subscriptions: XMLSubscriptions{
+				Member: members,
+			},
+			NextToken: nextToken,
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
 	})
 }
 
-// convertSubscriptionsToEntries converts subscriptions to list entries.
-func convertSubscriptionsToEntries(subscriptions []*Subscription) []SubscriptionEntry {
-	entries := make([]SubscriptionEntry, 0, len(subscriptions))
+// convertSubscriptionsToXMLMembers converts subscriptions to XML members.
+func convertSubscriptionsToXMLMembers(subscriptions []*Subscription) []XMLSubscriptionMember {
+	members := make([]XMLSubscriptionMember, 0, len(subscriptions))
 
 	for _, sub := range subscriptions {
-		entries = append(entries, SubscriptionEntry{
-			SubscriptionARN: sub.ARN,
+		members = append(members, XMLSubscriptionMember{
+			SubscriptionArn: sub.ARN,
 			Owner:           sub.Owner,
 			Protocol:        sub.Protocol,
 			Endpoint:        sub.Endpoint,
-			TopicARN:        sub.TopicARN,
+			TopicArn:        sub.TopicARN,
 		})
 	}
 
-	return entries
+	return members
 }
 
 // readJSONRequest reads and decodes JSON request body.
@@ -354,22 +409,31 @@ func readJSONRequest(r *http.Request, v any) error {
 	return nil
 }
 
-// writeJSONResponse writes a JSON response with HTTP 200 OK.
-func writeJSONResponse(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+// writeXMLResponse writes an XML response with HTTP 200 OK.
+func writeXMLResponse(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write([]byte(xml.Header))
+	_ = xml.NewEncoder(w).Encode(v)
 }
 
-// writeTopicError writes an SNS error response in JSON format.
+// writeTopicError writes an SNS error response in XML format.
 func writeTopicError(w http.ResponseWriter, code, message string, status int) {
-	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
-	w.Header().Set("x-amzn-RequestId", uuid.New().String())
+	requestID := uuid.New().String()
+
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	w.Header().Set("x-amzn-RequestId", requestID)
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(ErrorResponse{
-		Type:    code,
-		Message: message,
+	_, _ = w.Write([]byte(xml.Header))
+	_ = xml.NewEncoder(w).Encode(XMLErrorResponse{
+		Xmlns: snsXMLNS,
+		Error: XMLErrorDetail{
+			Type:    "Sender",
+			Code:    code,
+			Message: message,
+		},
+		RequestID: requestID,
 	})
 }
 
