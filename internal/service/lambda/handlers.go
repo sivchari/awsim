@@ -1,10 +1,12 @@
 package lambda
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -248,8 +250,31 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify function exists.
-	if err := s.verifyFunctionExists(r, functionName, w); err != nil {
+	// Get function.
+	fn, err := s.storage.GetFunction(r.Context(), functionName)
+	if err != nil {
+		var lambdaErr *FunctionError
+		if errors.As(err, &lambdaErr) {
+			status := http.StatusBadRequest
+			if lambdaErr.Type == ErrResourceNotFound {
+				status = http.StatusNotFound
+			}
+
+			writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
+
+			return
+		}
+
+		writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	// Check if InvokeEndpoint is configured.
+	if fn.InvokeEndpoint == "" {
+		writeFunctionError(w, ErrInvalidParameterValue,
+			"InvokeEndpoint is not configured for this function", http.StatusBadRequest)
+
 		return
 	}
 
@@ -261,58 +286,76 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeInvokeResponse(w, r, payload)
-}
-
-// verifyFunctionExists checks if a function exists and writes an error response if not.
-func (s *Service) verifyFunctionExists(r *http.Request, functionName string, w http.ResponseWriter) error {
-	_, err := s.storage.GetFunction(r.Context(), functionName)
-	if err != nil {
-		var lambdaErr *FunctionError
-		if errors.As(err, &lambdaErr) {
-			status := http.StatusBadRequest
-			if lambdaErr.Type == ErrResourceNotFound {
-				status = http.StatusNotFound
-			}
-
-			writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
-
-			return fmt.Errorf("function not found: %w", err)
-		}
-
-		writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
-
-		return fmt.Errorf("failed to get function: %w", err)
-	}
-
-	return nil
-}
-
-// writeInvokeResponse writes the invoke response based on invocation type.
-func writeInvokeResponse(w http.ResponseWriter, r *http.Request, payload []byte) {
+	// Handle invocation type.
 	invocationType := r.Header.Get("X-Amz-Invocation-Type")
 	if invocationType == "" {
 		invocationType = "RequestResponse"
 	}
 
+	// DryRun: just validate, no actual invocation.
+	if invocationType == "DryRun" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Amz-Executed-Version", "$LATEST")
+		w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+		w.WriteHeader(http.StatusNoContent)
+
+		return
+	}
+
+	// Event: async invocation, return immediately and invoke in background.
+	if invocationType == "Event" {
+		endpoint := fn.InvokeEndpoint
+		payloadCopy := make([]byte, len(payload))
+		copy(payloadCopy, payload)
+
+		go func() {
+			resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payloadCopy))
+			if err != nil {
+				slog.Error("async invoke failed", "function", functionName, "error", err)
+
+				return
+			}
+			resp.Body.Close()
+		}()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Amz-Executed-Version", "$LATEST")
+		w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("{}"))
+
+		return
+	}
+
+	// RequestResponse: synchronous invocation.
+	resp, err := http.Post(fn.InvokeEndpoint, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		writeFunctionError(w, ErrServiceException,
+			fmt.Sprintf("Failed to invoke endpoint: %v", err), http.StatusInternalServerError)
+
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read the response body.
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeFunctionError(w, ErrServiceException,
+			"Failed to read response from endpoint", http.StatusInternalServerError)
+
+		return
+	}
+
+	// Write response headers.
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Amz-Executed-Version", "$LATEST")
 	w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+	w.WriteHeader(http.StatusOK)
 
-	switch invocationType {
-	case "Event":
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte("{}"))
-	case "DryRun":
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		w.WriteHeader(http.StatusOK)
-
-		if len(payload) == 0 {
-			_, _ = w.Write([]byte("null"))
-		} else {
-			_, _ = w.Write(payload)
-		}
+	if len(respBody) == 0 {
+		_, _ = w.Write([]byte("null"))
+	} else {
+		_, _ = w.Write(respBody)
 	}
 }
 
