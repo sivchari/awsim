@@ -65,6 +65,10 @@ linters:
       - path: internal/service/sns/types\.go
         linters:
           - tagliatelle
+      # AWS Lambda API requires PascalCase JSON field names.
+      - path: internal/service/lambda/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
