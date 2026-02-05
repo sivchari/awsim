@@ -43,6 +43,9 @@ type JSONProtocolService interface {
 
 	// DispatchAction handles the JSON protocol request after routing.
 	DispatchAction(w http.ResponseWriter, r *http.Request)
+
+	// isJSONProtocol is a marker method to distinguish from QueryProtocolService.
+	isJSONProtocol()
 }
 
 // QueryProtocolService is an optional interface for services using AWS Query protocol.
@@ -57,4 +60,7 @@ type QueryProtocolService interface {
 
 	// DispatchAction handles the request after Query-to-JSON conversion.
 	DispatchAction(w http.ResponseWriter, r *http.Request)
+
+	// isQueryProtocol is a marker method to distinguish from JSONProtocolService.
+	isQueryProtocol()
 }

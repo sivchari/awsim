@@ -42,6 +42,9 @@ func (s *Service) TargetPrefix() string {
 	return "AmazonSimpleNotificationService"
 }
 
+// isQueryProtocol is a marker method that indicates SNS uses AWS Query protocol.
+func (s *Service) isQueryProtocol() {}
+
 // Storage returns the SNS storage.
 // This can be used to set up cross-service integration (e.g., SNS to SQS).
 func (s *Service) Storage() Storage {

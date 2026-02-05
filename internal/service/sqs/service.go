@@ -45,3 +45,6 @@ func (s *Service) RegisterRoutes(_ service.Router) {
 func (s *Service) TargetPrefix() string {
 	return "AmazonSQS"
 }
+
+// isJSONProtocol is a marker method that indicates SQS uses AWS JSON 1.0 protocol.
+func (s *Service) isJSONProtocol() {}
