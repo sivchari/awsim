@@ -45,4 +45,6 @@ func (s *Service) TargetPrefix() string {
 }
 
 // isJSONProtocol is a marker method that indicates DynamoDB uses AWS JSON 1.0 protocol.
+//
+//nolint:unused // Marker method for interface compliance.
 func (s *Service) isJSONProtocol() {}

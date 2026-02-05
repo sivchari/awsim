@@ -47,4 +47,6 @@ func (s *Service) TargetPrefix() string {
 }
 
 // isJSONProtocol is a marker method that indicates Secrets Manager uses AWS JSON 1.1 protocol.
+//
+//nolint:unused // Marker method for interface compliance.
 func (s *Service) isJSONProtocol() {}
