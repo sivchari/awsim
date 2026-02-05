@@ -188,8 +188,8 @@ func TestLambda_Invoke(t *testing.T) {
 		t.Fatalf("failed to invoke function: %v", err)
 	}
 
-	if invokeOutput.StatusCode == nil || *invokeOutput.StatusCode != 200 {
-		t.Errorf("unexpected status code: %v", invokeOutput.StatusCode)
+	if invokeOutput.StatusCode != 200 {
+		t.Errorf("unexpected status code: %d", invokeOutput.StatusCode)
 	}
 
 	t.Logf("Invoke response: %s", string(invokeOutput.Payload))
