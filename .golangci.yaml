@@ -57,6 +57,10 @@ linters:
       - path: internal/service/dynamodb/types\.go
         linters:
           - tagliatelle
+      # AWS Secrets Manager API requires PascalCase JSON field names.
+      - path: internal/service/secretsmanager/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

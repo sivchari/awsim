@@ -11,17 +11,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// Error codes for Secrets Manager.
+const (
+	errResourceNotFound     = "ResourceNotFoundException"
+	errInvalidParameter     = "InvalidParameterException"
+	errInternalServiceError = "InternalServiceError"
+	errInvalidAction        = "InvalidAction"
+)
+
 // CreateSecret handles the CreateSecret action.
 func (s *Service) CreateSecret(w http.ResponseWriter, r *http.Request) {
 	var req CreateSecretRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.Name == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the Name parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the Name parameter.", http.StatusBadRequest)
 
 		return
 	}
@@ -35,7 +43,7 @@ func (s *Service) CreateSecret(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
@@ -51,13 +59,13 @@ func (s *Service) CreateSecret(w http.ResponseWriter, r *http.Request) {
 func (s *Service) GetSecretValue(w http.ResponseWriter, r *http.Request) {
 	var req GetSecretValueRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretID == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
 
 		return
 	}
@@ -67,7 +75,7 @@ func (s *Service) GetSecretValue(w http.ResponseWriter, r *http.Request) {
 		var sErr *SecretError
 		if errors.As(err, &sErr) {
 			status := http.StatusBadRequest
-			if sErr.Code == "ResourceNotFoundException" {
+			if sErr.Code == errResourceNotFound {
 				status = http.StatusNotFound
 			}
 
@@ -76,7 +84,7 @@ func (s *Service) GetSecretValue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
@@ -96,19 +104,19 @@ func (s *Service) GetSecretValue(w http.ResponseWriter, r *http.Request) {
 func (s *Service) PutSecretValue(w http.ResponseWriter, r *http.Request) {
 	var req PutSecretValueRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretID == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretString == "" && len(req.SecretBinary) == 0 {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide either SecretString or SecretBinary.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide either SecretString or SecretBinary.", http.StatusBadRequest)
 
 		return
 	}
@@ -118,7 +126,7 @@ func (s *Service) PutSecretValue(w http.ResponseWriter, r *http.Request) {
 		var sErr *SecretError
 		if errors.As(err, &sErr) {
 			status := http.StatusBadRequest
-			if sErr.Code == "ResourceNotFoundException" {
+			if sErr.Code == errResourceNotFound {
 				status = http.StatusNotFound
 			}
 
@@ -127,7 +135,7 @@ func (s *Service) PutSecretValue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
@@ -144,13 +152,13 @@ func (s *Service) PutSecretValue(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	var req DeleteSecretRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretID == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
 
 		return
 	}
@@ -160,7 +168,7 @@ func (s *Service) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 		var sErr *SecretError
 		if errors.As(err, &sErr) {
 			status := http.StatusBadRequest
-			if sErr.Code == "ResourceNotFoundException" {
+			if sErr.Code == errResourceNotFound {
 				status = http.StatusNotFound
 			}
 
@@ -169,7 +177,7 @@ func (s *Service) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
@@ -194,18 +202,28 @@ func (s *Service) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 func (s *Service) ListSecrets(w http.ResponseWriter, r *http.Request) {
 	var req ListSecretsRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	secrets, nextToken, err := s.storage.ListSecrets(r.Context(), req.MaxResults, req.NextToken, req.IncludePlannedDeletion)
 	if err != nil {
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
 
+	secretList := convertSecretsToListEntries(secrets)
+
+	writeJSONResponse(w, ListSecretsResponse{
+		SecretList: secretList,
+		NextToken:  nextToken,
+	})
+}
+
+// convertSecretsToListEntries converts secrets to list entries.
+func convertSecretsToListEntries(secrets []*Secret) []SecretListEntry {
 	secretList := make([]SecretListEntry, 0, len(secrets))
 
 	for _, secret := range secrets {
@@ -256,23 +274,20 @@ func (s *Service) ListSecrets(w http.ResponseWriter, r *http.Request) {
 		secretList = append(secretList, entry)
 	}
 
-	writeJSONResponse(w, ListSecretsResponse{
-		SecretList: secretList,
-		NextToken:  nextToken,
-	})
+	return secretList
 }
 
 // DescribeSecret handles the DescribeSecret action.
 func (s *Service) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	var req DescribeSecretRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretID == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
 
 		return
 	}
@@ -282,7 +297,7 @@ func (s *Service) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 		var sErr *SecretError
 		if errors.As(err, &sErr) {
 			status := http.StatusBadRequest
-			if sErr.Code == "ResourceNotFoundException" {
+			if sErr.Code == errResourceNotFound {
 				status = http.StatusNotFound
 			}
 
@@ -291,11 +306,18 @@ func (s *Service) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
 
+	resp := buildDescribeSecretResponse(secret)
+
+	writeJSONResponse(w, resp)
+}
+
+// buildDescribeSecretResponse builds the DescribeSecret response.
+func buildDescribeSecretResponse(secret *Secret) DescribeSecretResponse {
 	resp := DescribeSecretResponse{
 		ARN:               secret.ARN,
 		Name:              secret.Name,
@@ -336,26 +358,26 @@ func (s *Service) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 		resp.NextRotationDate = &nextRotation
 	}
 
-	resp.VersionIdsToStages = make(map[string][]string)
+	resp.VersionIDsToStages = make(map[string][]string)
 
 	for versionID, version := range secret.VersionIDs {
-		resp.VersionIdsToStages[versionID] = version.VersionStages
+		resp.VersionIDsToStages[versionID] = version.VersionStages
 	}
 
-	writeJSONResponse(w, resp)
+	return resp
 }
 
 // UpdateSecret handles the UpdateSecret action.
 func (s *Service) UpdateSecret(w http.ResponseWriter, r *http.Request) {
 	var req UpdateSecretRequest
 	if err := readJSONRequest(r, &req); err != nil {
-		writeSecretsManagerError(w, "InvalidParameterException", "Failed to parse request body", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.SecretID == "" {
-		writeSecretsManagerError(w, "InvalidParameterException", "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidParameter, "You must provide a value for the SecretId parameter.", http.StatusBadRequest)
 
 		return
 	}
@@ -365,7 +387,7 @@ func (s *Service) UpdateSecret(w http.ResponseWriter, r *http.Request) {
 		var sErr *SecretError
 		if errors.As(err, &sErr) {
 			status := http.StatusBadRequest
-			if sErr.Code == "ResourceNotFoundException" {
+			if sErr.Code == errResourceNotFound {
 				status = http.StatusNotFound
 			}
 
@@ -374,7 +396,7 @@ func (s *Service) UpdateSecret(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeSecretsManagerError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+		writeSecretsManagerError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 
 		return
 	}
@@ -450,6 +472,6 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	case "UpdateSecret":
 		s.UpdateSecret(w, r)
 	default:
-		writeSecretsManagerError(w, "InvalidAction", "The action "+action+" is not valid", http.StatusBadRequest)
+		writeSecretsManagerError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 	}
 }

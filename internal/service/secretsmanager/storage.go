@@ -281,6 +281,7 @@ func (m *MemoryStorage) ListSecrets(_ context.Context, maxResults int, nextToken
 		for i, s := range allSecrets {
 			if s.Name == nextToken {
 				startIdx = i
+
 				break
 			}
 		}
@@ -288,8 +289,8 @@ func (m *MemoryStorage) ListSecrets(_ context.Context, maxResults int, nextToken
 
 	endIdx := min(startIdx+maxResults, len(allSecrets))
 	result := allSecrets[startIdx:endIdx]
-	var newNextToken string
 
+	var newNextToken string
 	if endIdx < len(allSecrets) {
 		newNextToken = allSecrets[endIdx].Name
 	}
@@ -343,48 +344,57 @@ func (m *MemoryStorage) UpdateSecret(_ context.Context, req *UpdateSecretRequest
 		secret.KmsKeyID = req.KmsKeyID
 	}
 
-	var version *SecretVersion
-
-	// Create new version if secret value is provided.
-	if req.SecretString != "" || len(req.SecretBinary) > 0 {
-		versionID := req.ClientRequestToken
-		if versionID == "" {
-			versionID = uuid.New().String()
-		}
-
-		// Remove AWSCURRENT stage from previous version.
-		for _, v := range secret.VersionIDs {
-			newStages := make([]string, 0)
-
-			for _, stage := range v.VersionStages {
-				if stage != stageCurrent {
-					newStages = append(newStages, stage)
-				} else {
-					newStages = append(newStages, stagePrevious)
-				}
-			}
-
-			v.VersionStages = newStages
-		}
-
-		version = &SecretVersion{
-			VersionID:     versionID,
-			SecretString:  req.SecretString,
-			SecretBinary:  req.SecretBinary,
-			VersionStages: []string{stageCurrent},
-			CreatedDate:   now,
-			KmsKeyID:      secret.KmsKeyID,
-		}
-
-		secret.VersionIDs[versionID] = version
-		secret.VersionID = versionID
-		secret.SecretString = req.SecretString
-		secret.SecretBinary = req.SecretBinary
-	}
-
+	version := m.createNewVersionIfNeeded(secret, req, now)
 	secret.LastChangedDate = now
 
 	return secret, version, nil
+}
+
+// createNewVersionIfNeeded creates a new secret version if value is provided.
+func (m *MemoryStorage) createNewVersionIfNeeded(secret *Secret, req *UpdateSecretRequest, now time.Time) *SecretVersion {
+	if req.SecretString == "" && len(req.SecretBinary) == 0 {
+		return nil
+	}
+
+	versionID := req.ClientRequestToken
+	if versionID == "" {
+		versionID = uuid.New().String()
+	}
+
+	m.rotateVersionStages(secret)
+
+	version := &SecretVersion{
+		VersionID:     versionID,
+		SecretString:  req.SecretString,
+		SecretBinary:  req.SecretBinary,
+		VersionStages: []string{stageCurrent},
+		CreatedDate:   now,
+		KmsKeyID:      secret.KmsKeyID,
+	}
+
+	secret.VersionIDs[versionID] = version
+	secret.VersionID = versionID
+	secret.SecretString = req.SecretString
+	secret.SecretBinary = req.SecretBinary
+
+	return version
+}
+
+// rotateVersionStages moves AWSCURRENT to AWSPREVIOUS for all versions.
+func (m *MemoryStorage) rotateVersionStages(secret *Secret) {
+	for _, v := range secret.VersionIDs {
+		newStages := make([]string, 0)
+
+		for _, stage := range v.VersionStages {
+			if stage != stageCurrent {
+				newStages = append(newStages, stage)
+			} else {
+				newStages = append(newStages, stagePrevious)
+			}
+		}
+
+		v.VersionStages = newStages
+	}
 }
 
 // findSecret finds a secret by name or ARN.
