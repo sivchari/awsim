@@ -7,6 +7,10 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   integration:
     name: Integration tests
@@ -20,11 +24,15 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Build Docker image
-        run: docker compose build
+      - name: Build with coverage
+        run: |
+          mkdir -p bin coverage
+          go build -cover -covermode=atomic -o bin/awsim ./cmd/awsim
 
-      - name: Start awsim
-        run: docker compose up -d
+      - name: Start awsim with coverage
+        run: |
+          GOCOVERDIR=coverage bin/awsim --host 0.0.0.0 --port 4566 &
+          echo $! > awsim.pid
 
       - name: Wait for awsim to be ready
         run: |
@@ -44,4 +52,71 @@ jobs:
 
       - name: Stop awsim
         if: always()
-        run: docker compose down
+        run: |
+          if [ -f awsim.pid ]; then
+            kill $(cat awsim.pid) 2>/dev/null || true
+            sleep 2
+          fi
+
+      - name: Generate coverage report
+        if: always()
+        id: coverage
+        run: |
+          if [ -d coverage ] && [ "$(ls -A coverage)" ]; then
+            go tool covdata textfmt -i=coverage -o=coverage.out
+            COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
+            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "## Integration Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Total Coverage: $COVERAGE**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "coverage=N/A" >> $GITHUB_OUTPUT
+            echo "## Integration Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**No coverage data collected**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request_target'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.coverage }}';
+
+            let comment = `## 📊 Integration Test Coverage Report\n\n`;
+            comment += `**Total Coverage: ${coverage}**\n\n`;
+
+            try {
+              const comments = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              const coverageComments = comments.data.filter(c =>
+                c.body.includes('📊 Integration Test Coverage Report') &&
+                c.user.type === 'Bot'
+              );
+
+              for (const oldComment of coverageComments) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: oldComment.id
+                });
+              }
+            } catch (error) {
+              console.warn('Failed to delete previous comments:', error.message);
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.error('Failed to post coverage comment:', error.message);
+              throw error;
+            }
