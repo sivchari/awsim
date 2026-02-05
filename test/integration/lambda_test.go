@@ -26,7 +26,7 @@ func newLambdaClient(t *testing.T) *lambda.Client {
 	}
 
 	return lambda.NewFromConfig(cfg, func(o *lambda.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566")
+		o.BaseEndpoint = aws.String("http://localhost:4566/lambda")
 	})
 }
 

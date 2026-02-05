@@ -3,6 +3,7 @@ package lambda
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -276,12 +277,12 @@ func (s *Service) verifyFunctionExists(r *http.Request, functionName string, w h
 
 			writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
 
-			return err
+			return fmt.Errorf("function not found: %w", err)
 		}
 
 		writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
 
-		return err
+		return fmt.Errorf("failed to get function: %w", err)
 	}
 
 	return nil
@@ -306,6 +307,7 @@ func writeInvokeResponse(w http.ResponseWriter, r *http.Request, payload []byte)
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusOK)
+
 		if len(payload) == 0 {
 			_, _ = w.Write([]byte("null"))
 		} else {
@@ -314,41 +316,41 @@ func writeInvokeResponse(w http.ResponseWriter, r *http.Request, payload []byte)
 	}
 }
 
-// extractFunctionName extracts function name from path like /2015-03-31/functions/{name}.
+// extractFunctionName extracts function name from path like /lambda/2015-03-31/functions/{name}.
 func extractFunctionName(path string) string {
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) >= 3 && parts[1] == pathSegmentFunctions {
-		return parts[2]
+	if len(parts) >= 4 && parts[2] == pathSegmentFunctions {
+		return parts[3]
 	}
 
 	return ""
 }
 
-// extractFunctionNameFromCodePath extracts function name from path like /2015-03-31/functions/{name}/code.
+// extractFunctionNameFromCodePath extracts function name from path like /lambda/2015-03-31/functions/{name}/code.
 func extractFunctionNameFromCodePath(path string) string {
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) >= 4 && parts[1] == pathSegmentFunctions && parts[3] == "code" {
-		return parts[2]
+	if len(parts) >= 5 && parts[2] == pathSegmentFunctions && parts[4] == "code" {
+		return parts[3]
 	}
 
 	return ""
 }
 
-// extractFunctionNameFromConfigPath extracts function name from path like /2015-03-31/functions/{name}/configuration.
+// extractFunctionNameFromConfigPath extracts function name from path like /lambda/2015-03-31/functions/{name}/configuration.
 func extractFunctionNameFromConfigPath(path string) string {
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) >= 4 && parts[1] == pathSegmentFunctions && parts[3] == "configuration" {
-		return parts[2]
+	if len(parts) >= 5 && parts[2] == pathSegmentFunctions && parts[4] == "configuration" {
+		return parts[3]
 	}
 
 	return ""
 }
 
-// extractFunctionNameFromInvokePath extracts function name from path like /2015-03-31/functions/{name}/invocations.
+// extractFunctionNameFromInvokePath extracts function name from path like /lambda/2015-03-31/functions/{name}/invocations.
 func extractFunctionNameFromInvokePath(path string) string {
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) >= 4 && parts[1] == pathSegmentFunctions && parts[3] == "invocations" {
-		return parts[2]
+	if len(parts) >= 5 && parts[2] == pathSegmentFunctions && parts[4] == "invocations" {
+		return parts[3]
 	}
 
 	return ""

@@ -31,29 +31,30 @@ func (s *Service) Name() string {
 
 // Prefix returns the URL prefix for this service.
 func (s *Service) Prefix() string {
-	return ""
+	return "/lambda"
 }
 
 // RegisterRoutes registers the Lambda routes.
+// Note: Routes use /lambda prefix to avoid conflicts with S3 wildcard routes.
 func (s *Service) RegisterRoutes(r service.Router) {
-	// CreateFunction: POST /2015-03-31/functions
-	r.Handle("POST", "/2015-03-31/functions", s.CreateFunction)
+	// CreateFunction: POST /lambda/2015-03-31/functions
+	r.Handle("POST", "/lambda/2015-03-31/functions", s.CreateFunction)
 
-	// ListFunctions: GET /2015-03-31/functions
-	r.Handle("GET", "/2015-03-31/functions", s.ListFunctions)
+	// ListFunctions: GET /lambda/2015-03-31/functions
+	r.Handle("GET", "/lambda/2015-03-31/functions", s.ListFunctions)
 
-	// GetFunction: GET /2015-03-31/functions/{FunctionName}
-	r.Handle("GET", "/2015-03-31/functions/{functionName}", s.GetFunction)
+	// GetFunction: GET /lambda/2015-03-31/functions/{FunctionName}
+	r.Handle("GET", "/lambda/2015-03-31/functions/{functionName}", s.GetFunction)
 
-	// DeleteFunction: DELETE /2015-03-31/functions/{FunctionName}
-	r.Handle("DELETE", "/2015-03-31/functions/{functionName}", s.DeleteFunction)
+	// DeleteFunction: DELETE /lambda/2015-03-31/functions/{FunctionName}
+	r.Handle("DELETE", "/lambda/2015-03-31/functions/{functionName}", s.DeleteFunction)
 
-	// UpdateFunctionCode: PUT /2015-03-31/functions/{FunctionName}/code
-	r.Handle("PUT", "/2015-03-31/functions/{functionName}/code", s.UpdateFunctionCode)
+	// UpdateFunctionCode: PUT /lambda/2015-03-31/functions/{FunctionName}/code
+	r.Handle("PUT", "/lambda/2015-03-31/functions/{functionName}/code", s.UpdateFunctionCode)
 
-	// UpdateFunctionConfiguration: PUT /2015-03-31/functions/{FunctionName}/configuration
-	r.Handle("PUT", "/2015-03-31/functions/{functionName}/configuration", s.UpdateFunctionConfiguration)
+	// UpdateFunctionConfiguration: PUT /lambda/2015-03-31/functions/{FunctionName}/configuration
+	r.Handle("PUT", "/lambda/2015-03-31/functions/{functionName}/configuration", s.UpdateFunctionConfiguration)
 
-	// Invoke: POST /2015-03-31/functions/{FunctionName}/invocations
-	r.Handle("POST", "/2015-03-31/functions/{functionName}/invocations", s.Invoke)
+	// Invoke: POST /lambda/2015-03-31/functions/{FunctionName}/invocations
+	r.Handle("POST", "/lambda/2015-03-31/functions/{functionName}/invocations", s.Invoke)
 }
