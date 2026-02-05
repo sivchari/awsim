@@ -17,17 +17,19 @@ type Route struct {
 
 // Router is the HTTP router for awsim.
 type Router struct {
-	mux    *http.ServeMux
-	routes []Route
-	logger *slog.Logger
+	mux           *http.ServeMux
+	routes        []Route
+	prefixRouters map[string]*http.ServeMux // Separate routers for services with prefixes
+	logger        *slog.Logger
 }
 
 // NewRouter creates a new router.
 func NewRouter(logger *slog.Logger) *Router {
 	r := &Router{
-		mux:    http.NewServeMux(),
-		routes: make([]Route, 0),
-		logger: logger,
+		mux:           http.NewServeMux(),
+		routes:        make([]Route, 0),
+		prefixRouters: make(map[string]*http.ServeMux),
+		logger:        logger,
 	}
 
 	return r
@@ -41,10 +43,41 @@ func (r *Router) Handle(method, pattern string, handler http.HandlerFunc) {
 		Handler: handler,
 	})
 
+	// Check if this is a prefixed route (e.g., /lambda/...)
+	// Routes with specific prefixes are registered in separate ServeMux instances
+	// to avoid conflicts with wildcard routes like /{bucket}/{key...}
+	prefix := extractRoutePrefix(pattern)
+	if prefix != "" {
+		if _, ok := r.prefixRouters[prefix]; !ok {
+			r.prefixRouters[prefix] = http.NewServeMux()
+		}
+
+		fullPattern := method + " " + pattern
+		r.prefixRouters[prefix].HandleFunc(fullPattern, r.wrapHandler(method, pattern, handler))
+		r.logger.Debug("registered prefixed route", "method", method, "pattern", pattern, "prefix", prefix)
+
+		return
+	}
+
 	// Use Go 1.22+ method pattern
 	fullPattern := method + " " + pattern
 	r.mux.HandleFunc(fullPattern, r.wrapHandler(method, pattern, handler))
 	r.logger.Debug("registered route", "method", method, "pattern", pattern)
+}
+
+// extractRoutePrefix extracts service prefixes like "/lambda" from patterns.
+// Returns empty string for patterns without service prefixes.
+func extractRoutePrefix(pattern string) string {
+	// Known service prefixes that need isolation from wildcard routes
+	prefixes := []string{"/lambda"}
+
+	for _, prefix := range prefixes {
+		if len(pattern) >= len(prefix) && pattern[:len(prefix)] == prefix {
+			return prefix
+		}
+	}
+
+	return ""
 }
 
 // HandleFunc is an alias for Handle for compatibility with service.Router interface.
@@ -89,6 +122,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 
 		return
+	}
+
+	// Check if the request matches a prefix router first
+	for prefix, mux := range r.prefixRouters {
+		if len(req.URL.Path) >= len(prefix) && req.URL.Path[:len(prefix)] == prefix {
+			mux.ServeHTTP(w, req)
+
+			return
+		}
 	}
 
 	r.mux.ServeHTTP(w, req)

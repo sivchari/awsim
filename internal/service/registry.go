@@ -49,24 +49,14 @@ func (r *Registry) Get(name string) (Service, bool) {
 }
 
 // All returns all registered services.
-// Services with wildcard routes (like S3) are returned first to avoid
-// Go 1.22+ ServeMux route conflicts.
 func (r *Registry) All() []Service {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	services := make([]Service, 0, len(r.services))
 
-	// Register S3 first since it has wildcard routes like /{bucket}/{key...}
-	// that must be registered before more specific routes from other services.
-	if svc, ok := r.services["s3"]; ok {
+	for _, svc := range r.services {
 		services = append(services, svc)
-	}
-
-	for name, svc := range r.services {
-		if name != "s3" {
-			services = append(services, svc)
-		}
 	}
 
 	return services
