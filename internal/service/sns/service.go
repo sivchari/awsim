@@ -43,6 +43,8 @@ func (s *Service) TargetPrefix() string {
 }
 
 // isQueryProtocol is a marker method that indicates SNS uses AWS Query protocol.
+//
+//nolint:unused // Marker method for interface compliance.
 func (s *Service) isQueryProtocol() {}
 
 // Storage returns the SNS storage.
