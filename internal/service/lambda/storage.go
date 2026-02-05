@@ -50,11 +50,17 @@ func (s *MemoryStorage) CreateFunction(_ context.Context, req *CreateFunctionReq
 		}
 	}
 
-	// Calculate code hash.
+	fn := s.buildFunction(req)
+	s.functions[req.FunctionName] = fn
+
+	return fn, nil
+}
+
+// buildFunction creates a Function from a CreateFunctionRequest with defaults applied.
+func (s *MemoryStorage) buildFunction(req *CreateFunctionRequest) *Function {
 	codeHash := sha256.Sum256(req.Code.ZipFile)
 	codeSha256 := base64.StdEncoding.EncodeToString(codeHash[:])
 
-	// Set defaults.
 	timeout := req.Timeout
 	if timeout == 0 {
 		timeout = 3
@@ -75,7 +81,7 @@ func (s *MemoryStorage) CreateFunction(_ context.Context, req *CreateFunctionReq
 		architectures = []string{"x86_64"}
 	}
 
-	fn := &Function{
+	return &Function{
 		FunctionName:  req.FunctionName,
 		FunctionArn:   fmt.Sprintf("arn:aws:lambda:%s:%s:function:%s", s.region, s.accountID, req.FunctionName),
 		Runtime:       req.Runtime,
@@ -100,10 +106,6 @@ func (s *MemoryStorage) CreateFunction(_ context.Context, req *CreateFunctionReq
 			ImageURI:        req.Code.ImageURI,
 		},
 	}
-
-	s.functions[req.FunctionName] = fn
-
-	return fn, nil
 }
 
 // GetFunction retrieves a Lambda function by name.
