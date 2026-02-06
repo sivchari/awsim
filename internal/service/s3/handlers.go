@@ -19,6 +19,81 @@ const (
 	timeFormatHTTP = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
+// Route Dispatchers - dispatch based on query parameters
+
+// handleBucketGet dispatches GET /{bucket} requests based on query parameters.
+func (s *Service) handleBucketGet(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.URL.Query()["versioning"]; ok {
+		s.GetBucketVersioning(w, r)
+
+		return
+	}
+
+	if _, ok := r.URL.Query()["versions"]; ok {
+		s.ListObjectVersions(w, r)
+
+		return
+	}
+
+	if _, ok := r.URL.Query()["uploads"]; ok {
+		s.ListMultipartUploads(w, r)
+
+		return
+	}
+
+	s.ListObjects(w, r)
+}
+
+// handleObjectPut dispatches PUT /{bucket}/{key} requests based on query parameters.
+func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("uploadId") != "" && r.URL.Query().Get("partNumber") != "" {
+		s.UploadPart(w, r)
+
+		return
+	}
+
+	s.PutObject(w, r)
+}
+
+// handleObjectGet dispatches GET /{bucket}/{key} requests based on query parameters.
+func (s *Service) handleObjectGet(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("uploadId") != "" {
+		s.ListParts(w, r)
+
+		return
+	}
+
+	s.GetObject(w, r)
+}
+
+// handleObjectDelete dispatches DELETE /{bucket}/{key} requests based on query parameters.
+func (s *Service) handleObjectDelete(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("uploadId") != "" {
+		s.AbortMultipartUpload(w, r)
+
+		return
+	}
+
+	s.DeleteObject(w, r)
+}
+
+// handleObjectPost dispatches POST /{bucket}/{key} requests based on query parameters.
+func (s *Service) handleObjectPost(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.URL.Query()["uploads"]; ok {
+		s.CreateMultipartUpload(w, r)
+
+		return
+	}
+
+	if r.URL.Query().Get("uploadId") != "" {
+		s.CompleteMultipartUpload(w, r)
+
+		return
+	}
+
+	writeS3Error(w, r, "InvalidRequest", "Invalid request", http.StatusBadRequest)
+}
+
 // ListBuckets handles GET / - list all buckets.
 func (s *Service) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	buckets, err := s.storage.ListBuckets(r.Context())
@@ -636,23 +711,6 @@ func (s *Service) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 	s.CreateBucket(w, r)
 }
 
-// handleBucketGet routes GET /{bucket} requests based on query parameters.
-func (s *Service) handleBucketGet(w http.ResponseWriter, r *http.Request) {
-	if _, ok := r.URL.Query()["versioning"]; ok {
-		s.GetBucketVersioning(w, r)
-
-		return
-	}
-
-	if _, ok := r.URL.Query()["versions"]; ok {
-		s.ListObjectVersions(w, r)
-
-		return
-	}
-
-	s.ListObjects(w, r)
-}
-
 // writeXMLResponse writes an XML response with HTTP 200 OK status.
 func writeXMLResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/xml")
@@ -754,4 +812,313 @@ type PresignedURLError struct {
 
 func (e *PresignedURLError) Error() string {
 	return e.Code + ": " + e.Message
+}
+
+// Multipart Upload Handlers
+
+// CreateMultipartUpload handles POST /{bucket}/{key}?uploads - initiate a multipart upload.
+func (s *Service) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	if key == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid key", http.StatusBadRequest)
+
+		return
+	}
+
+	upload, err := s.storage.CreateMultipartUpload(r.Context(), bucket, key)
+	if err != nil {
+		var bucketErr *BucketError
+		if errors.As(err, &bucketErr) {
+			writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+			return
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	result := InitiateMultipartUploadResult{
+		Xmlns:    s3Namespace,
+		Bucket:   bucket,
+		Key:      key,
+		UploadID: upload.UploadID,
+	}
+
+	writeXMLResponse(w, result)
+}
+
+// UploadPart handles PUT /{bucket}/{key}?partNumber={partNumber}&uploadId={uploadId} - upload a part.
+func (s *Service) UploadPart(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	if key == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid key", http.StatusBadRequest)
+
+		return
+	}
+
+	uploadID := r.URL.Query().Get("uploadId")
+	if uploadID == "" {
+		writeS3Error(w, r, "InvalidArgument", "uploadId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	partNumberStr := r.URL.Query().Get("partNumber")
+	partNumber, err := strconv.Atoi(partNumberStr)
+
+	if err != nil || partNumber < 1 || partNumber > 10000 {
+		writeS3Error(w, r, "InvalidArgument", "Invalid partNumber", http.StatusBadRequest)
+
+		return
+	}
+
+	part, err := s.storage.UploadPart(r.Context(), bucket, key, uploadID, partNumber, r.Body)
+	if err != nil {
+		handleMultipartError(w, r, err)
+
+		return
+	}
+
+	w.Header().Set("ETag", part.ETag)
+	w.WriteHeader(http.StatusOK)
+}
+
+// CompleteMultipartUpload handles POST /{bucket}/{key}?uploadId={uploadId} - complete a multipart upload.
+func (s *Service) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	if key == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid key", http.StatusBadRequest)
+
+		return
+	}
+
+	uploadID := r.URL.Query().Get("uploadId")
+	if uploadID == "" {
+		writeS3Error(w, r, "InvalidArgument", "uploadId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	// Parse the XML request body
+	var req CompleteMultipartUploadRequest
+	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeS3Error(w, r, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
+
+		return
+	}
+
+	obj, err := s.storage.CompleteMultipartUpload(r.Context(), bucket, key, uploadID, req.Parts)
+	if err != nil {
+		handleMultipartError(w, r, err)
+
+		return
+	}
+
+	result := CompleteMultipartUploadResult{
+		Xmlns:    s3Namespace,
+		Location: "/" + bucket + "/" + key,
+		Bucket:   bucket,
+		Key:      key,
+		ETag:     obj.ETag,
+	}
+
+	writeXMLResponse(w, result)
+}
+
+// AbortMultipartUpload handles DELETE /{bucket}/{key}?uploadId={uploadId} - abort a multipart upload.
+func (s *Service) AbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	if key == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid key", http.StatusBadRequest)
+
+		return
+	}
+
+	uploadID := r.URL.Query().Get("uploadId")
+	if uploadID == "" {
+		writeS3Error(w, r, "InvalidArgument", "uploadId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	err := s.storage.AbortMultipartUpload(r.Context(), bucket, key, uploadID)
+	if err != nil {
+		handleMultipartError(w, r, err)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListMultipartUploads handles GET /{bucket}?uploads - list in-progress multipart uploads.
+func (s *Service) ListMultipartUploads(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	prefix := r.URL.Query().Get("prefix")
+	maxUploads := 1000
+
+	if maxUploadsStr := r.URL.Query().Get("max-uploads"); maxUploadsStr != "" {
+		if mu, err := strconv.Atoi(maxUploadsStr); err == nil && mu > 0 {
+			maxUploads = mu
+		}
+	}
+
+	uploads, err := s.storage.ListMultipartUploads(r.Context(), bucket, prefix, maxUploads)
+	if err != nil {
+		var bucketErr *BucketError
+		if errors.As(err, &bucketErr) {
+			writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+			return
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	uploadInfos := make([]UploadInfo, len(uploads))
+	for i, u := range uploads {
+		uploadInfos[i] = UploadInfo{
+			Key:       u.Key,
+			UploadID:  u.UploadID,
+			Initiated: u.Initiated.Format(timeFormatISO),
+		}
+	}
+
+	result := ListMultipartUploadsResult{
+		Xmlns:       s3Namespace,
+		Bucket:      bucket,
+		MaxUploads:  maxUploads,
+		IsTruncated: false,
+		Uploads:     uploadInfos,
+	}
+
+	writeXMLResponse(w, result)
+}
+
+// ListParts handles GET /{bucket}/{key}?uploadId={uploadId} - list parts of a multipart upload.
+func (s *Service) ListParts(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	if key == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid key", http.StatusBadRequest)
+
+		return
+	}
+
+	uploadID := r.URL.Query().Get("uploadId")
+	if uploadID == "" {
+		writeS3Error(w, r, "InvalidArgument", "uploadId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	maxParts := 1000
+
+	if maxPartsStr := r.URL.Query().Get("max-parts"); maxPartsStr != "" {
+		if mp, err := strconv.Atoi(maxPartsStr); err == nil && mp > 0 {
+			maxParts = mp
+		}
+	}
+
+	parts, err := s.storage.ListParts(r.Context(), bucket, key, uploadID, maxParts)
+	if err != nil {
+		handleMultipartError(w, r, err)
+
+		return
+	}
+
+	partInfos := make([]PartInfo, len(parts))
+	for i, p := range parts {
+		partInfos[i] = PartInfo{
+			PartNumber:   p.PartNumber,
+			LastModified: p.LastModified.Format(timeFormatISO),
+			ETag:         p.ETag,
+			Size:         p.Size,
+		}
+	}
+
+	result := ListPartsResult{
+		Xmlns:       s3Namespace,
+		Bucket:      bucket,
+		Key:         key,
+		UploadID:    uploadID,
+		MaxParts:    maxParts,
+		IsTruncated: false,
+		Parts:       partInfos,
+	}
+
+	writeXMLResponse(w, result)
+}
+
+// handleMultipartError handles errors from multipart upload operations.
+func handleMultipartError(w http.ResponseWriter, r *http.Request, err error) {
+	var bucketErr *BucketError
+	if errors.As(err, &bucketErr) {
+		writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+		return
+	}
+
+	var multipartErr *MultipartError
+	if errors.As(err, &multipartErr) {
+		status := http.StatusNotFound
+		if multipartErr.Code == "InvalidPart" {
+			status = http.StatusBadRequest
+		}
+
+		writeS3Error(w, r, multipartErr.Code, multipartErr.Message, status)
+
+		return
+	}
+
+	writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
 }

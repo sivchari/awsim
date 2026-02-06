@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 func newS3Client(t *testing.T) *s3.Client {
@@ -533,6 +534,175 @@ func TestS3_PresignedURL_Expired(t *testing.T) {
 	}
 }
 
+// Multipart Upload Tests
+
+func TestS3_MultipartUpload_BasicFlow(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-multipart-basic"
+	key := "large-file.bin"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+		})
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Create multipart upload
+	createResult, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to create multipart upload: %v", err)
+	}
+
+	uploadID := createResult.UploadId
+	if uploadID == nil || *uploadID == "" {
+		t.Fatal("expected non-empty uploadId")
+	}
+
+	// Upload parts
+	part1Content := strings.Repeat("A", 5*1024*1024) // 5MB minimum part size
+	part2Content := strings.Repeat("B", 5*1024*1024)
+
+	part1Result, err := client.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(key),
+		UploadId:   uploadID,
+		PartNumber: aws.Int32(1),
+		Body:       strings.NewReader(part1Content),
+	})
+	if err != nil {
+		t.Fatalf("failed to upload part 1: %v", err)
+	}
+
+	part2Result, err := client.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(key),
+		UploadId:   uploadID,
+		PartNumber: aws.Int32(2),
+		Body:       strings.NewReader(part2Content),
+	})
+	if err != nil {
+		t.Fatalf("failed to upload part 2: %v", err)
+	}
+
+	// Complete multipart upload
+	_, err = client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: []types.CompletedPart{
+				{PartNumber: aws.Int32(1), ETag: part1Result.ETag},
+				{PartNumber: aws.Int32(2), ETag: part2Result.ETag},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to complete multipart upload: %v", err)
+	}
+
+	// Verify the object was created
+	getResult, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to get object: %v", err)
+	}
+	defer getResult.Body.Close()
+
+	body, err := io.ReadAll(getResult.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+
+	expectedContent := part1Content + part2Content
+	if string(body) != expectedContent {
+		t.Errorf("content mismatch: expected length %d, got %d", len(expectedContent), len(body))
+	}
+}
+
+func TestS3_MultipartUpload_AbortUpload(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-multipart-abort"
+	key := "aborted-file.bin"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Create multipart upload
+	createResult, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to create multipart upload: %v", err)
+	}
+
+	uploadID := createResult.UploadId
+
+	// Upload a part
+	_, err = client.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(key),
+		UploadId:   uploadID,
+		PartNumber: aws.Int32(1),
+		Body:       strings.NewReader("test data"),
+	})
+	if err != nil {
+		t.Fatalf("failed to upload part: %v", err)
+	}
+
+	// Abort the upload
+	_, err = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+	})
+	if err != nil {
+		t.Fatalf("failed to abort multipart upload: %v", err)
+	}
+
+	// Verify the upload is aborted by trying to list parts
+	_, err = client.ListParts(ctx, &s3.ListPartsInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+	})
+	if err == nil {
+		t.Error("expected error when listing parts of aborted upload")
+	}
+}
+
+// Versioning Tests
+
 func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 	client := newS3Client(t)
 	ctx := t.Context()
@@ -567,8 +737,8 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 	// Enable versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &s3types.VersioningConfiguration{
-			Status: s3types.BucketVersioningStatusEnabled,
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
 	})
 	if err != nil {
@@ -583,15 +753,15 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		t.Fatalf("failed to get bucket versioning: %v", err)
 	}
 
-	if result.Status != s3types.BucketVersioningStatusEnabled {
+	if result.Status != types.BucketVersioningStatusEnabled {
 		t.Errorf("expected versioning status Enabled, got %v", result.Status)
 	}
 
 	// Suspend versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &s3types.VersioningConfiguration{
-			Status: s3types.BucketVersioningStatusSuspended,
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusSuspended,
 		},
 	})
 	if err != nil {
@@ -606,7 +776,7 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		t.Fatalf("failed to get bucket versioning: %v", err)
 	}
 
-	if result.Status != s3types.BucketVersioningStatusSuspended {
+	if result.Status != types.BucketVersioningStatusSuspended {
 		t.Errorf("expected versioning status Suspended, got %v", result.Status)
 	}
 }
@@ -654,8 +824,8 @@ func TestS3_Versioning_PutObjectWithVersioning(t *testing.T) {
 	// Enable versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &s3types.VersioningConfiguration{
-			Status: s3types.BucketVersioningStatusEnabled,
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
 	})
 	if err != nil {
@@ -769,8 +939,8 @@ func TestS3_Versioning_DeleteObjectCreatesDeleteMarker(t *testing.T) {
 	// Enable versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &s3types.VersioningConfiguration{
-			Status: s3types.BucketVersioningStatusEnabled,
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
 	})
 	if err != nil {
@@ -830,6 +1000,158 @@ func TestS3_Versioning_DeleteObjectCreatesDeleteMarker(t *testing.T) {
 	}
 }
 
+func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-list-multipart"
+	key1 := "file1.bin"
+	key2 := "file2.bin"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// Abort any in-progress uploads
+		uploads, _ := client.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{
+			Bucket: aws.String(bucketName),
+		})
+		if uploads != nil {
+			for _, u := range uploads.Uploads {
+				_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+					Bucket:   aws.String(bucketName),
+					Key:      u.Key,
+					UploadId: u.UploadId,
+				})
+			}
+		}
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Create two multipart uploads
+	upload1, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key1),
+	})
+	if err != nil {
+		t.Fatalf("failed to create multipart upload 1: %v", err)
+	}
+
+	upload2, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key2),
+	})
+	if err != nil {
+		t.Fatalf("failed to create multipart upload 2: %v", err)
+	}
+
+	// List multipart uploads
+	listResult, err := client.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to list multipart uploads: %v", err)
+	}
+
+	if len(listResult.Uploads) != 2 {
+		t.Errorf("expected 2 uploads, got %d", len(listResult.Uploads))
+	}
+
+	// Cleanup
+	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key1),
+		UploadId: upload1.UploadId,
+	})
+	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key2),
+		UploadId: upload2.UploadId,
+	})
+}
+
+func TestS3_MultipartUpload_ListParts(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-list-parts"
+	key := "multipart-file.bin"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Create multipart upload
+	createResult, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to create multipart upload: %v", err)
+	}
+
+	uploadID := createResult.UploadId
+
+	// Upload two parts
+	_, err = client.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(key),
+		UploadId:   uploadID,
+		PartNumber: aws.Int32(1),
+		Body:       strings.NewReader("part 1 content"),
+	})
+	if err != nil {
+		t.Fatalf("failed to upload part 1: %v", err)
+	}
+
+	_, err = client.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String(key),
+		UploadId:   uploadID,
+		PartNumber: aws.Int32(2),
+		Body:       strings.NewReader("part 2 content"),
+	})
+	if err != nil {
+		t.Fatalf("failed to upload part 2: %v", err)
+	}
+
+	// List parts
+	listResult, err := client.ListParts(ctx, &s3.ListPartsInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+	})
+	if err != nil {
+		t.Fatalf("failed to list parts: %v", err)
+	}
+
+	if len(listResult.Parts) != 2 {
+		t.Errorf("expected 2 parts, got %d", len(listResult.Parts))
+	}
+
+	// Cleanup
+	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bucketName),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+	})
+}
+
 func TestS3_Versioning_ListObjectVersions(t *testing.T) {
 	client := newS3Client(t)
 	ctx := t.Context()
@@ -873,8 +1195,8 @@ func TestS3_Versioning_ListObjectVersions(t *testing.T) {
 	// Enable versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &s3types.VersioningConfiguration{
-			Status: s3types.BucketVersioningStatusEnabled,
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
 	})
 	if err != nil {
