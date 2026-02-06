@@ -14,13 +14,15 @@ type Bucket struct {
 
 // Object represents an S3 object.
 type Object struct {
-	Key          string
-	Body         []byte
-	ETag         string
-	Size         int64
-	LastModified time.Time
-	ContentType  string
-	Metadata     map[string]string
+	Key            string
+	Body           []byte
+	ETag           string
+	Size           int64
+	LastModified   time.Time
+	ContentType    string
+	Metadata       map[string]string
+	VersionID      string
+	IsDeleteMarker bool
 }
 
 // XML Response Types
@@ -89,4 +91,51 @@ type ErrorResponse struct {
 	RequestID  string   `xml:"RequestId"`
 	BucketName string   `xml:"BucketName,omitempty"`
 	Key        string   `xml:"Key,omitempty"`
+}
+
+// Versioning Types
+
+// VersioningConfiguration represents bucket versioning configuration.
+type VersioningConfiguration struct {
+	XMLName xml.Name `xml:"VersioningConfiguration"`
+	Xmlns   string   `xml:"xmlns,attr,omitempty"`
+	Status  string   `xml:"Status,omitempty"`
+}
+
+// ListVersionsResult is the response for ListObjectVersions.
+type ListVersionsResult struct {
+	XMLName             xml.Name            `xml:"ListVersionsResult"`
+	Xmlns               string              `xml:"xmlns,attr"`
+	Name                string              `xml:"Name"`
+	Prefix              string              `xml:"Prefix,omitempty"`
+	KeyMarker           string              `xml:"KeyMarker,omitempty"`
+	VersionIDMarker     string              `xml:"VersionIdMarker,omitempty"`
+	NextKeyMarker       string              `xml:"NextKeyMarker,omitempty"`
+	NextVersionIDMarker string              `xml:"NextVersionIdMarker,omitempty"`
+	MaxKeys             int                 `xml:"MaxKeys"`
+	IsTruncated         bool                `xml:"IsTruncated"`
+	Versions            []ObjectVersionInfo `xml:"Version,omitempty"`
+	DeleteMarkers       []DeleteMarkerInfo  `xml:"DeleteMarker,omitempty"`
+	CommonPrefixes      []CommonPrefix      `xml:"CommonPrefixes,omitempty"`
+}
+
+// ObjectVersionInfo represents an object version in ListVersionsResult.
+type ObjectVersionInfo struct {
+	Key          string `xml:"Key"`
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool   `xml:"IsLatest"`
+	LastModified string `xml:"LastModified"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
+	StorageClass string `xml:"StorageClass"`
+	Owner        Owner  `xml:"Owner"`
+}
+
+// DeleteMarkerInfo represents a delete marker in ListVersionsResult.
+type DeleteMarkerInfo struct {
+	Key          string `xml:"Key"`
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool   `xml:"IsLatest"`
+	LastModified string `xml:"LastModified"`
+	Owner        Owner  `xml:"Owner"`
 }

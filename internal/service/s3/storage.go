@@ -23,9 +23,16 @@ type Storage interface {
 	// Object operations
 	PutObject(ctx context.Context, bucket, key string, body io.Reader, metadata map[string]string) (*Object, error)
 	GetObject(ctx context.Context, bucket, key string) (*Object, error)
-	DeleteObject(ctx context.Context, bucket, key string) error
+	GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*Object, error)
+	DeleteObject(ctx context.Context, bucket, key string) (*Object, error)
+	DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) (*Object, error)
 	HeadObject(ctx context.Context, bucket, key string) (*Object, error)
 	ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int) ([]Object, []string, error)
+
+	// Versioning operations
+	PutBucketVersioning(ctx context.Context, bucket, status string) error
+	GetBucketVersioning(ctx context.Context, bucket string) (string, error)
+	ListObjectVersions(ctx context.Context, bucket, prefix, delimiter string, maxKeys int) ([]Object, []string, error)
 }
 
 // MemoryStorage implements Storage with in-memory data.
@@ -35,9 +42,12 @@ type MemoryStorage struct {
 }
 
 type memoryBucket struct {
-	name         string
-	creationDate time.Time
-	objects      map[string]*Object
+	name             string
+	creationDate     time.Time
+	objects          map[string]*Object   // current/latest version per key
+	versions         map[string][]*Object // all versions per key (newest first)
+	versioningStatus string               // "", "Enabled", "Suspended"
+	versionIDCounter uint64               // counter for generating version IDs
 }
 
 // NewMemoryStorage creates a new in-memory S3 storage.
@@ -57,9 +67,11 @@ func (s *MemoryStorage) CreateBucket(_ context.Context, name string) error {
 	}
 
 	s.buckets[name] = &memoryBucket{
-		name:         name,
-		creationDate: time.Now(),
-		objects:      make(map[string]*Object),
+		name:             name,
+		creationDate:     time.Now(),
+		objects:          make(map[string]*Object),
+		versions:         make(map[string][]*Object),
+		versioningStatus: "",
 	}
 
 	return nil
@@ -151,6 +163,31 @@ func (s *MemoryStorage) PutObject(_ context.Context, bucket, key string, body io
 		obj.ContentType = "application/octet-stream"
 	}
 
+	// Handle versioning
+	if b.versioningStatus == "Enabled" {
+		// Generate version ID
+		b.versionIDCounter++
+		obj.VersionID = fmt.Sprintf("v%d", b.versionIDCounter)
+
+		// Prepend to versions list (newest first)
+		b.versions[key] = append([]*Object{obj}, b.versions[key]...)
+	} else if b.versioningStatus == "Suspended" {
+		// For suspended versioning, use "null" version ID
+		obj.VersionID = "null"
+
+		// Remove any existing "null" version
+		versions := b.versions[key]
+		newVersions := make([]*Object, 0, len(versions))
+		for _, v := range versions {
+			if v.VersionID != "null" {
+				newVersions = append(newVersions, v)
+			}
+		}
+
+		b.versions[key] = append([]*Object{obj}, newVersions...)
+	}
+
+	// Always update current object
 	b.objects[key] = obj
 
 	return obj, nil
@@ -171,23 +208,127 @@ func (s *MemoryStorage) GetObject(_ context.Context, bucket, key string) (*Objec
 		return nil, &ObjectError{Code: "NoSuchKey", Message: "The specified key does not exist.", Key: key}
 	}
 
+	// Check if current version is a delete marker
+	if obj.IsDeleteMarker {
+		return nil, &ObjectError{Code: "NoSuchKey", Message: "The specified key does not exist.", Key: key}
+	}
+
 	return obj, nil
 }
 
+// GetObjectVersion retrieves a specific version of an object.
+func (s *MemoryStorage) GetObjectVersion(_ context.Context, bucket, key, versionID string) (*Object, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	versions := b.versions[key]
+	for _, obj := range versions {
+		if obj.VersionID == versionID {
+			if obj.IsDeleteMarker {
+				return nil, &ObjectError{Code: "MethodNotAllowed", Message: "The specified method is not allowed against this resource.", Key: key}
+			}
+
+			return obj, nil
+		}
+	}
+
+	return nil, &ObjectError{Code: "NoSuchVersion", Message: "The specified version does not exist.", Key: key}
+}
+
 // DeleteObject deletes an object.
-func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) error {
+func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Object, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	b, exists := s.buckets[bucket]
 	if !exists {
-		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	// S3 doesn't return error if key doesn't exist
+	// Handle versioning
+	if b.versioningStatus == "Enabled" {
+		// Create a delete marker
+		b.versionIDCounter++
+		deleteMarker := &Object{
+			Key:            key,
+			VersionID:      fmt.Sprintf("v%d", b.versionIDCounter),
+			IsDeleteMarker: true,
+			LastModified:   time.Now(),
+		}
+
+		// Prepend delete marker to versions
+		b.versions[key] = append([]*Object{deleteMarker}, b.versions[key]...)
+		b.objects[key] = deleteMarker
+
+		return deleteMarker, nil
+	}
+
+	// For non-versioned or suspended buckets, just delete
 	delete(b.objects, key)
 
-	return nil
+	// For suspended buckets, also remove "null" version
+	if b.versioningStatus == "Suspended" {
+		versions := b.versions[key]
+		newVersions := make([]*Object, 0, len(versions))
+
+		for _, v := range versions {
+			if v.VersionID != "null" {
+				newVersions = append(newVersions, v)
+			}
+		}
+
+		if len(newVersions) == 0 {
+			delete(b.versions, key)
+		} else {
+			b.versions[key] = newVersions
+		}
+	}
+
+	return nil, nil
+}
+
+// DeleteObjectVersion deletes a specific version of an object.
+func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, versionID string) (*Object, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	versions := b.versions[key]
+	var deletedObj *Object
+
+	newVersions := make([]*Object, 0, len(versions))
+	for _, v := range versions {
+		if v.VersionID == versionID {
+			deletedObj = v
+		} else {
+			newVersions = append(newVersions, v)
+		}
+	}
+
+	if deletedObj == nil {
+		// S3 doesn't return error if version doesn't exist
+		return nil, nil
+	}
+
+	if len(newVersions) == 0 {
+		delete(b.versions, key)
+		delete(b.objects, key)
+	} else {
+		b.versions[key] = newVersions
+		// Update current object to the newest version
+		b.objects[key] = newVersions[0]
+	}
+
+	return deletedObj, nil
 }
 
 // HeadObject retrieves object metadata without body.
@@ -274,6 +415,140 @@ func (s *MemoryStorage) ListObjects(_ context.Context, bucket, prefix, delimiter
 	}
 
 	// Convert common prefixes to sorted slice
+	prefixList := make([]string, 0, len(commonPrefixes))
+	for p := range commonPrefixes {
+		prefixList = append(prefixList, p)
+	}
+
+	sort.Strings(prefixList)
+
+	return objects, prefixList, nil
+}
+
+// PutBucketVersioning sets the versioning status of a bucket.
+func (s *MemoryStorage) PutBucketVersioning(_ context.Context, bucket, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	if status != "Enabled" && status != "Suspended" && status != "" {
+		return &BucketError{Code: "MalformedXML", Message: "Invalid versioning status", BucketName: bucket}
+	}
+
+	b.versioningStatus = status
+
+	return nil
+}
+
+// GetBucketVersioning returns the versioning status of a bucket.
+func (s *MemoryStorage) GetBucketVersioning(_ context.Context, bucket string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return "", &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	return b.versioningStatus, nil
+}
+
+// ListObjectVersions lists all versions of objects in a bucket.
+func (s *MemoryStorage) ListObjectVersions(_ context.Context, bucket, prefix, delimiter string, maxKeys int) ([]Object, []string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	if maxKeys <= 0 {
+		maxKeys = 1000
+	}
+
+	// Collect all keys that have versions
+	keys := make([]string, 0, len(b.versions))
+	for key := range b.versions {
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+
+	// Also include keys from objects that don't have versioning history
+	for key := range b.objects {
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			if _, hasVersions := b.versions[key]; !hasVersions {
+				keys = append(keys, key)
+			}
+		}
+	}
+
+	sort.Strings(keys)
+
+	objects := make([]Object, 0)
+	commonPrefixes := make(map[string]bool)
+	count := 0
+
+	for _, key := range keys {
+		// Handle delimiter
+		if delimiter != "" {
+			remainder := strings.TrimPrefix(key, prefix)
+			if idx := strings.Index(remainder, delimiter); idx >= 0 {
+				commonPrefix := prefix + remainder[:idx+len(delimiter)]
+				commonPrefixes[commonPrefix] = true
+
+				continue
+			}
+		}
+
+		// Get all versions for this key
+		versions := b.versions[key]
+		if len(versions) == 0 {
+			// No versioning history, include current object
+			if obj, exists := b.objects[key]; exists {
+				objects = append(objects, Object{
+					Key:            obj.Key,
+					VersionID:      obj.VersionID,
+					ETag:           obj.ETag,
+					Size:           obj.Size,
+					LastModified:   obj.LastModified,
+					IsDeleteMarker: obj.IsDeleteMarker,
+				})
+				count++
+			}
+		} else {
+			// Include all versions
+			for i, obj := range versions {
+				objects = append(objects, Object{
+					Key:            obj.Key,
+					VersionID:      obj.VersionID,
+					ETag:           obj.ETag,
+					Size:           obj.Size,
+					LastModified:   obj.LastModified,
+					IsDeleteMarker: obj.IsDeleteMarker,
+				})
+				// Mark first version (newest) as latest
+				if i == 0 {
+					objects[len(objects)-1].VersionID = obj.VersionID
+				}
+				count++
+
+				if count >= maxKeys {
+					break
+				}
+			}
+		}
+
+		if count >= maxKeys {
+			break
+		}
+	}
+
 	prefixList := make([]string, 0, len(commonPrefixes))
 	for p := range commonPrefixes {
 		prefixList = append(prefixList, p)
