@@ -39,12 +39,13 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("DELETE", "/{bucket}", s.DeleteBucket)
 	r.Handle("HEAD", "/{bucket}", s.HeadBucket)
 
-	// Object list (must be before object operations to handle query params)
+	// Bucket-level GET handles ListObjects, ListMultipartUploads, versioning queries
 	r.Handle("GET", "/{bucket}", s.handleBucketGet)
 
-	// Object operations
-	r.Handle("PUT", "/{bucket}/{key...}", s.PutObject)
-	r.Handle("GET", "/{bucket}/{key...}", s.GetObject)
-	r.Handle("DELETE", "/{bucket}/{key...}", s.DeleteObject)
+	// Object operations with multipart upload support
+	r.Handle("PUT", "/{bucket}/{key...}", s.handleObjectPut)
+	r.Handle("GET", "/{bucket}/{key...}", s.handleObjectGet)
+	r.Handle("DELETE", "/{bucket}/{key...}", s.handleObjectDelete)
 	r.Handle("HEAD", "/{bucket}/{key...}", s.HeadObject)
+	r.Handle("POST", "/{bucket}/{key...}", s.handleObjectPost)
 }

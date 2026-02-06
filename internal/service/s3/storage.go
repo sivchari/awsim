@@ -40,6 +40,14 @@ type Storage interface {
 	PutBucketVersioning(ctx context.Context, bucket, status string) error
 	GetBucketVersioning(ctx context.Context, bucket string) (string, error)
 	ListObjectVersions(ctx context.Context, bucket, prefix, delimiter string, maxKeys int) ([]Object, []string, error)
+
+	// Multipart upload operations
+	CreateMultipartUpload(ctx context.Context, bucket, key string) (*MultipartUpload, error)
+	UploadPart(ctx context.Context, bucket, key, uploadID string, partNumber int, body io.Reader) (*Part, error)
+	CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string, parts []PartRequest) (*Object, error)
+	AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error
+	ListMultipartUploads(ctx context.Context, bucket, prefix string, maxUploads int) ([]*MultipartUpload, error)
+	ListParts(ctx context.Context, bucket, key, uploadID string, maxParts int) ([]*Part, error)
 }
 
 // MemoryStorage implements Storage with in-memory data.
@@ -51,10 +59,11 @@ type MemoryStorage struct {
 type memoryBucket struct {
 	name             string
 	creationDate     time.Time
-	objects          map[string]*Object   // current/latest version per key
-	versions         map[string][]*Object // all versions per key (newest first)
-	versioningStatus string               // "", "Enabled", "Suspended"
-	versionIDCounter uint64               // counter for generating version IDs
+	objects          map[string]*Object          // current/latest version per key
+	versions         map[string][]*Object        // all versions per key (newest first)
+	versioningStatus string                      // "", "Enabled", "Suspended"
+	versionIDCounter uint64                      // counter for generating version IDs
+	multipartUploads map[string]*MultipartUpload // uploadID -> MultipartUpload
 }
 
 // NewMemoryStorage creates a new in-memory S3 storage.
@@ -79,6 +88,7 @@ func (s *MemoryStorage) CreateBucket(_ context.Context, name string) error {
 		objects:          make(map[string]*Object),
 		versions:         make(map[string][]*Object),
 		versioningStatus: "",
+		multipartUploads: make(map[string]*MultipartUpload),
 	}
 
 	return nil
@@ -632,4 +642,276 @@ type ObjectError struct {
 
 func (e *ObjectError) Error() string {
 	return fmt.Sprintf("%s: %s (key: %s)", e.Code, e.Message, e.Key)
+}
+
+// MultipartError represents an S3 multipart upload error.
+type MultipartError struct {
+	Code     string
+	Message  string
+	UploadID string
+}
+
+func (e *MultipartError) Error() string {
+	return fmt.Sprintf("%s: %s (uploadId: %s)", e.Code, e.Message, e.UploadID)
+}
+
+// CreateMultipartUpload creates a new multipart upload.
+func (s *MemoryStorage) CreateMultipartUpload(_ context.Context, bucket, key string) (*MultipartUpload, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	uploadID := generateUploadID()
+	upload := &MultipartUpload{
+		Bucket:    bucket,
+		Key:       key,
+		UploadID:  uploadID,
+		Initiated: time.Now(),
+		Parts:     make(map[int]*Part),
+	}
+
+	b.multipartUploads[uploadID] = upload
+
+	return upload, nil
+}
+
+// UploadPart uploads a part of a multipart upload.
+func (s *MemoryStorage) UploadPart(_ context.Context, bucket, key, uploadID string, partNumber int, body io.Reader) (*Part, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	upload, exists := b.multipartUploads[uploadID]
+	if !exists {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	if upload.Key != key {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+
+	hash := md5.Sum(data) //nolint:gosec // MD5 is required for S3 ETag calculation per AWS specification
+	etag := hex.EncodeToString(hash[:])
+
+	part := &Part{
+		PartNumber:   partNumber,
+		ETag:         fmt.Sprintf("%q", etag),
+		Size:         int64(len(data)),
+		LastModified: time.Now(),
+		Body:         data,
+	}
+
+	upload.Parts[partNumber] = part
+
+	return part, nil
+}
+
+// CompleteMultipartUpload completes a multipart upload by assembling parts.
+func (s *MemoryStorage) CompleteMultipartUpload(_ context.Context, bucket, key, uploadID string, parts []PartRequest) (*Object, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	upload, exists := b.multipartUploads[uploadID]
+	if !exists {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	if upload.Key != key {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	// Validate and assemble parts
+	var combinedBody []byte
+
+	for _, pr := range parts {
+		part, ok := upload.Parts[pr.PartNumber]
+		if !ok {
+			return nil, &MultipartError{Code: "InvalidPart", Message: "One or more of the specified parts could not be found", UploadID: uploadID}
+		}
+
+		// Verify ETag matches
+		if part.ETag != pr.ETag && part.ETag != fmt.Sprintf("%q", strings.Trim(pr.ETag, "\"")) {
+			return nil, &MultipartError{Code: "InvalidPart", Message: "One or more of the specified parts could not be found", UploadID: uploadID}
+		}
+
+		combinedBody = append(combinedBody, part.Body...)
+	}
+
+	// Calculate final ETag (MD5 of MD5s + "-" + number of parts)
+	etag := calculateMultipartETag(parts, upload.Parts)
+
+	obj := &Object{
+		Key:          key,
+		Body:         combinedBody,
+		ETag:         etag,
+		Size:         int64(len(combinedBody)),
+		LastModified: time.Now(),
+		ContentType:  "application/octet-stream",
+	}
+
+	b.objects[key] = obj
+	delete(b.multipartUploads, uploadID)
+
+	return obj, nil
+}
+
+// AbortMultipartUpload aborts a multipart upload.
+func (s *MemoryStorage) AbortMultipartUpload(_ context.Context, bucket, key, uploadID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	upload, exists := b.multipartUploads[uploadID]
+	if !exists {
+		return &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	if upload.Key != key {
+		return &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	delete(b.multipartUploads, uploadID)
+
+	return nil
+}
+
+// ListMultipartUploads lists in-progress multipart uploads.
+func (s *MemoryStorage) ListMultipartUploads(_ context.Context, bucket, prefix string, maxUploads int) ([]*MultipartUpload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	if maxUploads <= 0 {
+		maxUploads = 1000
+	}
+
+	uploads := make([]*MultipartUpload, 0)
+
+	for _, upload := range b.multipartUploads {
+		if prefix == "" || strings.HasPrefix(upload.Key, prefix) {
+			uploads = append(uploads, upload)
+		}
+
+		if len(uploads) >= maxUploads {
+			break
+		}
+	}
+
+	// Sort by key and then by upload ID for consistent ordering
+	sort.Slice(uploads, func(i, j int) bool {
+		if uploads[i].Key != uploads[j].Key {
+			return uploads[i].Key < uploads[j].Key
+		}
+
+		return uploads[i].UploadID < uploads[j].UploadID
+	})
+
+	return uploads, nil
+}
+
+// ListParts lists the parts that have been uploaded for a multipart upload.
+func (s *MemoryStorage) ListParts(_ context.Context, bucket, key, uploadID string, maxParts int) ([]*Part, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	b, exists := s.buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
+	}
+
+	upload, exists := b.multipartUploads[uploadID]
+	if !exists {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	if upload.Key != key {
+		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
+	}
+
+	if maxParts <= 0 {
+		maxParts = 1000
+	}
+
+	parts := make([]*Part, 0, len(upload.Parts))
+	for _, part := range upload.Parts {
+		parts = append(parts, part)
+	}
+
+	// Sort by part number
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].PartNumber < parts[j].PartNumber
+	})
+
+	// Limit to maxParts
+	if len(parts) > maxParts {
+		parts = parts[:maxParts]
+	}
+
+	return parts, nil
+}
+
+// generateUploadID generates a unique upload ID.
+func generateUploadID() string {
+	// Generate a UUID-based upload ID similar to AWS format
+	return strings.ReplaceAll(fmt.Sprintf("%s%s", randomHex(8), randomHex(8)), "-", "")
+}
+
+// randomHex generates a random hex string.
+func randomHex(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(time.Now().UnixNano() & 0xff)
+		time.Sleep(time.Nanosecond)
+	}
+
+	return hex.EncodeToString(b)
+}
+
+// calculateMultipartETag calculates the ETag for a completed multipart upload.
+// Format: "MD5-of-MD5s-N" where N is the number of parts.
+func calculateMultipartETag(partRequests []PartRequest, parts map[int]*Part) string {
+	const md5Size = 16 // MD5 produces 16 bytes
+
+	// Concatenate all part ETags (raw MD5 values)
+	md5Concat := make([]byte, 0, len(partRequests)*md5Size)
+
+	for _, pr := range partRequests {
+		part := parts[pr.PartNumber]
+		// Extract raw MD5 from ETag (remove quotes)
+		etag := strings.Trim(part.ETag, "\"")
+
+		md5Bytes, _ := hex.DecodeString(etag)
+		md5Concat = append(md5Concat, md5Bytes...)
+	}
+
+	// Calculate MD5 of concatenated MD5s
+	finalHash := md5.Sum(md5Concat) //nolint:gosec // MD5 is required for S3 ETag calculation per AWS specification
+
+	return fmt.Sprintf("%q", fmt.Sprintf("%s-%d", hex.EncodeToString(finalHash[:]), len(partRequests)))
 }

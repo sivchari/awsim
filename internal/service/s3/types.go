@@ -139,3 +139,106 @@ type DeleteMarkerInfo struct {
 	LastModified string `xml:"LastModified"`
 	Owner        Owner  `xml:"Owner"`
 }
+
+// Multipart Upload Types
+
+// MultipartUpload represents an in-progress multipart upload.
+type MultipartUpload struct {
+	Bucket    string
+	Key       string
+	UploadID  string
+	Initiated time.Time
+	Parts     map[int]*Part // partNumber -> Part
+}
+
+// Part represents a part in a multipart upload.
+type Part struct {
+	PartNumber   int
+	ETag         string
+	Size         int64
+	LastModified time.Time
+	Body         []byte
+}
+
+// InitiateMultipartUploadResult is the response for CreateMultipartUpload.
+type InitiateMultipartUploadResult struct {
+	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
+	Xmlns    string   `xml:"xmlns,attr"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	UploadID string   `xml:"UploadId"`
+}
+
+// CompleteMultipartUploadRequest is the request body for CompleteMultipartUpload.
+type CompleteMultipartUploadRequest struct {
+	XMLName xml.Name      `xml:"CompleteMultipartUpload"`
+	Parts   []PartRequest `xml:"Part"`
+}
+
+// PartRequest represents a part in the complete request.
+type PartRequest struct {
+	PartNumber int    `xml:"PartNumber"`
+	ETag       string `xml:"ETag"`
+}
+
+// CompleteMultipartUploadResult is the response for CompleteMultipartUpload.
+type CompleteMultipartUploadResult struct {
+	XMLName  xml.Name `xml:"CompleteMultipartUploadResult"`
+	Xmlns    string   `xml:"xmlns,attr"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	ETag     string   `xml:"ETag"`
+}
+
+// ListMultipartUploadsResult is the response for ListMultipartUploads.
+type ListMultipartUploadsResult struct {
+	XMLName            xml.Name       `xml:"ListMultipartUploadsResult"`
+	Xmlns              string         `xml:"xmlns,attr"`
+	Bucket             string         `xml:"Bucket"`
+	KeyMarker          string         `xml:"KeyMarker,omitempty"`
+	UploadIDMarker     string         `xml:"UploadIdMarker,omitempty"`
+	NextKeyMarker      string         `xml:"NextKeyMarker,omitempty"`
+	NextUploadIDMarker string         `xml:"NextUploadIdMarker,omitempty"`
+	MaxUploads         int            `xml:"MaxUploads"`
+	IsTruncated        bool           `xml:"IsTruncated"`
+	Uploads            []UploadInfo   `xml:"Upload"`
+	CommonPrefixes     []CommonPrefix `xml:"CommonPrefixes,omitempty"`
+}
+
+// UploadInfo represents a multipart upload in the list response.
+type UploadInfo struct {
+	Key       string `xml:"Key"`
+	UploadID  string `xml:"UploadId"`
+	Initiated string `xml:"Initiated"`
+}
+
+// ListPartsResult is the response for ListParts.
+type ListPartsResult struct {
+	XMLName              xml.Name   `xml:"ListPartsResult"`
+	Xmlns                string     `xml:"xmlns,attr"`
+	Bucket               string     `xml:"Bucket"`
+	Key                  string     `xml:"Key"`
+	UploadID             string     `xml:"UploadId"`
+	PartNumberMarker     int        `xml:"PartNumberMarker"`
+	NextPartNumberMarker int        `xml:"NextPartNumberMarker"`
+	MaxParts             int        `xml:"MaxParts"`
+	IsTruncated          bool       `xml:"IsTruncated"`
+	Parts                []PartInfo `xml:"Part"`
+}
+
+// PartInfo represents a part in the list parts response.
+type PartInfo struct {
+	PartNumber   int    `xml:"PartNumber"`
+	LastModified string `xml:"LastModified"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
+}
+
+// CopyPartResult is the response for UploadPartCopy.
+type CopyPartResult struct {
+	XMLName      xml.Name `xml:"CopyPartResult"`
+	Xmlns        string   `xml:"xmlns,attr"`
+	LastModified string   `xml:"LastModified"`
+	ETag         string   `xml:"ETag"`
+}
