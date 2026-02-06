@@ -186,17 +186,16 @@ const (
 
 // EventSourceMapping represents a Lambda event source mapping.
 type EventSourceMapping struct {
-	UUID                           string    `json:"UUID"`
-	FunctionArn                    string    `json:"FunctionArn"`
-	EventSourceArn                 string    `json:"EventSourceArn,omitempty"`
-	State                          string    `json:"State"`
-	StateTransitionReason          string    `json:"StateTransitionReason,omitempty"`
-	BatchSize                      int       `json:"BatchSize,omitempty"`
-	MaximumBatchingWindowInSeconds int       `json:"MaximumBatchingWindowInSeconds,omitempty"`
-	Enabled                        *bool     `json:"Enabled,omitempty"`
-	LastModified                   time.Time `json:"-"`
-	LastModifiedStr                string    `json:"LastModified,omitempty"`
-	LastProcessingResult           string    `json:"LastProcessingResult,omitempty"`
+	UUID                           string  `json:"UUID"`
+	FunctionArn                    string  `json:"FunctionArn"`
+	EventSourceArn                 string  `json:"EventSourceArn,omitempty"`
+	State                          string  `json:"State"`
+	StateTransitionReason          string  `json:"StateTransitionReason,omitempty"`
+	BatchSize                      int     `json:"BatchSize,omitempty"`
+	MaximumBatchingWindowInSeconds int     `json:"MaximumBatchingWindowInSeconds,omitempty"`
+	Enabled                        *bool   `json:"Enabled,omitempty"`
+	LastModified                   float64 `json:"LastModified,omitempty"`
+	LastProcessingResult           string  `json:"LastProcessingResult,omitempty"`
 }
 
 // CreateEventSourceMappingRequest is the request for CreateEventSourceMapping.

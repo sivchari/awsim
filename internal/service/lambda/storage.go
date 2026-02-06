@@ -322,7 +322,6 @@ func (s *MemoryStorage) CreateEventSourceMapping(_ context.Context, req *CreateE
 		state = "Disabled"
 	}
 
-	now := time.Now().UTC()
 	mapping := &EventSourceMapping{
 		UUID:                           mappingUUID,
 		FunctionArn:                    fn.FunctionArn,
@@ -331,8 +330,7 @@ func (s *MemoryStorage) CreateEventSourceMapping(_ context.Context, req *CreateE
 		BatchSize:                      batchSize,
 		MaximumBatchingWindowInSeconds: req.MaximumBatchingWindowInSeconds,
 		Enabled:                        &enabled,
-		LastModified:                   now,
-		LastModifiedStr:                formatLastModified(now),
+		LastModified:                   toUnixTimestamp(time.Now().UTC()),
 		LastProcessingResult:           "No records processed",
 	}
 
@@ -476,9 +474,7 @@ func (s *MemoryStorage) UpdateEventSourceMapping(_ context.Context, uuid string,
 		}
 	}
 
-	now := time.Now().UTC()
-	mapping.LastModified = now
-	mapping.LastModifiedStr = formatLastModified(now)
+	mapping.LastModified = toUnixTimestamp(time.Now().UTC())
 
 	return mapping, nil
 }
@@ -493,9 +489,9 @@ func generateUUID() string {
 		time.Now().UnixNano()&0xFFFFFFFFFFFF)
 }
 
-// formatLastModified formats time for LastModified field.
-func formatLastModified(t time.Time) string {
-	return t.Format("2006-01-02T15:04:05.000+0000")
+// toUnixTimestamp converts time.Time to Unix timestamp as float64.
+func toUnixTimestamp(t time.Time) float64 {
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9
 }
 
 // matchesFunctionName checks if the function ARN matches the function name.
