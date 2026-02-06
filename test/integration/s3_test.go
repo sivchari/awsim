@@ -5,7 +5,9 @@ package integration
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -317,5 +319,215 @@ func TestS3_ListObjects(t *testing.T) {
 
 	if len(result.Contents) != 1 {
 		t.Errorf("expected 1 object with prefix 'dir/', got %d", len(result.Contents))
+	}
+}
+
+func newS3PresignClient(t *testing.T) *s3.PresignClient {
+	t.Helper()
+
+	return s3.NewPresignClient(newS3Client(t))
+}
+
+func TestS3_PresignedURL_GetObject(t *testing.T) {
+	client := newS3Client(t)
+	presignClient := newS3PresignClient(t)
+	ctx := t.Context()
+	bucketName := "test-presigned-get-object"
+	key := "test-presigned-key.txt"
+	content := "Hello, presigned URL!"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+		})
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Put object using regular client
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader([]byte(content)),
+	})
+	if err != nil {
+		t.Fatalf("failed to put object: %v", err)
+	}
+
+	// Generate presigned URL for GetObject
+	presignedReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 15 * time.Minute
+	})
+	if err != nil {
+		t.Fatalf("failed to presign GetObject: %v", err)
+	}
+
+	// Use presigned URL to get the object
+	resp, err := http.Get(presignedReq.URL)
+	if err != nil {
+		t.Fatalf("failed to GET presigned URL: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	if string(body) != content {
+		t.Errorf("expected content %q, got %q", content, string(body))
+	}
+}
+
+func TestS3_PresignedURL_PutObject(t *testing.T) {
+	client := newS3Client(t)
+	presignClient := newS3PresignClient(t)
+	ctx := t.Context()
+	bucketName := "test-presigned-put-object"
+	key := "test-presigned-put-key.txt"
+	content := "Hello, presigned PUT!"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+		})
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Generate presigned URL for PutObject
+	presignedReq, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 15 * time.Minute
+	})
+	if err != nil {
+		t.Fatalf("failed to presign PutObject: %v", err)
+	}
+
+	// Use presigned URL to put the object
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, presignedReq.URL, bytes.NewReader([]byte(content)))
+	if err != nil {
+		t.Fatalf("failed to create PUT request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to PUT presigned URL: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Verify object was uploaded using regular client
+	result, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to get object: %v", err)
+	}
+	defer result.Body.Close()
+
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+
+	if string(body) != content {
+		t.Errorf("expected content %q, got %q", content, string(body))
+	}
+}
+
+func TestS3_PresignedURL_Expired(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-presigned-expired"
+	key := "test-expired-key.txt"
+	content := "Hello, expired!"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+		})
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Put object using regular client
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader([]byte(content)),
+	})
+	if err != nil {
+		t.Fatalf("failed to put object: %v", err)
+	}
+
+	// Generate presigned URL with 1 second expiration
+	presignClient := newS3PresignClient(t)
+	presignedReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 1 * time.Second
+	})
+	if err != nil {
+		t.Fatalf("failed to presign GetObject: %v", err)
+	}
+
+	// Wait for URL to expire
+	time.Sleep(2 * time.Second)
+
+	// Use expired presigned URL
+	resp, err := http.Get(presignedReq.URL)
+	if err != nil {
+		t.Fatalf("failed to GET expired presigned URL: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Should return 403 Forbidden for expired URL
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected status 403 for expired URL, got %d", resp.StatusCode)
 	}
 }

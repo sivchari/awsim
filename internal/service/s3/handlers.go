@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -204,6 +205,10 @@ func (s *Service) ListObjects(w http.ResponseWriter, r *http.Request) {
 
 // PutObject handles PUT /{bucket}/{key...} - upload an object.
 func (s *Service) PutObject(w http.ResponseWriter, r *http.Request) {
+	if !checkPresignedURL(w, r) {
+		return
+	}
+
 	bucket := r.PathValue("bucket")
 	key := r.PathValue("key")
 
@@ -251,6 +256,10 @@ func (s *Service) PutObject(w http.ResponseWriter, r *http.Request) {
 
 // GetObject handles GET /{bucket}/{key...} - download an object.
 func (s *Service) GetObject(w http.ResponseWriter, r *http.Request) {
+	if !checkPresignedURL(w, r) {
+		return
+	}
+
 	bucket := r.PathValue("bucket")
 	key := r.PathValue("key")
 
@@ -407,4 +416,83 @@ func writeS3Error(w http.ResponseWriter, _ *http.Request, code, message string, 
 
 	_, _ = io.WriteString(w, xmlHeader)
 	_ = xml.NewEncoder(w).Encode(errResp)
+}
+
+// isPresignedRequest checks if the request is a presigned URL request.
+func isPresignedRequest(r *http.Request) bool {
+	return r.URL.Query().Get("X-Amz-Signature") != ""
+}
+
+// checkPresignedURL validates presigned URL if present and writes error response if invalid.
+// Returns true if the request should continue processing, false if an error was written.
+func checkPresignedURL(w http.ResponseWriter, r *http.Request) bool {
+	if !isPresignedRequest(r) {
+		return true
+	}
+
+	if err := validatePresignedURL(r); err != nil {
+		var presignErr *PresignedURLError
+		if errors.As(err, &presignErr) {
+			writeS3Error(w, r, presignErr.Code, presignErr.Message, http.StatusForbidden)
+
+			return false
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return false
+	}
+
+	return true
+}
+
+// validatePresignedURL validates the presigned URL expiration.
+// Returns nil if the URL is valid, or an error if expired.
+func validatePresignedURL(r *http.Request) error {
+	// Get the date when the URL was signed
+	amzDate := r.URL.Query().Get("X-Amz-Date")
+	if amzDate == "" {
+		return &PresignedURLError{Code: "AuthorizationQueryParametersError", Message: "X-Amz-Date must be in the ISO8601 Long Format"}
+	}
+
+	// Get the expiration in seconds
+	expiresStr := r.URL.Query().Get("X-Amz-Expires")
+	if expiresStr == "" {
+		return &PresignedURLError{Code: "AuthorizationQueryParametersError", Message: "X-Amz-Expires must be provided"}
+	}
+
+	expires, err := strconv.ParseInt(expiresStr, 10, 64)
+	if err != nil {
+		return &PresignedURLError{Code: "AuthorizationQueryParametersError", Message: "X-Amz-Expires must be a number"}
+	}
+
+	// AWS allows max 7 days (604800 seconds) for presigned URLs
+	const maxExpires = 604800
+	if expires > maxExpires {
+		return &PresignedURLError{Code: "AuthorizationQueryParametersError", Message: "X-Amz-Expires must be less than 604800 seconds"}
+	}
+
+	// Parse the signing date (format: 20060102T150405Z)
+	signTime, err := time.Parse("20060102T150405Z", amzDate)
+	if err != nil {
+		return &PresignedURLError{Code: "AuthorizationQueryParametersError", Message: "Invalid X-Amz-Date format"}
+	}
+
+	// Check if the URL has expired
+	expirationTime := signTime.Add(time.Duration(expires) * time.Second)
+	if time.Now().After(expirationTime) {
+		return &PresignedURLError{Code: "AccessDenied", Message: "Request has expired"}
+	}
+
+	return nil
+}
+
+// PresignedURLError represents a presigned URL validation error.
+type PresignedURLError struct {
+	Code    string
+	Message string
+}
+
+func (e *PresignedURLError) Error() string {
+	return e.Code + ": " + e.Message
 }
