@@ -13,11 +13,9 @@ import (
 
 // Error codes for CloudWatch Logs.
 const (
-	errResourceNotFound      = "ResourceNotFoundException"
-	errResourceAlreadyExists = "ResourceAlreadyExistsException"
-	errInvalidParameter      = "InvalidParameterException"
-	errInternalServiceError  = "ServiceUnavailableException"
-	errInvalidAction         = "UnrecognizedClientException"
+	errInvalidParameter     = "InvalidParameterException"
+	errInternalServiceError = "ServiceUnavailableException"
+	errInvalidAction        = "UnrecognizedClientException"
 )
 
 // CreateLogGroup handles the CreateLogGroup action.
@@ -275,15 +273,7 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 func handleLogsError(w http.ResponseWriter, err error) {
 	var logsErr *LogsError
 	if errors.As(err, &logsErr) {
-		status := http.StatusBadRequest
-
-		if logsErr.Code == errResourceNotFound {
-			status = http.StatusBadRequest
-		} else if logsErr.Code == errResourceAlreadyExists {
-			status = http.StatusBadRequest
-		}
-
-		writeLogsError(w, logsErr.Code, logsErr.Message, status)
+		writeLogsError(w, logsErr.Code, logsErr.Message, http.StatusBadRequest)
 
 		return
 	}
