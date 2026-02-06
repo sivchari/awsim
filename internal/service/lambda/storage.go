@@ -17,24 +17,33 @@ type Storage interface {
 	ListFunctions(ctx context.Context, marker string, maxItems int) ([]*Function, string, error)
 	UpdateFunctionCode(ctx context.Context, name string, req *UpdateFunctionCodeRequest) (*Function, error)
 	UpdateFunctionConfiguration(ctx context.Context, name string, req *UpdateFunctionConfigurationRequest) (*Function, error)
+
+	// EventSourceMapping operations
+	CreateEventSourceMapping(ctx context.Context, req *CreateEventSourceMappingRequest) (*EventSourceMapping, error)
+	GetEventSourceMapping(ctx context.Context, uuid string) (*EventSourceMapping, error)
+	DeleteEventSourceMapping(ctx context.Context, uuid string) error
+	ListEventSourceMappings(ctx context.Context, functionName, eventSourceArn, marker string, maxItems int) ([]*EventSourceMapping, string, error)
+	UpdateEventSourceMapping(ctx context.Context, uuid string, req *UpdateEventSourceMappingRequest) (*EventSourceMapping, error)
 }
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	functions map[string]*Function
-	baseURL   string
-	region    string
-	accountID string
+	mu                  sync.RWMutex
+	functions           map[string]*Function
+	eventSourceMappings map[string]*EventSourceMapping
+	baseURL             string
+	region              string
+	accountID           string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
 func NewMemoryStorage(baseURL string) *MemoryStorage {
 	return &MemoryStorage{
-		functions: make(map[string]*Function),
-		baseURL:   baseURL,
-		region:    "us-east-1",
-		accountID: "000000000000",
+		functions:           make(map[string]*Function),
+		eventSourceMappings: make(map[string]*EventSourceMapping),
+		baseURL:             baseURL,
+		region:              "us-east-1",
+		accountID:           "000000000000",
 	}
 }
 
@@ -278,4 +287,249 @@ func (s *MemoryStorage) UpdateFunctionConfiguration(_ context.Context, name stri
 	fn.LastModified = time.Now().UTC()
 
 	return fn, nil
+}
+
+// CreateEventSourceMapping creates a new event source mapping.
+func (s *MemoryStorage) CreateEventSourceMapping(_ context.Context, req *CreateEventSourceMappingRequest) (*EventSourceMapping, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Validate function exists
+	fn, exists := s.functions[req.FunctionName]
+	if !exists {
+		return nil, &FunctionError{
+			Type:    ErrResourceNotFound,
+			Message: fmt.Sprintf("Function not found: %s", req.FunctionName),
+		}
+	}
+
+	// Generate UUID
+	mappingUUID := generateUUID()
+
+	// Set defaults
+	batchSize := req.BatchSize
+	if batchSize == 0 {
+		batchSize = 10
+	}
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	state := "Enabled"
+	if !enabled {
+		state = "Disabled"
+	}
+
+	now := time.Now().UTC()
+	mapping := &EventSourceMapping{
+		UUID:                           mappingUUID,
+		FunctionArn:                    fn.FunctionArn,
+		EventSourceArn:                 req.EventSourceArn,
+		State:                          state,
+		BatchSize:                      batchSize,
+		MaximumBatchingWindowInSeconds: req.MaximumBatchingWindowInSeconds,
+		Enabled:                        &enabled,
+		LastModified:                   now,
+		LastModifiedStr:                formatLastModified(now),
+		LastProcessingResult:           "No records processed",
+	}
+
+	s.eventSourceMappings[mappingUUID] = mapping
+
+	return mapping, nil
+}
+
+// GetEventSourceMapping retrieves an event source mapping by UUID.
+func (s *MemoryStorage) GetEventSourceMapping(_ context.Context, uuid string) (*EventSourceMapping, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	mapping, exists := s.eventSourceMappings[uuid]
+	if !exists {
+		return nil, &FunctionError{
+			Type:    ErrResourceNotFound,
+			Message: fmt.Sprintf("Event source mapping not found: %s", uuid),
+		}
+	}
+
+	return mapping, nil
+}
+
+// DeleteEventSourceMapping deletes an event source mapping.
+func (s *MemoryStorage) DeleteEventSourceMapping(_ context.Context, uuid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mapping, exists := s.eventSourceMappings[uuid]
+	if !exists {
+		return &FunctionError{
+			Type:    ErrResourceNotFound,
+			Message: fmt.Sprintf("Event source mapping not found: %s", uuid),
+		}
+	}
+
+	// Mark as deleting state before removing
+	mapping.State = "Deleting"
+	delete(s.eventSourceMappings, uuid)
+
+	return nil
+}
+
+// ListEventSourceMappings lists event source mappings with optional filters.
+func (s *MemoryStorage) ListEventSourceMappings(_ context.Context, functionName, eventSourceArn, marker string, maxItems int) ([]*EventSourceMapping, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if maxItems == 0 {
+		maxItems = 100
+	}
+
+	// Collect matching mappings
+	var mappings []*EventSourceMapping
+	for _, m := range s.eventSourceMappings {
+		// Filter by function name if specified
+		if functionName != "" && !matchesFunctionName(m.FunctionArn, functionName) {
+			continue
+		}
+
+		// Filter by event source ARN if specified
+		if eventSourceArn != "" && m.EventSourceArn != eventSourceArn {
+			continue
+		}
+
+		mappings = append(mappings, m)
+	}
+
+	// Simple pagination
+	start := 0
+	if marker != "" {
+		for i, m := range mappings {
+			if m.UUID == marker {
+				start = i + 1
+
+				break
+			}
+		}
+	}
+
+	end := start + maxItems
+	if end > len(mappings) {
+		end = len(mappings)
+	}
+
+	result := mappings[start:end]
+	nextMarker := ""
+
+	if end < len(mappings) {
+		nextMarker = mappings[end-1].UUID
+	}
+
+	return result, nextMarker, nil
+}
+
+// UpdateEventSourceMapping updates an event source mapping.
+func (s *MemoryStorage) UpdateEventSourceMapping(_ context.Context, uuid string, req *UpdateEventSourceMappingRequest) (*EventSourceMapping, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mapping, exists := s.eventSourceMappings[uuid]
+	if !exists {
+		return nil, &FunctionError{
+			Type:    ErrResourceNotFound,
+			Message: fmt.Sprintf("Event source mapping not found: %s", uuid),
+		}
+	}
+
+	// Update function ARN if function name is specified
+	if req.FunctionName != "" {
+		fn, fnExists := s.functions[req.FunctionName]
+		if !fnExists {
+			return nil, &FunctionError{
+				Type:    ErrResourceNotFound,
+				Message: fmt.Sprintf("Function not found: %s", req.FunctionName),
+			}
+		}
+
+		mapping.FunctionArn = fn.FunctionArn
+	}
+
+	if req.BatchSize > 0 {
+		mapping.BatchSize = req.BatchSize
+	}
+
+	if req.MaximumBatchingWindowInSeconds > 0 {
+		mapping.MaximumBatchingWindowInSeconds = req.MaximumBatchingWindowInSeconds
+	}
+
+	if req.Enabled != nil {
+		mapping.Enabled = req.Enabled
+
+		if *req.Enabled {
+			mapping.State = "Enabled"
+		} else {
+			mapping.State = "Disabled"
+		}
+	}
+
+	now := time.Now().UTC()
+	mapping.LastModified = now
+	mapping.LastModifiedStr = formatLastModified(now)
+
+	return mapping, nil
+}
+
+// generateUUID generates a UUID for event source mapping.
+func generateUUID() string {
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		time.Now().UnixNano()&0xFFFFFFFF,
+		time.Now().UnixNano()>>32&0xFFFF,
+		0x4000|time.Now().UnixNano()>>48&0x0FFF,
+		0x8000|time.Now().UnixNano()>>60&0x3FFF,
+		time.Now().UnixNano()&0xFFFFFFFFFFFF)
+}
+
+// formatLastModified formats time for LastModified field.
+func formatLastModified(t time.Time) string {
+	return t.Format("2006-01-02T15:04:05.000+0000")
+}
+
+// matchesFunctionName checks if the function ARN matches the function name.
+func matchesFunctionName(functionArn, functionName string) bool {
+	// Function name can be the full ARN or just the function name
+	if functionArn == functionName {
+		return true
+	}
+
+	// Extract function name from ARN
+	// ARN format: arn:aws:lambda:region:account:function:name
+	parts := splitARN(functionArn)
+	if len(parts) >= 7 && parts[6] == functionName {
+		return true
+	}
+
+	return false
+}
+
+// splitARN splits an ARN into its components.
+func splitARN(arn string) []string {
+	return splitString(arn, ':')
+}
+
+// splitString splits a string by separator.
+func splitString(s string, sep byte) []string {
+	var result []string
+	start := 0
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			result = append(result, s[start:i])
+			start = i + 1
+		}
+	}
+
+	result = append(result, s[start:])
+
+	return result
 }

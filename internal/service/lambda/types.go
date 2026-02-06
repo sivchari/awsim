@@ -183,3 +183,41 @@ const (
 	ErrInvalidParameterValue = "InvalidParameterValueException"
 	ErrServiceException      = "ServiceException"
 )
+
+// EventSourceMapping represents a Lambda event source mapping.
+type EventSourceMapping struct {
+	UUID                           string    `json:"UUID"`
+	FunctionArn                    string    `json:"FunctionArn"`
+	EventSourceArn                 string    `json:"EventSourceArn,omitempty"`
+	State                          string    `json:"State"`
+	StateTransitionReason          string    `json:"StateTransitionReason,omitempty"`
+	BatchSize                      int       `json:"BatchSize,omitempty"`
+	MaximumBatchingWindowInSeconds int       `json:"MaximumBatchingWindowInSeconds,omitempty"`
+	Enabled                        *bool     `json:"Enabled,omitempty"`
+	LastModified                   time.Time `json:"-"`
+	LastModifiedStr                string    `json:"LastModified,omitempty"`
+	LastProcessingResult           string    `json:"LastProcessingResult,omitempty"`
+}
+
+// CreateEventSourceMappingRequest is the request for CreateEventSourceMapping.
+type CreateEventSourceMappingRequest struct {
+	FunctionName                   string `json:"FunctionName"`
+	EventSourceArn                 string `json:"EventSourceArn,omitempty"`
+	BatchSize                      int    `json:"BatchSize,omitempty"`
+	MaximumBatchingWindowInSeconds int    `json:"MaximumBatchingWindowInSeconds,omitempty"`
+	Enabled                        *bool  `json:"Enabled,omitempty"`
+}
+
+// UpdateEventSourceMappingRequest is the request for UpdateEventSourceMapping.
+type UpdateEventSourceMappingRequest struct {
+	FunctionName                   string `json:"FunctionName,omitempty"`
+	BatchSize                      int    `json:"BatchSize,omitempty"`
+	MaximumBatchingWindowInSeconds int    `json:"MaximumBatchingWindowInSeconds,omitempty"`
+	Enabled                        *bool  `json:"Enabled,omitempty"`
+}
+
+// ListEventSourceMappingsResponse is the response for ListEventSourceMappings.
+type ListEventSourceMappingsResponse struct {
+	EventSourceMappings []*EventSourceMapping `json:"EventSourceMappings"`
+	NextMarker          string                `json:"NextMarker,omitempty"`
+}
