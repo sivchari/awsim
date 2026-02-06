@@ -146,7 +146,7 @@ func (s *MemoryStorage) GetParametersByPath(_ context.Context, path string, recu
 	}
 
 	if !strings.HasSuffix(path, "/") {
-		path = path + "/"
+		path += "/"
 	}
 
 	// Collect matching parameters

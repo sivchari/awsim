@@ -254,14 +254,8 @@ func parameterToMetadata(p *Parameter) *ParameterMetadata {
 func handleSSMError(w http.ResponseWriter, err error) {
 	var ssmErr *ParameterError
 	if errors.As(err, &ssmErr) {
-		status := http.StatusBadRequest
-		if ssmErr.Type == ErrParameterNotFound {
-			status = http.StatusBadRequest // SSM returns 400 for not found
-		} else if ssmErr.Type == ErrParameterAlreadyExists {
-			status = http.StatusBadRequest
-		}
-
-		writeSSMError(w, ssmErr.Type, ssmErr.Message, status)
+		// SSM returns 400 for all parameter errors (not found, already exists, etc.)
+		writeSSMError(w, ssmErr.Type, ssmErr.Message, http.StatusBadRequest)
 
 		return
 	}
