@@ -47,7 +47,7 @@ func (s *Service) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	writeXMLResponse(w, http.StatusOK, result)
+	writeXMLResponse(w, result)
 }
 
 // CreateBucket handles PUT /{bucket} - create a bucket.
@@ -174,12 +174,12 @@ func (s *Service) ListObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contents := make([]ObjectInfo, len(objects))
-	for i, obj := range objects {
+	for i := range objects {
 		contents[i] = ObjectInfo{
-			Key:          obj.Key,
-			LastModified: obj.LastModified.Format(timeFormatISO),
-			ETag:         obj.ETag,
-			Size:         obj.Size,
+			Key:          objects[i].Key,
+			LastModified: objects[i].LastModified.Format(timeFormatISO),
+			ETag:         objects[i].ETag,
+			Size:         objects[i].Size,
 			StorageClass: "STANDARD",
 		}
 	}
@@ -200,7 +200,7 @@ func (s *Service) ListObjects(w http.ResponseWriter, r *http.Request) {
 		CommonPrefixes: prefixes,
 	}
 
-	writeXMLResponse(w, http.StatusOK, result)
+	writeXMLResponse(w, result)
 }
 
 // PutObject handles PUT /{bucket}/{key...} - upload an object.
@@ -280,49 +280,57 @@ func (s *Service) GetObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for version ID
 	versionID := r.URL.Query().Get("versionId")
-
-	var obj *Object
-	var err error
-
-	if versionID != "" {
-		obj, err = s.storage.GetObjectVersion(r.Context(), bucket, key, versionID)
-	} else {
-		obj, err = s.storage.GetObject(r.Context(), bucket, key)
-	}
+	obj, err := s.getObjectByVersion(r, bucket, key, versionID)
 
 	if err != nil {
-		var bucketErr *BucketError
-		if errors.As(err, &bucketErr) {
-			writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
-
-			return
-		}
-
-		var objErr *ObjectError
-		if errors.As(err, &objErr) {
-			writeS3Error(w, r, objErr.Code, objErr.Message, http.StatusNotFound)
-
-			return
-		}
-
-		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+		handleGetObjectError(w, r, err)
 
 		return
 	}
 
+	writeObjectResponse(w, obj)
+}
+
+// getObjectByVersion retrieves an object, optionally by version ID.
+func (s *Service) getObjectByVersion(r *http.Request, bucket, key, versionID string) (*Object, error) {
+	if versionID != "" {
+		return s.storage.GetObjectVersion(r.Context(), bucket, key, versionID)
+	}
+
+	return s.storage.GetObject(r.Context(), bucket, key)
+}
+
+// handleGetObjectError handles errors from GetObject/GetObjectVersion.
+func handleGetObjectError(w http.ResponseWriter, r *http.Request, err error) {
+	var bucketErr *BucketError
+	if errors.As(err, &bucketErr) {
+		writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+		return
+	}
+
+	var objErr *ObjectError
+	if errors.As(err, &objErr) {
+		writeS3Error(w, r, objErr.Code, objErr.Message, http.StatusNotFound)
+
+		return
+	}
+
+	writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+}
+
+// writeObjectResponse writes the object response with headers and body.
+func writeObjectResponse(w http.ResponseWriter, obj *Object) {
 	w.Header().Set("Content-Type", obj.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
 	w.Header().Set("ETag", obj.ETag)
 	w.Header().Set("Last-Modified", obj.LastModified.UTC().Format(timeFormatHTTP))
 
-	// Set version ID header if present
 	if obj.VersionID != "" {
 		w.Header().Set("x-amz-version-id", obj.VersionID)
 	}
 
-	// Set metadata headers
 	for k, v := range obj.Metadata {
 		if k != "Content-Type" {
 			w.Header().Set("x-amz-meta-"+k, v)
@@ -351,17 +359,8 @@ func (s *Service) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for version ID
 	versionID := r.URL.Query().Get("versionId")
-
-	var deleteMarker *Object
-	var err error
-
-	if versionID != "" {
-		deleteMarker, err = s.storage.DeleteObjectVersion(r.Context(), bucket, key, versionID)
-	} else {
-		deleteMarker, err = s.storage.DeleteObject(r.Context(), bucket, key)
-	}
+	deleteMarker, err := s.deleteObjectByVersion(r, bucket, key, versionID)
 
 	if err != nil {
 		var bucketErr *BucketError
@@ -388,6 +387,15 @@ func (s *Service) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteObjectByVersion deletes an object, optionally by version ID.
+func (s *Service) deleteObjectByVersion(r *http.Request, bucket, key, versionID string) (*Object, error) {
+	if versionID != "" {
+		return s.storage.DeleteObjectVersion(r.Context(), bucket, key, versionID)
+	}
+
+	return s.storage.DeleteObject(r.Context(), bucket, key)
 }
 
 // HeadObject handles HEAD /{bucket}/{key...} - get object metadata.
@@ -498,7 +506,7 @@ func (s *Service) GetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 		Status: status,
 	}
 
-	writeXMLResponse(w, http.StatusOK, result)
+	writeXMLResponse(w, result)
 }
 
 // ListObjectVersions handles GET /{bucket}?versions - list object versions.
@@ -512,67 +520,17 @@ func (s *Service) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 
 	prefix := r.URL.Query().Get("prefix")
 	delimiter := r.URL.Query().Get("delimiter")
-	maxKeys := 1000
-
-	if maxKeysStr := r.URL.Query().Get("max-keys"); maxKeysStr != "" {
-		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 {
-			maxKeys = mk
-		}
-	}
+	maxKeys := parseMaxKeys(r.URL.Query().Get("max-keys"))
 
 	objects, commonPrefixes, err := s.storage.ListObjectVersions(r.Context(), bucket, prefix, delimiter, maxKeys)
 	if err != nil {
-		var bucketErr *BucketError
-		if errors.As(err, &bucketErr) {
-			writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
-
-			return
-		}
-
-		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+		handleListVersionsError(w, r, err)
 
 		return
 	}
 
-	// Separate versions and delete markers
-	versions := make([]ObjectVersionInfo, 0)
-	deleteMarkers := make([]DeleteMarkerInfo, 0)
-
-	for i, obj := range objects {
-		isLatest := i == 0 || (i > 0 && objects[i-1].Key != obj.Key)
-
-		if obj.IsDeleteMarker {
-			deleteMarkers = append(deleteMarkers, DeleteMarkerInfo{
-				Key:          obj.Key,
-				VersionID:    obj.VersionID,
-				IsLatest:     isLatest,
-				LastModified: obj.LastModified.Format(timeFormatISO),
-				Owner: Owner{
-					ID:          "owner-id",
-					DisplayName: "owner",
-				},
-			})
-		} else {
-			versions = append(versions, ObjectVersionInfo{
-				Key:          obj.Key,
-				VersionID:    obj.VersionID,
-				IsLatest:     isLatest,
-				LastModified: obj.LastModified.Format(timeFormatISO),
-				ETag:         obj.ETag,
-				Size:         obj.Size,
-				StorageClass: "STANDARD",
-				Owner: Owner{
-					ID:          "owner-id",
-					DisplayName: "owner",
-				},
-			})
-		}
-	}
-
-	prefixes := make([]CommonPrefix, len(commonPrefixes))
-	for i, p := range commonPrefixes {
-		prefixes[i] = CommonPrefix{Prefix: p}
-	}
+	versions, deleteMarkers := separateVersionsAndDeleteMarkers(objects)
+	prefixes := toCommonPrefixes(commonPrefixes)
 
 	result := ListVersionsResult{
 		Xmlns:          s3Namespace,
@@ -585,7 +543,86 @@ func (s *Service) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 		CommonPrefixes: prefixes,
 	}
 
-	writeXMLResponse(w, http.StatusOK, result)
+	writeXMLResponse(w, result)
+}
+
+// parseMaxKeys parses max-keys query parameter with default of 1000.
+func parseMaxKeys(maxKeysStr string) int {
+	if maxKeysStr == "" {
+		return 1000
+	}
+
+	if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 {
+		return mk
+	}
+
+	return 1000
+}
+
+// handleListVersionsError handles errors from ListObjectVersions.
+func handleListVersionsError(w http.ResponseWriter, r *http.Request, err error) {
+	var bucketErr *BucketError
+	if errors.As(err, &bucketErr) {
+		writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+		return
+	}
+
+	writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+}
+
+// separateVersionsAndDeleteMarkers separates objects into versions and delete markers.
+func separateVersionsAndDeleteMarkers(objects []Object) ([]ObjectVersionInfo, []DeleteMarkerInfo) {
+	versions := make([]ObjectVersionInfo, 0, len(objects))
+	deleteMarkers := make([]DeleteMarkerInfo, 0)
+
+	for i := range objects {
+		obj := &objects[i]
+		isLatest := i == 0 || objects[i-1].Key != obj.Key
+
+		if obj.IsDeleteMarker {
+			deleteMarkers = append(deleteMarkers, toDeleteMarkerInfo(obj, isLatest))
+		} else {
+			versions = append(versions, toObjectVersionInfo(obj, isLatest))
+		}
+	}
+
+	return versions, deleteMarkers
+}
+
+// toObjectVersionInfo converts an Object to ObjectVersionInfo.
+func toObjectVersionInfo(obj *Object, isLatest bool) ObjectVersionInfo {
+	return ObjectVersionInfo{
+		Key:          obj.Key,
+		VersionID:    obj.VersionID,
+		IsLatest:     isLatest,
+		LastModified: obj.LastModified.Format(timeFormatISO),
+		ETag:         obj.ETag,
+		Size:         obj.Size,
+		StorageClass: "STANDARD",
+		Owner:        Owner{ID: "owner-id", DisplayName: "owner"},
+	}
+}
+
+// toDeleteMarkerInfo converts an Object to DeleteMarkerInfo.
+func toDeleteMarkerInfo(obj *Object, isLatest bool) DeleteMarkerInfo {
+	return DeleteMarkerInfo{
+		Key:          obj.Key,
+		VersionID:    obj.VersionID,
+		IsLatest:     isLatest,
+		LastModified: obj.LastModified.Format(timeFormatISO),
+		Owner:        Owner{ID: "owner-id", DisplayName: "owner"},
+	}
+}
+
+// toCommonPrefixes converts string slice to CommonPrefix slice.
+func toCommonPrefixes(prefixes []string) []CommonPrefix {
+	result := make([]CommonPrefix, len(prefixes))
+	for i, p := range prefixes {
+		result[i] = CommonPrefix{Prefix: p}
+	}
+
+	return result
 }
 
 // handleBucketPut routes PUT /{bucket} requests based on query parameters.
@@ -616,10 +653,10 @@ func (s *Service) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	s.ListObjects(w, r)
 }
 
-// writeXMLResponse writes an XML response.
-func writeXMLResponse(w http.ResponseWriter, status int, v any) {
+// writeXMLResponse writes an XML response with HTTP 200 OK status.
+func writeXMLResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 
 	_, _ = io.WriteString(w, xmlHeader)
 	_ = xml.NewEncoder(w).Encode(v)

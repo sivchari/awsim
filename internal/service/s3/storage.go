@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+// Versioning status constants.
+const (
+	VersioningEnabled   = "Enabled"
+	VersioningSuspended = "Suspended"
+	VersionIDNull       = "null"
+)
+
 // Storage defines the S3 storage interface.
 type Storage interface {
 	// Bucket operations
@@ -164,22 +171,24 @@ func (s *MemoryStorage) PutObject(_ context.Context, bucket, key string, body io
 	}
 
 	// Handle versioning
-	if b.versioningStatus == "Enabled" {
+	switch b.versioningStatus {
+	case VersioningEnabled:
 		// Generate version ID
 		b.versionIDCounter++
 		obj.VersionID = fmt.Sprintf("v%d", b.versionIDCounter)
 
 		// Prepend to versions list (newest first)
 		b.versions[key] = append([]*Object{obj}, b.versions[key]...)
-	} else if b.versioningStatus == "Suspended" {
+	case VersioningSuspended:
 		// For suspended versioning, use "null" version ID
-		obj.VersionID = "null"
+		obj.VersionID = VersionIDNull
 
 		// Remove any existing "null" version
 		versions := b.versions[key]
 		newVersions := make([]*Object, 0, len(versions))
+
 		for _, v := range versions {
-			if v.VersionID != "null" {
+			if v.VersionID != VersionIDNull {
 				newVersions = append(newVersions, v)
 			}
 		}
@@ -241,6 +250,7 @@ func (s *MemoryStorage) GetObjectVersion(_ context.Context, bucket, key, version
 }
 
 // DeleteObject deletes an object.
+// Returns the deleted object (or delete marker for versioned buckets), or nil if non-versioned delete.
 func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Object, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -250,9 +260,8 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	// Handle versioning
-	if b.versioningStatus == "Enabled" {
-		// Create a delete marker
+	// Handle versioning - create delete marker for enabled buckets
+	if b.versioningStatus == VersioningEnabled {
 		b.versionIDCounter++
 		deleteMarker := &Object{
 			Key:            key,
@@ -272,12 +281,12 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 	delete(b.objects, key)
 
 	// For suspended buckets, also remove "null" version
-	if b.versioningStatus == "Suspended" {
+	if b.versioningStatus == VersioningSuspended {
 		versions := b.versions[key]
 		newVersions := make([]*Object, 0, len(versions))
 
 		for _, v := range versions {
-			if v.VersionID != "null" {
+			if v.VersionID != VersionIDNull {
 				newVersions = append(newVersions, v)
 			}
 		}
@@ -289,7 +298,8 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 		}
 	}
 
-	return nil, nil
+	// Return empty object for non-versioned delete (S3 returns 204 with no body)
+	return &Object{Key: key}, nil //nolint:nilnil // S3 returns empty response for non-versioned delete
 }
 
 // DeleteObjectVersion deletes a specific version of an object.
@@ -303,20 +313,11 @@ func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, vers
 	}
 
 	versions := b.versions[key]
-	var deletedObj *Object
+	deletedObj, newVersions := filterOutVersion(versions, versionID)
 
-	newVersions := make([]*Object, 0, len(versions))
-	for _, v := range versions {
-		if v.VersionID == versionID {
-			deletedObj = v
-		} else {
-			newVersions = append(newVersions, v)
-		}
-	}
-
+	// S3 doesn't return error if version doesn't exist, returns empty object
 	if deletedObj == nil {
-		// S3 doesn't return error if version doesn't exist
-		return nil, nil
+		return &Object{Key: key, VersionID: versionID}, nil //nolint:nilnil // S3 returns empty response for non-existent version
 	}
 
 	if len(newVersions) == 0 {
@@ -329,6 +330,23 @@ func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, vers
 	}
 
 	return deletedObj, nil
+}
+
+// filterOutVersion removes a specific version from the versions list.
+func filterOutVersion(versions []*Object, versionID string) (*Object, []*Object) {
+	var deletedObj *Object
+
+	newVersions := make([]*Object, 0, len(versions))
+
+	for _, v := range versions {
+		if v.VersionID == versionID {
+			deletedObj = v
+		} else {
+			newVersions = append(newVersions, v)
+		}
+	}
+
+	return deletedObj, newVersions
 }
 
 // HeadObject retrieves object metadata without body.
@@ -435,7 +453,7 @@ func (s *MemoryStorage) PutBucketVersioning(_ context.Context, bucket, status st
 		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	if status != "Enabled" && status != "Suspended" && status != "" {
+	if status != VersioningEnabled && status != VersioningSuspended && status != "" {
 		return &BucketError{Code: "MalformedXML", Message: "Invalid versioning status", BucketName: bucket}
 	}
 
@@ -471,92 +489,127 @@ func (s *MemoryStorage) ListObjectVersions(_ context.Context, bucket, prefix, de
 		maxKeys = 1000
 	}
 
-	// Collect all keys that have versions
-	keys := make([]string, 0, len(b.versions))
-	for key := range b.versions {
-		if prefix == "" || strings.HasPrefix(key, prefix) {
-			keys = append(keys, key)
-		}
-	}
-
-	// Also include keys from objects that don't have versioning history
-	for key := range b.objects {
-		if prefix == "" || strings.HasPrefix(key, prefix) {
-			if _, hasVersions := b.versions[key]; !hasVersions {
-				keys = append(keys, key)
-			}
-		}
-	}
-
+	keys := collectVersionKeys(b, prefix)
 	sort.Strings(keys)
 
+	objects, commonPrefixes := processVersionKeys(b, keys, prefix, delimiter, maxKeys)
+	prefixList := sortedPrefixList(commonPrefixes)
+
+	return objects, prefixList, nil
+}
+
+// collectVersionKeys collects all keys that match the prefix from both versions and objects maps.
+func collectVersionKeys(b *memoryBucket, prefix string) []string {
+	keySet := make(map[string]bool)
+
+	for key := range b.versions {
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			keySet[key] = true
+		}
+	}
+
+	for key := range b.objects {
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			keySet[key] = true
+		}
+	}
+
+	keys := make([]string, 0, len(keySet))
+	for key := range keySet {
+		keys = append(keys, key)
+	}
+
+	return keys
+}
+
+// processVersionKeys processes keys and returns objects and common prefixes.
+func processVersionKeys(b *memoryBucket, keys []string, prefix, delimiter string, maxKeys int) ([]Object, map[string]bool) {
 	objects := make([]Object, 0)
 	commonPrefixes := make(map[string]bool)
 	count := 0
 
 	for _, key := range keys {
-		// Handle delimiter
+		if count >= maxKeys {
+			break
+		}
+
+		// Handle delimiter for common prefixes
 		if delimiter != "" {
-			remainder := strings.TrimPrefix(key, prefix)
-			if idx := strings.Index(remainder, delimiter); idx >= 0 {
-				commonPrefix := prefix + remainder[:idx+len(delimiter)]
-				commonPrefixes[commonPrefix] = true
+			if cp := extractCommonPrefix(key, prefix, delimiter); cp != "" {
+				commonPrefixes[cp] = true
 
 				continue
 			}
 		}
 
-		// Get all versions for this key
-		versions := b.versions[key]
-		if len(versions) == 0 {
-			// No versioning history, include current object
-			if obj, exists := b.objects[key]; exists {
-				objects = append(objects, Object{
-					Key:            obj.Key,
-					VersionID:      obj.VersionID,
-					ETag:           obj.ETag,
-					Size:           obj.Size,
-					LastModified:   obj.LastModified,
-					IsDeleteMarker: obj.IsDeleteMarker,
-				})
-				count++
-			}
-		} else {
-			// Include all versions
-			for i, obj := range versions {
-				objects = append(objects, Object{
-					Key:            obj.Key,
-					VersionID:      obj.VersionID,
-					ETag:           obj.ETag,
-					Size:           obj.Size,
-					LastModified:   obj.LastModified,
-					IsDeleteMarker: obj.IsDeleteMarker,
-				})
-				// Mark first version (newest) as latest
-				if i == 0 {
-					objects[len(objects)-1].VersionID = obj.VersionID
-				}
-				count++
+		// Add versions for this key
+		added := addKeyVersions(b, key, &objects, maxKeys-count)
+		count += added
+	}
 
-				if count >= maxKeys {
-					break
-				}
-			}
+	return objects, commonPrefixes
+}
+
+// extractCommonPrefix extracts common prefix if delimiter is found.
+func extractCommonPrefix(key, prefix, delimiter string) string {
+	remainder := strings.TrimPrefix(key, prefix)
+	if idx := strings.Index(remainder, delimiter); idx >= 0 {
+		return prefix + remainder[:idx+len(delimiter)]
+	}
+
+	return ""
+}
+
+// addKeyVersions adds all versions of a key to the objects slice.
+func addKeyVersions(b *memoryBucket, key string, objects *[]Object, limit int) int {
+	versions := b.versions[key]
+	if len(versions) == 0 {
+		// No versioning history, include current object if exists
+		if obj, exists := b.objects[key]; exists {
+			*objects = append(*objects, objectToVersionInfo(obj))
+
+			return 1
 		}
 
-		if count >= maxKeys {
+		return 0
+	}
+
+	count := 0
+
+	for _, obj := range versions {
+		if count >= limit {
 			break
 		}
+
+		*objects = append(*objects, objectToVersionInfo(obj))
+		count++
 	}
 
-	prefixList := make([]string, 0, len(commonPrefixes))
-	for p := range commonPrefixes {
-		prefixList = append(prefixList, p)
+	return count
+}
+
+// objectToVersionInfo converts an Object to version info format.
+func objectToVersionInfo(obj *Object) Object {
+	return Object{
+		Key:            obj.Key,
+		VersionID:      obj.VersionID,
+		ETag:           obj.ETag,
+		Size:           obj.Size,
+		LastModified:   obj.LastModified,
+		IsDeleteMarker: obj.IsDeleteMarker,
+	}
+}
+
+// sortedPrefixList converts a map of prefixes to a sorted slice.
+func sortedPrefixList(prefixes map[string]bool) []string {
+	list := make([]string, 0, len(prefixes))
+	for p := range prefixes {
+		list = append(list, p)
 	}
 
-	sort.Strings(prefixList)
+	sort.Strings(list)
 
-	return objects, prefixList, nil
+	return list
 }
 
 // BucketError represents an S3 bucket error.
