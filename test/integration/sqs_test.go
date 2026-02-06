@@ -331,3 +331,196 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 		t.Errorf("VisibilityTimeout mismatch: got %s, want 120", vt)
 	}
 }
+
+func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-fifo.fifo"
+
+	// Create FIFO queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"FifoQueue":                 "true",
+			"ContentBasedDeduplication": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create FIFO queue: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message with MessageGroupId.
+	sendOutput, err := client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:       createOutput.QueueUrl,
+		MessageBody:    aws.String("FIFO message"),
+		MessageGroupId: aws.String("group1"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message to FIFO queue: %v", err)
+	}
+
+	if sendOutput.MessageId == nil {
+		t.Fatal("message ID is nil")
+	}
+
+	if sendOutput.SequenceNumber == nil {
+		t.Fatal("sequence number is nil for FIFO queue")
+	}
+
+	t.Logf("Sent message: %s, SequenceNumber: %s", *sendOutput.MessageId, *sendOutput.SequenceNumber)
+}
+
+func TestSQS_FIFOQueue_GetAttributes(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-fifo-attrs.fifo"
+
+	// Create FIFO queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"FifoQueue":                 "true",
+			"ContentBasedDeduplication": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create FIFO queue: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Get queue attributes.
+	getOutput, err := client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: createOutput.QueueUrl,
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameAll,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to get queue attributes: %v", err)
+	}
+
+	if fifo, ok := getOutput.Attributes["FifoQueue"]; !ok || fifo != "true" {
+		t.Errorf("FifoQueue attribute mismatch: got %s, want true", fifo)
+	}
+
+	if cbd, ok := getOutput.Attributes["ContentBasedDeduplication"]; !ok || cbd != "true" {
+		t.Errorf("ContentBasedDeduplication attribute mismatch: got %s, want true", cbd)
+	}
+}
+
+func TestSQS_FIFOQueue_MissingMessageGroupId(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-fifo-no-group.fifo"
+
+	// Create FIFO queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"FifoQueue":                 "true",
+			"ContentBasedDeduplication": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create FIFO queue: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message without MessageGroupId (should fail).
+	_, err = client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    createOutput.QueueUrl,
+		MessageBody: aws.String("FIFO message without group"),
+	})
+	if err == nil {
+		t.Error("expected error when sending message without MessageGroupId to FIFO queue")
+	}
+}
+
+func TestSQS_FIFOQueue_ExplicitDeduplicationId(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-fifo-dedup.fifo"
+
+	// Create FIFO queue without ContentBasedDeduplication.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"FifoQueue": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create FIFO queue: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message with explicit MessageDeduplicationId.
+	sendOutput, err := client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:               createOutput.QueueUrl,
+		MessageBody:            aws.String("FIFO message with dedup ID"),
+		MessageGroupId:         aws.String("group1"),
+		MessageDeduplicationId: aws.String("dedup-123"),
+	})
+	if err != nil {
+		t.Fatalf("failed to send message with deduplication ID: %v", err)
+	}
+
+	if sendOutput.SequenceNumber == nil {
+		t.Fatal("sequence number is nil for FIFO queue")
+	}
+
+	t.Logf("Sent message: %s, SequenceNumber: %s", *sendOutput.MessageId, *sendOutput.SequenceNumber)
+}
+
+func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-fifo-no-dedup.fifo"
+
+	// Create FIFO queue without ContentBasedDeduplication.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"FifoQueue": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create FIFO queue: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message without MessageDeduplicationId (should fail when CBD is false).
+	_, err = client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:       createOutput.QueueUrl,
+		MessageBody:    aws.String("FIFO message without dedup ID"),
+		MessageGroupId: aws.String("group1"),
+	})
+	if err == nil {
+		t.Error("expected error when sending message without MessageDeduplicationId and ContentBasedDeduplication disabled")
+	}
+}

@@ -3,14 +3,22 @@ package sqs
 import (
 	"context"
 	"crypto/md5" //nolint:gosec // MD5 is required by SQS spec for message body hash
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// deduplicationEntry holds deduplication information for FIFO queues.
+type deduplicationEntry struct {
+	messageID string
+	expiresAt time.Time
+}
 
 // Storage defines the interface for SQS storage operations.
 type Storage interface {
@@ -19,7 +27,7 @@ type Storage interface {
 	ListQueues(ctx context.Context, prefix string) ([]string, error)
 	GetQueueURL(ctx context.Context, name string) (string, error)
 	GetQueue(ctx context.Context, queueURL string) (*Queue, error)
-	SendMessage(ctx context.Context, queueURL, body string, delaySeconds int, messageAttributes map[string]MessageAttributeValue) (*Message, error)
+	SendMessage(ctx context.Context, queueURL, body string, delaySeconds int, messageAttributes map[string]MessageAttributeValue, messageGroupID, messageDeduplicationID string) (*Message, error)
 	ReceiveMessage(ctx context.Context, queueURL string, maxMessages, visibilityTimeout, waitTimeSeconds int) ([]*Message, error)
 	DeleteMessage(ctx context.Context, queueURL, receiptHandle string) error
 	PurgeQueue(ctx context.Context, queueURL string) error
@@ -37,6 +45,9 @@ func (e *QueueError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
+// Attribute value for boolean true.
+const attrValueTrue = "true"
+
 // Common error codes.
 var (
 	ErrQueueAlreadyExists   = &QueueError{Code: "QueueAlreadyExists", Message: "A queue with this name already exists"}
@@ -53,9 +64,11 @@ type MemoryStorage struct {
 }
 
 type queueData struct {
-	queue    *Queue
-	messages []*Message
-	inflight map[string]*Message // receiptHandle -> message
+	queue              *Queue
+	messages           []*Message
+	inflight           map[string]*Message           // receiptHandle -> message
+	deduplicationCache map[string]deduplicationEntry // deduplicationID -> entry (FIFO only)
+	sequenceCounter    uint64                        // Per-queue sequence number (FIFO only)
 }
 
 // NewMemoryStorage creates a new in-memory SQS storage.
@@ -77,28 +90,45 @@ func (s *MemoryStorage) CreateQueue(_ context.Context, name string, attributes m
 		return qd.queue, nil
 	}
 
+	// Check FIFO queue requirements.
+	isFifo := strings.HasSuffix(name, ".fifo")
+	if attributes["FifoQueue"] == attrValueTrue && !isFifo {
+		return nil, &QueueError{
+			Code:    "InvalidParameterValue",
+			Message: "The queue name must end with .fifo for FIFO queues",
+		}
+	}
+
 	now := time.Now()
 	queue := &Queue{
-		Name:                   name,
-		URL:                    queueURL,
-		ARN:                    fmt.Sprintf("arn:aws:sqs:us-east-1:000000000000:%s", name),
-		CreatedTimestamp:       now,
-		LastModifiedTimestamp:  now,
-		VisibilityTimeout:      30,
-		MessageRetentionPeriod: 345600,
-		DelaySeconds:           0,
-		MaxMessageSize:         262144,
-		ReceiveWaitTimeSeconds: 0,
+		Name:                      name,
+		URL:                       queueURL,
+		ARN:                       fmt.Sprintf("arn:aws:sqs:us-east-1:000000000000:%s", name),
+		CreatedTimestamp:          now,
+		LastModifiedTimestamp:     now,
+		VisibilityTimeout:         30,
+		MessageRetentionPeriod:    345600,
+		DelaySeconds:              0,
+		MaxMessageSize:            262144,
+		ReceiveWaitTimeSeconds:    0,
+		FifoQueue:                 isFifo,
+		ContentBasedDeduplication: attributes["ContentBasedDeduplication"] == attrValueTrue,
 	}
 
 	// Apply attributes.
 	applyQueueAttributes(queue, attributes)
 
-	s.queues[queueURL] = &queueData{
+	qd := &queueData{
 		queue:    queue,
 		messages: make([]*Message, 0),
 		inflight: make(map[string]*Message),
 	}
+
+	if isFifo {
+		qd.deduplicationCache = make(map[string]deduplicationEntry)
+	}
+
+	s.queues[queueURL] = qd
 
 	return queue, nil
 }
@@ -160,8 +190,75 @@ func (s *MemoryStorage) GetQueue(_ context.Context, queueURL string) (*Queue, er
 	return qd.queue, nil
 }
 
+// fifoResult holds the result of FIFO validation and deduplication.
+type fifoResult struct {
+	sequenceNumber string
+	dedupID        string
+	existingMsg    *Message
+}
+
+// validateFIFO validates FIFO queue requirements and handles deduplication.
+func (qd *queueData) validateFIFO(body, messageGroupID, messageDeduplicationID string, now time.Time) (*fifoResult, error) {
+	if messageGroupID == "" {
+		return nil, &QueueError{
+			Code:    "MissingParameter",
+			Message: "The request must contain the parameter MessageGroupId",
+		}
+	}
+
+	dedupID := messageDeduplicationID
+	if dedupID == "" {
+		if qd.queue.ContentBasedDeduplication {
+			hash := sha256.Sum256([]byte(body))
+			dedupID = hex.EncodeToString(hash[:])
+		} else {
+			return nil, &QueueError{
+				Code:    "InvalidParameterValue",
+				Message: "The queue should either have ContentBasedDeduplication enabled or MessageDeduplicationId provided explicitly",
+			}
+		}
+	}
+
+	// Clean up expired deduplication entries.
+	for id, entry := range qd.deduplicationCache {
+		if now.After(entry.expiresAt) {
+			delete(qd.deduplicationCache, id)
+		}
+	}
+
+	// Check deduplication cache (5-minute window).
+	if entry, exists := qd.deduplicationCache[dedupID]; exists {
+		for _, msg := range qd.messages {
+			if msg.MessageID == entry.messageID {
+				return &fifoResult{existingMsg: msg}, nil
+			}
+		}
+	}
+
+	// Generate sequence number.
+	qd.sequenceCounter++
+
+	// Add to deduplication cache (5-minute TTL).
+	qd.deduplicationCache[dedupID] = deduplicationEntry{
+		messageID: "",
+		expiresAt: now.Add(5 * time.Minute),
+	}
+
+	return &fifoResult{
+		sequenceNumber: fmt.Sprintf("%d", qd.sequenceCounter),
+		dedupID:        dedupID,
+	}, nil
+}
+
+// updateFIFOCache updates the deduplication cache with the message ID.
+func (qd *queueData) updateFIFOCache(dedupID, messageID string) {
+	entry := qd.deduplicationCache[dedupID]
+	entry.messageID = messageID
+	qd.deduplicationCache[dedupID] = entry
+}
+
 // SendMessage sends a message to a queue.
-func (s *MemoryStorage) SendMessage(_ context.Context, queueURL, body string, delaySeconds int, messageAttributes map[string]MessageAttributeValue) (*Message, error) {
+func (s *MemoryStorage) SendMessage(_ context.Context, queueURL, body string, delaySeconds int, messageAttributes map[string]MessageAttributeValue, messageGroupID, messageDeduplicationID string) (*Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -177,20 +274,43 @@ func (s *MemoryStorage) SendMessage(_ context.Context, queueURL, body string, de
 		delay = qd.queue.DelaySeconds
 	}
 
+	var sequenceNumber, dedupID string
+
+	if qd.queue.FifoQueue {
+		result, err := qd.validateFIFO(body, messageGroupID, messageDeduplicationID, now)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.existingMsg != nil {
+			return result.existingMsg, nil
+		}
+
+		sequenceNumber = result.sequenceNumber
+		dedupID = result.dedupID
+	}
+
 	// MD5 is required by SQS specification for message body hash.
-	hash := md5.Sum([]byte(body)) //nolint:gosec // MD5 is required by SQS spec
+	md5Hash := md5.Sum([]byte(body)) //nolint:gosec // MD5 is required by SQS spec
 	msg := &Message{
-		MessageID:         uuid.New().String(),
-		Body:              body,
-		MD5OfBody:         hex.EncodeToString(hash[:]),
-		MessageAttributes: messageAttributes,
-		SentTimestamp:     now,
-		VisibleAt:         now.Add(time.Duration(delay) * time.Second),
+		MessageID:              uuid.New().String(),
+		Body:                   body,
+		MD5OfBody:              hex.EncodeToString(md5Hash[:]),
+		MessageAttributes:      messageAttributes,
+		SentTimestamp:          now,
+		VisibleAt:              now.Add(time.Duration(delay) * time.Second),
+		MessageGroupID:         messageGroupID,
+		MessageDeduplicationID: messageDeduplicationID,
+		SequenceNumber:         sequenceNumber,
 		Attributes: map[string]string{
 			"SentTimestamp":                    fmt.Sprintf("%d", now.UnixMilli()),
 			"ApproximateReceiveCount":          "0",
 			"ApproximateFirstReceiveTimestamp": "",
 		},
+	}
+
+	if qd.queue.FifoQueue {
+		qd.updateFIFOCache(dedupID, msg.MessageID)
 	}
 
 	qd.messages = append(qd.messages, msg)
@@ -305,6 +425,8 @@ func (s *MemoryStorage) GetQueueAttributes(_ context.Context, queueURL string, a
 		"ReceiveMessageWaitTimeSeconds":         fmt.Sprintf("%d", q.ReceiveWaitTimeSeconds),
 		"ApproximateNumberOfMessages":           fmt.Sprintf("%d", len(qd.messages)),
 		"ApproximateNumberOfMessagesNotVisible": fmt.Sprintf("%d", len(qd.inflight)),
+		"FifoQueue":                             fmt.Sprintf("%t", q.FifoQueue),
+		"ContentBasedDeduplication":             fmt.Sprintf("%t", q.ContentBasedDeduplication),
 	}
 
 	// Check if "All" is requested.
@@ -352,6 +474,8 @@ func applyQueueAttributes(q *Queue, attrs map[string]string) {
 			_, _ = fmt.Sscanf(val, "%d", &q.MaxMessageSize)
 		case "ReceiveMessageWaitTimeSeconds":
 			_, _ = fmt.Sscanf(val, "%d", &q.ReceiveWaitTimeSeconds)
+		case "ContentBasedDeduplication":
+			q.ContentBasedDeduplication = val == "true"
 		}
 	}
 }

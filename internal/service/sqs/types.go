@@ -7,29 +7,34 @@ import (
 
 // Queue represents an SQS queue.
 type Queue struct {
-	Name                   string
-	URL                    string
-	ARN                    string
-	CreatedTimestamp       time.Time
-	LastModifiedTimestamp  time.Time
-	VisibilityTimeout      int
-	MessageRetentionPeriod int
-	DelaySeconds           int
-	MaxMessageSize         int
-	ReceiveWaitTimeSeconds int
+	Name                      string
+	URL                       string
+	ARN                       string
+	CreatedTimestamp          time.Time
+	LastModifiedTimestamp     time.Time
+	VisibilityTimeout         int
+	MessageRetentionPeriod    int
+	DelaySeconds              int
+	MaxMessageSize            int
+	ReceiveWaitTimeSeconds    int
+	FifoQueue                 bool
+	ContentBasedDeduplication bool
 }
 
 // Message represents an SQS message.
 type Message struct {
-	MessageID         string
-	ReceiptHandle     string
-	Body              string
-	MD5OfBody         string
-	Attributes        map[string]string
-	MessageAttributes map[string]MessageAttributeValue
-	SentTimestamp     time.Time
-	VisibleAt         time.Time
-	ReceiveCount      int
+	MessageID              string
+	ReceiptHandle          string
+	Body                   string
+	MD5OfBody              string
+	Attributes             map[string]string
+	MessageAttributes      map[string]MessageAttributeValue
+	SentTimestamp          time.Time
+	VisibleAt              time.Time
+	ReceiveCount           int
+	MessageGroupID         string
+	MessageDeduplicationID string
+	SequenceNumber         string
 }
 
 // MessageAttributeValue represents a message attribute.
@@ -127,6 +132,7 @@ type MessageResponse struct {
 	Attributes             map[string]string                `json:"Attributes,omitempty"`
 	MD5OfMessageAttributes string                           `json:"MD5OfMessageAttributes,omitempty"`
 	MessageAttributes      map[string]MessageAttributeValue `json:"MessageAttributes,omitempty"`
+	SequenceNumber         string                           `json:"SequenceNumber,omitempty"`
 }
 
 // DeleteMessageRequest is the request for DeleteMessage.

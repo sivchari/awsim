@@ -152,7 +152,7 @@ func (s *Service) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, req.MessageBody, req.DelaySeconds, req.MessageAttributes)
+	msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, req.MessageBody, req.DelaySeconds, req.MessageAttributes, req.MessageGroupID, req.MessageDeduplicationID)
 	if err != nil {
 		var qErr *QueueError
 		if errors.As(err, &qErr) {
@@ -169,6 +169,7 @@ func (s *Service) SendMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, SendMessageResponse{
 		MessageID:        msg.MessageID,
 		MD5OfMessageBody: msg.MD5OfBody,
+		SequenceNumber:   msg.SequenceNumber,
 	})
 }
 
@@ -227,6 +228,7 @@ func convertMessagesToResponse(messages []*Message) []MessageResponse {
 			Body:              msg.Body,
 			Attributes:        msg.Attributes,
 			MessageAttributes: msg.MessageAttributes,
+			SequenceNumber:    msg.SequenceNumber,
 		}
 	}
 
