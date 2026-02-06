@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -250,27 +251,13 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get function.
 	fn, err := s.storage.GetFunction(r.Context(), functionName)
 	if err != nil {
-		var lambdaErr *FunctionError
-		if errors.As(err, &lambdaErr) {
-			status := http.StatusBadRequest
-			if lambdaErr.Type == ErrResourceNotFound {
-				status = http.StatusNotFound
-			}
-
-			writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
-
-			return
-		}
-
-		writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
+		handleGetFunctionError(w, err)
 
 		return
 	}
 
-	// Check if InvokeEndpoint is configured.
 	if fn.InvokeEndpoint == "" {
 		writeFunctionError(w, ErrInvalidParameterValue,
 			"InvokeEndpoint is not configured for this function", http.StatusBadRequest)
@@ -278,7 +265,6 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read the payload.
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeFunctionError(w, ErrInvalidParameterValue, "Failed to read request body", http.StatusBadRequest)
@@ -286,58 +272,102 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle invocation type.
 	invocationType := r.Header.Get("X-Amz-Invocation-Type")
 	if invocationType == "" {
 		invocationType = "RequestResponse"
 	}
 
-	// DryRun: just validate, no actual invocation.
-	if invocationType == "DryRun" {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Amz-Executed-Version", "$LATEST")
-		w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+	switch invocationType {
+	case "DryRun":
+		writeInvokeHeaders(w)
 		w.WriteHeader(http.StatusNoContent)
-
-		return
-	}
-
-	// Event: async invocation, return immediately and invoke in background.
-	if invocationType == "Event" {
-		endpoint := fn.InvokeEndpoint
-		payloadCopy := make([]byte, len(payload))
-		copy(payloadCopy, payload)
-
-		go func() {
-			resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payloadCopy))
-			if err != nil {
-				slog.Error("async invoke failed", "function", functionName, "error", err)
-
-				return
-			}
-			resp.Body.Close()
-		}()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Amz-Executed-Version", "$LATEST")
-		w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+	case "Event":
+		s.invokeAsync(functionName, fn.InvokeEndpoint, payload)
+		writeInvokeHeaders(w)
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte("{}"))
+	default:
+		s.invokeSync(r.Context(), w, fn.InvokeEndpoint, payload)
+	}
+}
+
+// handleGetFunctionError writes error response for GetFunction errors.
+func handleGetFunctionError(w http.ResponseWriter, err error) {
+	var lambdaErr *FunctionError
+	if errors.As(err, &lambdaErr) {
+		status := http.StatusBadRequest
+		if lambdaErr.Type == ErrResourceNotFound {
+			status = http.StatusNotFound
+		}
+
+		writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
 
 		return
 	}
 
-	// RequestResponse: synchronous invocation.
-	resp, err := http.Post(fn.InvokeEndpoint, "application/json", bytes.NewReader(payload))
+	writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
+}
+
+// writeInvokeHeaders writes common invoke response headers.
+func writeInvokeHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Amz-Executed-Version", "$LATEST")
+	w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+}
+
+// invokeAsync invokes the function asynchronously.
+func (s *Service) invokeAsync(functionName, endpoint string, payload []byte) {
+	payloadCopy := make([]byte, len(payload))
+	copy(payloadCopy, payload)
+
+	go func() {
+		req, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			endpoint,
+			bytes.NewReader(payloadCopy),
+		)
+		if err != nil {
+			slog.Error("async invoke failed to create request", "function", functionName, "error", err)
+
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			slog.Error("async invoke failed", "function", functionName, "error", err)
+
+			return
+		}
+
+		_ = resp.Body.Close()
+	}()
+}
+
+// invokeSync invokes the function synchronously and writes the response.
+func (s *Service) invokeSync(ctx context.Context, w http.ResponseWriter, endpoint string, payload []byte) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		writeFunctionError(w, ErrServiceException,
+			fmt.Sprintf("Failed to create request: %v", err), http.StatusInternalServerError)
+
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		writeFunctionError(w, ErrServiceException,
 			fmt.Sprintf("Failed to invoke endpoint: %v", err), http.StatusInternalServerError)
 
 		return
 	}
-	defer resp.Body.Close()
 
-	// Read the response body.
+	defer func() { _ = resp.Body.Close() }()
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		writeFunctionError(w, ErrServiceException,
@@ -346,10 +376,7 @@ func (s *Service) Invoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write response headers.
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Amz-Executed-Version", "$LATEST")
-	w.Header().Set("X-Amz-Request-Id", uuid.New().String())
+	writeInvokeHeaders(w)
 	w.WriteHeader(http.StatusOK)
 
 	if len(respBody) == 0 {
