@@ -69,6 +69,10 @@ linters:
       - path: internal/service/lambda/types\.go
         linters:
           - tagliatelle
+      # AWS SSM API requires PascalCase JSON field names.
+      - path: internal/service/ssm/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

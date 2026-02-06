@@ -41,7 +41,7 @@ func (s *Service) PutParameter(w http.ResponseWriter, r *http.Request) {
 		Tier:    param.Tier,
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // GetParameter handles the GetParameter API.
@@ -70,7 +70,7 @@ func (s *Service) GetParameter(w http.ResponseWriter, r *http.Request) {
 		Parameter: parameterToValue(param),
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // GetParameters handles the GetParameters API.
@@ -104,7 +104,7 @@ func (s *Service) GetParameters(w http.ResponseWriter, r *http.Request) {
 		resp.Parameters = append(resp.Parameters, parameterToValue(p))
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // GetParametersByPath handles the GetParametersByPath API.
@@ -138,7 +138,7 @@ func (s *Service) GetParametersByPath(w http.ResponseWriter, r *http.Request) {
 		resp.Parameters = append(resp.Parameters, parameterToValue(p))
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // DeleteParameter handles the DeleteParameter API.
@@ -163,7 +163,7 @@ func (s *Service) DeleteParameter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, struct{}{})
+	writeJSONResponse(w, struct{}{})
 }
 
 // DeleteParameters handles the DeleteParameters API.
@@ -193,7 +193,7 @@ func (s *Service) DeleteParameters(w http.ResponseWriter, r *http.Request) {
 		InvalidParameters: invalid,
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // DescribeParameters handles the DescribeParameters API.
@@ -221,7 +221,7 @@ func (s *Service) DescribeParameters(w http.ResponseWriter, r *http.Request) {
 		resp.Parameters = append(resp.Parameters, parameterToMetadata(p))
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, resp)
 }
 
 // parameterToValue converts a Parameter to ParameterValue.
@@ -269,11 +269,11 @@ func handleSSMError(w http.ResponseWriter, err error) {
 	writeSSMError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
 }
 
-// writeJSONResponse writes a JSON response.
-func writeJSONResponse(w http.ResponseWriter, status int, v any) {
+// writeJSONResponse writes a JSON response with HTTP 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
 	w.Header().Set("X-Amzn-Requestid", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
