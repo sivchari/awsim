@@ -12,6 +12,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/secretsmanager"
 	_ "github.com/sivchari/awsim/internal/service/sns"
 	_ "github.com/sivchari/awsim/internal/service/sqs"
+	_ "github.com/sivchari/awsim/internal/service/ssm"
 )
 
 func main() {
