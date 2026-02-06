@@ -42,6 +42,20 @@ func (s *Service) TargetPrefix() string {
 	return "AmazonSimpleNotificationService"
 }
 
+// Actions returns the list of action names this service handles.
+func (s *Service) Actions() []string {
+	return []string{
+		"CreateTopic",
+		"DeleteTopic",
+		"ListTopics",
+		"Subscribe",
+		"Unsubscribe",
+		"Publish",
+		"ListSubscriptions",
+		"ListSubscriptionsByTopic",
+	}
+}
+
 // QueryProtocol is a marker method that indicates SNS uses AWS Query protocol.
 func (s *Service) QueryProtocol() {}
 

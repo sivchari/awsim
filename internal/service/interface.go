@@ -61,6 +61,10 @@ type QueryProtocolService interface {
 	// DispatchAction handles the request after Query-to-JSON conversion.
 	DispatchAction(w http.ResponseWriter, r *http.Request)
 
+	// Actions returns the list of action names this service handles.
+	// This is used by the dispatcher to route requests to the correct service.
+	Actions() []string
+
 	// QueryProtocol is a marker method to distinguish from JSONProtocolService.
 	QueryProtocol()
 }
