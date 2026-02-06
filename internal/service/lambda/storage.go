@@ -372,6 +372,7 @@ func (s *MemoryStorage) DeleteEventSourceMapping(_ context.Context, uuid string)
 
 	// Mark as deleting state before removing
 	mapping.State = "Deleting"
+
 	delete(s.eventSourceMappings, uuid)
 
 	return nil
@@ -388,6 +389,7 @@ func (s *MemoryStorage) ListEventSourceMappings(_ context.Context, functionName,
 
 	// Collect matching mappings
 	var mappings []*EventSourceMapping
+
 	for _, m := range s.eventSourceMappings {
 		// Filter by function name if specified
 		if functionName != "" && !matchesFunctionName(m.FunctionArn, functionName) {
@@ -404,6 +406,7 @@ func (s *MemoryStorage) ListEventSourceMappings(_ context.Context, functionName,
 
 	// Simple pagination
 	start := 0
+
 	if marker != "" {
 		for i, m := range mappings {
 			if m.UUID == marker {
@@ -520,6 +523,7 @@ func splitARN(arn string) []string {
 // splitString splits a string by separator.
 func splitString(s string, sep byte) []string {
 	var result []string
+
 	start := 0
 
 	for i := 0; i < len(s); i++ {
