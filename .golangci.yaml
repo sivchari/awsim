@@ -73,6 +73,10 @@ linters:
       - path: internal/service/ssm/types\.go
         linters:
           - tagliatelle
+      # AWS CloudWatch Logs API requires specific JSON field names.
+      - path: internal/service/cloudwatchlogs/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

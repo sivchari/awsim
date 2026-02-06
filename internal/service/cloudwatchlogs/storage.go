@@ -301,55 +301,8 @@ func (m *MemoryStorage) FilterLogEvents(_ context.Context, req *FilterLogEventsR
 		}
 	}
 
-	limit := defaultLimit
-	if req.Limit != nil && *req.Limit > 0 {
-		limit = min(int(*req.Limit), maxLimit)
-	}
-
-	var allEvents []FilteredLogEvent
-
-	var searchedStreams []SearchedLogStream
-
-	for streamName, streamData := range groupData.streams {
-		// Check if we should include this stream
-		if len(req.LogStreamNames) > 0 && !slices.Contains(req.LogStreamNames, streamName) {
-			continue
-		}
-
-		if req.LogStreamNamePrefix != "" && !strings.HasPrefix(streamName, req.LogStreamNamePrefix) {
-			continue
-		}
-
-		searchedStreams = append(searchedStreams, SearchedLogStream{
-			LogStreamName:      streamName,
-			SearchedCompletely: true,
-		})
-
-		// Filter events
-		for i, event := range streamData.events {
-			// Time filtering
-			if req.StartTime != nil && event.Timestamp < *req.StartTime {
-				continue
-			}
-
-			if req.EndTime != nil && event.Timestamp > *req.EndTime {
-				continue
-			}
-
-			// Pattern filtering (simple substring match)
-			if req.FilterPattern != "" && !strings.Contains(event.Message, req.FilterPattern) {
-				continue
-			}
-
-			allEvents = append(allEvents, FilteredLogEvent{
-				LogStreamName: streamName,
-				Timestamp:     event.Timestamp,
-				Message:       event.Message,
-				IngestionTime: time.Now().UnixMilli(),
-				EventID:       fmt.Sprintf("%d-%d", event.Timestamp, i),
-			})
-		}
-	}
+	limit := getLimit(req.Limit)
+	allEvents, searchedStreams := m.filterEventsFromStreams(groupData, req)
 
 	// Sort by timestamp
 	sort.Slice(allEvents, func(i, j int) bool {
@@ -367,75 +320,184 @@ func (m *MemoryStorage) FilterLogEvents(_ context.Context, req *FilterLogEventsR
 	}, nil
 }
 
+// filterEventsFromStreams filters events from log streams based on request criteria.
+func (m *MemoryStorage) filterEventsFromStreams(groupData *logGroupData, req *FilterLogEventsRequest) ([]FilteredLogEvent, []SearchedLogStream) {
+	var allEvents []FilteredLogEvent
+
+	var searchedStreams []SearchedLogStream
+
+	for streamName, streamData := range groupData.streams {
+		if !m.shouldIncludeStream(streamName, req.LogStreamNames, req.LogStreamNamePrefix) {
+			continue
+		}
+
+		searchedStreams = append(searchedStreams, SearchedLogStream{
+			LogStreamName:      streamName,
+			SearchedCompletely: true,
+		})
+
+		events := m.filterStreamEvents(streamName, streamData.events, req)
+		allEvents = append(allEvents, events...)
+	}
+
+	return allEvents, searchedStreams
+}
+
+// shouldIncludeStream checks if a stream should be included in the filter results.
+func (m *MemoryStorage) shouldIncludeStream(streamName string, streamNames []string, prefix string) bool {
+	if len(streamNames) > 0 && !slices.Contains(streamNames, streamName) {
+		return false
+	}
+
+	if prefix != "" && !strings.HasPrefix(streamName, prefix) {
+		return false
+	}
+
+	return true
+}
+
+// filterStreamEvents filters events from a single stream.
+func (m *MemoryStorage) filterStreamEvents(streamName string, events []*LogEvent, req *FilterLogEventsRequest) []FilteredLogEvent {
+	var result []FilteredLogEvent
+
+	for i, event := range events {
+		if !matchesTimeRange(event.Timestamp, req.StartTime, req.EndTime) {
+			continue
+		}
+
+		if req.FilterPattern != "" && !strings.Contains(event.Message, req.FilterPattern) {
+			continue
+		}
+
+		result = append(result, FilteredLogEvent{
+			LogStreamName: streamName,
+			Timestamp:     event.Timestamp,
+			Message:       event.Message,
+			IngestionTime: time.Now().UnixMilli(),
+			EventID:       fmt.Sprintf("%d-%d", event.Timestamp, i),
+		})
+	}
+
+	return result
+}
+
+// matchesTimeRange checks if a timestamp is within the given time range.
+func matchesTimeRange(timestamp int64, startTime, endTime *int64) bool {
+	if startTime != nil && timestamp < *startTime {
+		return false
+	}
+
+	if endTime != nil && timestamp > *endTime {
+		return false
+	}
+
+	return true
+}
+
+// getLimit returns the limit value from the request or the default.
+func getLimit(limit *int32) int {
+	if limit != nil && *limit > 0 {
+		return min(int(*limit), maxLimit)
+	}
+
+	return defaultLimit
+}
+
 // DescribeLogGroups describes log groups.
 func (m *MemoryStorage) DescribeLogGroups(_ context.Context, req *DescribeLogGroupsRequest) (*DescribeLogGroupsResponse, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	limit := defaultLimit
-	if req.Limit != nil && *req.Limit > 0 {
-		limit = min(int(*req.Limit), maxLimit)
-	}
-
-	var groups []LogGroupResponse
-
-	for name, groupData := range m.logGroups {
-		// Apply prefix filter
-		if req.LogGroupNamePrefix != "" && !strings.HasPrefix(name, req.LogGroupNamePrefix) {
-			continue
-		}
-
-		// Apply pattern filter (simple substring match)
-		if req.LogGroupNamePattern != "" && !strings.Contains(name, req.LogGroupNamePattern) {
-			continue
-		}
-
-		// Apply class filter
-		if req.LogGroupClass != "" && groupData.group.LogGroupClass != req.LogGroupClass {
-			continue
-		}
-
-		groups = append(groups, LogGroupResponse{
-			LogGroupName:      groupData.group.LogGroupName,
-			LogGroupARN:       groupData.group.LogGroupARN,
-			CreationTime:      groupData.group.CreationTime,
-			RetentionInDays:   groupData.group.RetentionInDays,
-			MetricFilterCount: groupData.group.MetricFilterCount,
-			StoredBytes:       groupData.group.StoredBytes,
-			KmsKeyID:          groupData.group.KmsKeyID,
-			LogGroupClass:     groupData.group.LogGroupClass,
-		})
-	}
+	limit := getLimit(req.Limit)
+	groups := m.filterLogGroups(req)
 
 	// Sort by name
 	sort.Slice(groups, func(i, j int) bool {
 		return groups[i].LogGroupName < groups[j].LogGroupName
 	})
 
-	// Handle pagination
-	startIdx := 0
-	if req.NextToken != "" {
-		for i, g := range groups {
-			if g.LogGroupName == req.NextToken {
-				startIdx = i
-
-				break
-			}
-		}
-	}
-
-	endIdx := min(startIdx+limit, len(groups))
-	result := groups[startIdx:endIdx]
-
-	var nextToken string
-	if endIdx < len(groups) {
-		nextToken = groups[endIdx].LogGroupName
-	}
+	result, nextToken := paginateLogGroups(groups, req.NextToken, limit)
 
 	return &DescribeLogGroupsResponse{
 		LogGroups: result,
 		NextToken: nextToken,
 	}, nil
+}
+
+// filterLogGroups filters log groups based on request criteria.
+func (m *MemoryStorage) filterLogGroups(req *DescribeLogGroupsRequest) []LogGroupResponse {
+	var groups []LogGroupResponse
+
+	for name, groupData := range m.logGroups {
+		if !m.matchLogGroupFilters(name, groupData.group, req) {
+			continue
+		}
+
+		groups = append(groups, buildLogGroupResponse(groupData.group))
+	}
+
+	return groups
+}
+
+// matchLogGroupFilters checks if a log group matches the filter criteria.
+func (m *MemoryStorage) matchLogGroupFilters(name string, group *LogGroup, req *DescribeLogGroupsRequest) bool {
+	if req.LogGroupNamePrefix != "" && !strings.HasPrefix(name, req.LogGroupNamePrefix) {
+		return false
+	}
+
+	if req.LogGroupNamePattern != "" && !strings.Contains(name, req.LogGroupNamePattern) {
+		return false
+	}
+
+	if req.LogGroupClass != "" && group.LogGroupClass != req.LogGroupClass {
+		return false
+	}
+
+	return true
+}
+
+// buildLogGroupResponse builds a LogGroupResponse from a LogGroup.
+func buildLogGroupResponse(group *LogGroup) LogGroupResponse {
+	return LogGroupResponse{
+		LogGroupName:      group.LogGroupName,
+		LogGroupARN:       group.LogGroupARN,
+		CreationTime:      group.CreationTime,
+		RetentionInDays:   group.RetentionInDays,
+		MetricFilterCount: group.MetricFilterCount,
+		StoredBytes:       group.StoredBytes,
+		KmsKeyID:          group.KmsKeyID,
+		LogGroupClass:     group.LogGroupClass,
+	}
+}
+
+// paginateLogGroups applies pagination to log groups.
+func paginateLogGroups(groups []LogGroupResponse, nextToken string, limit int) ([]LogGroupResponse, string) {
+	startIdx := findLogGroupStartIndex(groups, nextToken)
+	endIdx := min(startIdx+limit, len(groups))
+	result := groups[startIdx:endIdx]
+
+	var newNextToken string
+
+	if endIdx < len(groups) {
+		newNextToken = groups[endIdx].LogGroupName
+	}
+
+	return result, newNextToken
+}
+
+// findLogGroupStartIndex finds the starting index for pagination.
+func findLogGroupStartIndex(groups []LogGroupResponse, nextToken string) int {
+	if nextToken == "" {
+		return 0
+	}
+
+	for i := range groups {
+		if groups[i].LogGroupName == nextToken {
+			return i
+		}
+	}
+
+	return 0
 }
 
 // DescribeLogStreams describes log streams in a log group.
@@ -456,93 +518,124 @@ func (m *MemoryStorage) DescribeLogStreams(_ context.Context, req *DescribeLogSt
 		}
 	}
 
-	limit := defaultLimit
-	if req.Limit != nil && *req.Limit > 0 {
-		limit = min(int(*req.Limit), maxLimit)
-	}
-
-	var streams []LogStreamResponse
-
-	for name, streamData := range groupData.streams {
-		// Apply prefix filter
-		if req.LogStreamNamePrefix != "" && !strings.HasPrefix(name, req.LogStreamNamePrefix) {
-			continue
-		}
-
-		streams = append(streams, LogStreamResponse{
-			LogStreamName:       streamData.stream.LogStreamName,
-			CreationTime:        streamData.stream.CreationTime,
-			FirstEventTimestamp: streamData.stream.FirstEventTimestamp,
-			LastEventTimestamp:  streamData.stream.LastEventTimestamp,
-			LastIngestionTime:   streamData.stream.LastIngestionTime,
-			UploadSequenceToken: streamData.stream.UploadSequenceToken,
-			Arn:                 streamData.stream.LogStreamARN,
-			StoredBytes:         streamData.stream.StoredBytes,
-		})
-	}
-
-	// Sort by name or last event time
-	orderBy := req.OrderBy
-	if orderBy == "" {
-		orderBy = "LogStreamName"
-	}
-
-	descending := req.Descending != nil && *req.Descending
-
-	switch orderBy {
-	case "LastEventTime":
-		sort.Slice(streams, func(i, j int) bool {
-			iTime := int64(0)
-			jTime := int64(0)
-
-			if streams[i].LastEventTimestamp != nil {
-				iTime = *streams[i].LastEventTimestamp
-			}
-
-			if streams[j].LastEventTimestamp != nil {
-				jTime = *streams[j].LastEventTimestamp
-			}
-
-			if descending {
-				return iTime > jTime
-			}
-
-			return iTime < jTime
-		})
-	default: // LogStreamName
-		sort.Slice(streams, func(i, j int) bool {
-			if descending {
-				return streams[i].LogStreamName > streams[j].LogStreamName
-			}
-
-			return streams[i].LogStreamName < streams[j].LogStreamName
-		})
-	}
-
-	// Handle pagination
-	startIdx := 0
-	if req.NextToken != "" {
-		for i, s := range streams {
-			if s.LogStreamName == req.NextToken {
-				startIdx = i
-
-				break
-			}
-		}
-	}
-
-	endIdx := min(startIdx+limit, len(streams))
-	result := streams[startIdx:endIdx]
-
-	var nextToken string
-	if endIdx < len(streams) {
-		nextToken = streams[endIdx].LogStreamName
-	}
+	limit := getLimit(req.Limit)
+	streams := m.filterLogStreams(groupData, req.LogStreamNamePrefix)
+	sortLogStreams(streams, req.OrderBy, req.Descending)
+	result, nextToken := paginateLogStreams(streams, req.NextToken, limit)
 
 	return &DescribeLogStreamsResponse{
 		LogStreams: result,
 		NextToken:  nextToken,
 	}, nil
+}
+
+// filterLogStreams filters log streams based on prefix.
+func (m *MemoryStorage) filterLogStreams(groupData *logGroupData, prefix string) []LogStreamResponse {
+	var streams []LogStreamResponse
+
+	for name, streamData := range groupData.streams {
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
+			continue
+		}
+
+		streams = append(streams, buildLogStreamResponse(streamData.stream))
+	}
+
+	return streams
+}
+
+// buildLogStreamResponse builds a LogStreamResponse from a LogStream.
+func buildLogStreamResponse(stream *LogStream) LogStreamResponse {
+	return LogStreamResponse{
+		LogStreamName:       stream.LogStreamName,
+		CreationTime:        stream.CreationTime,
+		FirstEventTimestamp: stream.FirstEventTimestamp,
+		LastEventTimestamp:  stream.LastEventTimestamp,
+		LastIngestionTime:   stream.LastIngestionTime,
+		UploadSequenceToken: stream.UploadSequenceToken,
+		Arn:                 stream.LogStreamARN,
+		StoredBytes:         stream.StoredBytes,
+	}
+}
+
+// sortLogStreams sorts log streams by the specified order.
+func sortLogStreams(streams []LogStreamResponse, orderBy string, descending *bool) {
+	if orderBy == "" {
+		orderBy = "LogStreamName"
+	}
+
+	desc := descending != nil && *descending
+
+	switch orderBy {
+	case "LastEventTime":
+		sortByLastEventTime(streams, desc)
+	default:
+		sortByLogStreamName(streams, desc)
+	}
+}
+
+// sortByLastEventTime sorts streams by last event timestamp.
+func sortByLastEventTime(streams []LogStreamResponse, descending bool) {
+	sort.Slice(streams, func(i, j int) bool {
+		iTime := getLastEventTime(streams[i].LastEventTimestamp)
+		jTime := getLastEventTime(streams[j].LastEventTimestamp)
+
+		if descending {
+			return iTime > jTime
+		}
+
+		return iTime < jTime
+	})
+}
+
+// sortByLogStreamName sorts streams by name.
+func sortByLogStreamName(streams []LogStreamResponse, descending bool) {
+	sort.Slice(streams, func(i, j int) bool {
+		if descending {
+			return streams[i].LogStreamName > streams[j].LogStreamName
+		}
+
+		return streams[i].LogStreamName < streams[j].LogStreamName
+	})
+}
+
+// getLastEventTime returns the last event timestamp or 0.
+func getLastEventTime(timestamp *int64) int64 {
+	if timestamp != nil {
+		return *timestamp
+	}
+
+	return 0
+}
+
+// paginateLogStreams applies pagination to log streams.
+func paginateLogStreams(streams []LogStreamResponse, nextToken string, limit int) ([]LogStreamResponse, string) {
+	startIdx := findLogStreamStartIndex(streams, nextToken)
+	endIdx := min(startIdx+limit, len(streams))
+	result := streams[startIdx:endIdx]
+
+	var newNextToken string
+
+	if endIdx < len(streams) {
+		newNextToken = streams[endIdx].LogStreamName
+	}
+
+	return result, newNextToken
+}
+
+// findLogStreamStartIndex finds the starting index for pagination.
+func findLogStreamStartIndex(streams []LogStreamResponse, nextToken string) int {
+	if nextToken == "" {
+		return 0
+	}
+
+	for i := range streams {
+		if streams[i].LogStreamName == nextToken {
+			return i
+		}
+	}
+
+	return 0
 }
 
 // buildLogGroupARN builds an ARN for a log group.
