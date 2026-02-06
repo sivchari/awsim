@@ -93,10 +93,24 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 // formToJSON converts form values to JSON.
 func formToJSON(form map[string][]string) []byte {
 	result := make(map[string]any)
+	indexedArrays := make(map[string][]string)
 
 	for key, values := range form {
 		if key == "Action" || key == "Version" {
 			continue
+		}
+
+		// Check for indexed array pattern: Name.1, Name.2, etc.
+		if idx := strings.LastIndex(key, "."); idx > 0 {
+			suffix := key[idx+1:]
+			if _, err := strconv.Atoi(suffix); err == nil {
+				baseName := key[:idx]
+				if len(values) == 1 {
+					indexedArrays[baseName] = append(indexedArrays[baseName], values[0])
+				}
+
+				continue
+			}
 		}
 
 		// Convert key from Query format to JSON format.
@@ -107,6 +121,12 @@ func formToJSON(form map[string][]string) []byte {
 		} else if len(values) > 1 {
 			result[key] = values
 		}
+	}
+
+	// Add indexed arrays to result with plural form (e.g., InstanceId -> InstanceIds).
+	for baseName, arr := range indexedArrays {
+		pluralName := baseName + "s"
+		result[pluralName] = arr
 	}
 
 	// Handle nested attributes (like Attributes.entry.N.key/value).
