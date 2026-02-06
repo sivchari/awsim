@@ -279,7 +279,7 @@ func (m *MemoryStorage) CreateSecurityGroup(_ context.Context, req *CreateSecuri
 	sg := &SecurityGroup{
 		GroupID:      "sg-" + generateID(),
 		GroupName:    req.GroupName,
-		Description:  req.Description,
+		Description:  req.GroupDescription,
 		VpcID:        req.VpcID,
 		IngressRules: []IPPermission{},
 		EgressRules:  []IPPermission{},

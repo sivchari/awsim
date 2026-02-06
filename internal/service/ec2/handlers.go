@@ -198,8 +198,8 @@ func (s *Service) CreateSecurityGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Description == "" {
-		writeError(w, errInvalidParameter, "Description is required", http.StatusBadRequest)
+	if req.GroupDescription == "" {
+		writeError(w, errInvalidParameter, "GroupDescription is required", http.StatusBadRequest)
 
 		return
 	}

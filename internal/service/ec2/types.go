@@ -105,9 +105,9 @@ type StopInstancesRequest struct {
 
 // CreateSecurityGroupRequest represents a CreateSecurityGroup request.
 type CreateSecurityGroupRequest struct {
-	GroupName   string `json:"GroupName"`
-	Description string `json:"Description"`
-	VpcID       string `json:"VpcId,omitempty"`
+	GroupName        string `json:"GroupName"`
+	GroupDescription string `json:"GroupDescription"`
+	VpcID            string `json:"VpcId,omitempty"`
 }
 
 // DeleteSecurityGroupRequest represents a DeleteSecurityGroup request.
