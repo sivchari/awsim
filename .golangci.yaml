@@ -77,6 +77,10 @@ linters:
       - path: internal/service/cloudwatchlogs/types\.go
         linters:
           - tagliatelle
+      # AWS EC2 API requires PascalCase JSON field names.
+      - path: internal/service/ec2/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
