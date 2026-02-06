@@ -431,3 +431,210 @@ func TestLambda_CreateFunctionIdempotent(t *testing.T) {
 		t.Error("expected error when creating duplicate function")
 	}
 }
+
+func TestLambda_EventSourceMapping_CreateAndDelete(t *testing.T) {
+	client := newLambdaClient(t)
+	ctx := t.Context()
+	functionName := "test-esm-create-delete"
+
+	// Create function first.
+	_, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		FunctionName: aws.String(functionName),
+		Runtime:      types.RuntimePython312,
+		Role:         aws.String("arn:aws:iam::000000000000:role/test-role"),
+		Handler:      aws.String("index.handler"),
+		Code: &types.FunctionCode{
+			ZipFile: []byte("fake-zip-content"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create function: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+	})
+
+	// Create event source mapping.
+	createOutput, err := client.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
+		FunctionName:   aws.String(functionName),
+		EventSourceArn: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
+		BatchSize:      aws.Int32(10),
+		Enabled:        aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatalf("failed to create event source mapping: %v", err)
+	}
+
+	if createOutput.UUID == nil {
+		t.Fatal("event source mapping UUID is nil")
+	}
+
+	t.Logf("Created event source mapping: %s", *createOutput.UUID)
+
+	// Delete event source mapping.
+	deleteOutput, err := client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+		UUID: createOutput.UUID,
+	})
+	if err != nil {
+		t.Fatalf("failed to delete event source mapping: %v", err)
+	}
+
+	if *deleteOutput.State != "Deleting" {
+		t.Errorf("expected state to be Deleting, got %s", *deleteOutput.State)
+	}
+}
+
+func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
+	client := newLambdaClient(t)
+	ctx := t.Context()
+	functionName := "test-esm-get-update"
+
+	// Create function first.
+	_, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		FunctionName: aws.String(functionName),
+		Runtime:      types.RuntimePython312,
+		Role:         aws.String("arn:aws:iam::000000000000:role/test-role"),
+		Handler:      aws.String("index.handler"),
+		Code: &types.FunctionCode{
+			ZipFile: []byte("fake-zip-content"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create function: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+	})
+
+	// Create event source mapping.
+	createOutput, err := client.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
+		FunctionName:   aws.String(functionName),
+		EventSourceArn: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
+		BatchSize:      aws.Int32(10),
+		Enabled:        aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatalf("failed to create event source mapping: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+			UUID: createOutput.UUID,
+		})
+	})
+
+	// Get event source mapping.
+	getOutput, err := client.GetEventSourceMapping(ctx, &lambda.GetEventSourceMappingInput{
+		UUID: createOutput.UUID,
+	})
+	if err != nil {
+		t.Fatalf("failed to get event source mapping: %v", err)
+	}
+
+	if *getOutput.BatchSize != 10 {
+		t.Errorf("batch size mismatch: got %d, want 10", *getOutput.BatchSize)
+	}
+
+	// Update event source mapping.
+	updateOutput, err := client.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
+		UUID:      createOutput.UUID,
+		BatchSize: aws.Int32(50),
+		Enabled:   aws.Bool(false),
+	})
+	if err != nil {
+		t.Fatalf("failed to update event source mapping: %v", err)
+	}
+
+	if *updateOutput.BatchSize != 50 {
+		t.Errorf("batch size mismatch after update: got %d, want 50", *updateOutput.BatchSize)
+	}
+
+	if *updateOutput.State != "Disabled" {
+		t.Errorf("state mismatch after update: got %s, want Disabled", *updateOutput.State)
+	}
+}
+
+func TestLambda_EventSourceMapping_List(t *testing.T) {
+	client := newLambdaClient(t)
+	ctx := t.Context()
+	functionName := "test-esm-list"
+
+	// Create function first.
+	_, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		FunctionName: aws.String(functionName),
+		Runtime:      types.RuntimePython312,
+		Role:         aws.String("arn:aws:iam::000000000000:role/test-role"),
+		Handler:      aws.String("index.handler"),
+		Code: &types.FunctionCode{
+			ZipFile: []byte("fake-zip-content"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create function: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+	})
+
+	// Create event source mapping.
+	createOutput, err := client.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
+		FunctionName:   aws.String(functionName),
+		EventSourceArn: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue-list"),
+		BatchSize:      aws.Int32(10),
+	})
+	if err != nil {
+		t.Fatalf("failed to create event source mapping: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+			UUID: createOutput.UUID,
+		})
+	})
+
+	// List event source mappings by function name.
+	listOutput, err := client.ListEventSourceMappings(ctx, &lambda.ListEventSourceMappingsInput{
+		FunctionName: aws.String(functionName),
+	})
+	if err != nil {
+		t.Fatalf("failed to list event source mappings: %v", err)
+	}
+
+	found := false
+
+	for _, esm := range listOutput.EventSourceMappings {
+		if esm.UUID != nil && *esm.UUID == *createOutput.UUID {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("event source mapping %s not found in list", *createOutput.UUID)
+	}
+}
+
+func TestLambda_EventSourceMapping_FunctionNotFound(t *testing.T) {
+	client := newLambdaClient(t)
+	ctx := t.Context()
+
+	// Try to create event source mapping for non-existent function.
+	_, err := client.CreateEventSourceMapping(ctx, &lambda.CreateEventSourceMappingInput{
+		FunctionName:   aws.String("non-existent-function"),
+		EventSourceArn: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
+		BatchSize:      aws.Int32(10),
+	})
+	if err == nil {
+		t.Error("expected error when creating event source mapping for non-existent function")
+	}
+}

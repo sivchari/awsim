@@ -493,3 +493,156 @@ func writeFunctionError(w http.ResponseWriter, errType, message string, status i
 		"Message": message,
 	})
 }
+
+// CreateEventSourceMapping handles the CreateEventSourceMapping API.
+func (s *Service) CreateEventSourceMapping(w http.ResponseWriter, r *http.Request) {
+	var req CreateEventSourceMappingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFunctionError(w, ErrInvalidParameterValue, "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.FunctionName == "" {
+		writeFunctionError(w, ErrInvalidParameterValue, "FunctionName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	mapping, err := s.storage.CreateEventSourceMapping(r.Context(), &req)
+	if err != nil {
+		handleFunctionError(w, err)
+
+		return
+	}
+
+	writeJSONResponse(w, http.StatusCreated, mapping)
+}
+
+// GetEventSourceMapping handles the GetEventSourceMapping API.
+func (s *Service) GetEventSourceMapping(w http.ResponseWriter, r *http.Request) {
+	mappingUUID := extractEventSourceMappingUUID(r.URL.Path)
+	if mappingUUID == "" {
+		writeFunctionError(w, ErrInvalidParameterValue, "UUID is required", http.StatusBadRequest)
+
+		return
+	}
+
+	mapping, err := s.storage.GetEventSourceMapping(r.Context(), mappingUUID)
+	if err != nil {
+		handleFunctionError(w, err)
+
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, mapping)
+}
+
+// DeleteEventSourceMapping handles the DeleteEventSourceMapping API.
+func (s *Service) DeleteEventSourceMapping(w http.ResponseWriter, r *http.Request) {
+	mappingUUID := extractEventSourceMappingUUID(r.URL.Path)
+	if mappingUUID == "" {
+		writeFunctionError(w, ErrInvalidParameterValue, "UUID is required", http.StatusBadRequest)
+
+		return
+	}
+
+	mapping, err := s.storage.GetEventSourceMapping(r.Context(), mappingUUID)
+	if err != nil {
+		handleFunctionError(w, err)
+
+		return
+	}
+
+	if err := s.storage.DeleteEventSourceMapping(r.Context(), mappingUUID); err != nil {
+		handleFunctionError(w, err)
+
+		return
+	}
+
+	// Return the mapping with state set to Deleting
+	mapping.State = "Deleting"
+	writeJSONResponse(w, http.StatusOK, mapping)
+}
+
+// ListEventSourceMappings handles the ListEventSourceMappings API.
+func (s *Service) ListEventSourceMappings(w http.ResponseWriter, r *http.Request) {
+	functionName := r.URL.Query().Get("FunctionName")
+	eventSourceArn := r.URL.Query().Get("EventSourceArn")
+	marker := r.URL.Query().Get("Marker")
+
+	maxItems := 100
+
+	if maxItemsStr := r.URL.Query().Get("MaxItems"); maxItemsStr != "" {
+		if parsed, err := strconv.Atoi(maxItemsStr); err == nil {
+			maxItems = parsed
+		}
+	}
+
+	mappings, nextMarker, err := s.storage.ListEventSourceMappings(r.Context(), functionName, eventSourceArn, marker, maxItems)
+	if err != nil {
+		writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	resp := &ListEventSourceMappingsResponse{
+		EventSourceMappings: mappings,
+		NextMarker:          nextMarker,
+	}
+
+	writeJSONResponse(w, http.StatusOK, resp)
+}
+
+// UpdateEventSourceMapping handles the UpdateEventSourceMapping API.
+func (s *Service) UpdateEventSourceMapping(w http.ResponseWriter, r *http.Request) {
+	mappingUUID := extractEventSourceMappingUUID(r.URL.Path)
+	if mappingUUID == "" {
+		writeFunctionError(w, ErrInvalidParameterValue, "UUID is required", http.StatusBadRequest)
+
+		return
+	}
+
+	var req UpdateEventSourceMappingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFunctionError(w, ErrInvalidParameterValue, "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	mapping, err := s.storage.UpdateEventSourceMapping(r.Context(), mappingUUID, &req)
+	if err != nil {
+		handleFunctionError(w, err)
+
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, mapping)
+}
+
+// handleFunctionError handles FunctionError and writes appropriate response.
+func handleFunctionError(w http.ResponseWriter, err error) {
+	var lambdaErr *FunctionError
+	if errors.As(err, &lambdaErr) {
+		status := http.StatusBadRequest
+		if lambdaErr.Type == ErrResourceNotFound {
+			status = http.StatusNotFound
+		}
+
+		writeFunctionError(w, lambdaErr.Type, lambdaErr.Message, status)
+
+		return
+	}
+
+	writeFunctionError(w, ErrServiceException, "Internal server error", http.StatusInternalServerError)
+}
+
+// extractEventSourceMappingUUID extracts UUID from path like /lambda/2015-03-31/event-source-mappings/{UUID}.
+func extractEventSourceMappingUUID(path string) string {
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	if len(parts) >= 4 && parts[2] == "event-source-mappings" {
+		return parts[3]
+	}
+
+	return ""
+}

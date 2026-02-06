@@ -57,4 +57,20 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 	// Invoke: POST /lambda/2015-03-31/functions/{FunctionName}/invocations
 	r.Handle("POST", "/lambda/2015-03-31/functions/{functionName}/invocations", s.Invoke)
+
+	// EventSourceMapping operations
+	// CreateEventSourceMapping: POST /lambda/2015-03-31/event-source-mappings
+	r.Handle("POST", "/lambda/2015-03-31/event-source-mappings", s.CreateEventSourceMapping)
+
+	// ListEventSourceMappings: GET /lambda/2015-03-31/event-source-mappings
+	r.Handle("GET", "/lambda/2015-03-31/event-source-mappings", s.ListEventSourceMappings)
+
+	// GetEventSourceMapping: GET /lambda/2015-03-31/event-source-mappings/{UUID}
+	r.Handle("GET", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.GetEventSourceMapping)
+
+	// UpdateEventSourceMapping: PUT /lambda/2015-03-31/event-source-mappings/{UUID}
+	r.Handle("PUT", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.UpdateEventSourceMapping)
+
+	// DeleteEventSourceMapping: DELETE /lambda/2015-03-31/event-source-mappings/{UUID}
+	r.Handle("DELETE", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.DeleteEventSourceMapping)
 }
