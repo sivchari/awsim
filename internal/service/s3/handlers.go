@@ -281,7 +281,16 @@ func (s *Service) GetObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	versionID := r.URL.Query().Get("versionId")
-	obj, err := s.getObjectByVersion(r, bucket, key, versionID)
+
+	var obj *Object
+
+	var err error
+
+	if versionID != "" {
+		obj, err = s.storage.GetObjectVersion(r.Context(), bucket, key, versionID)
+	} else {
+		obj, err = s.storage.GetObject(r.Context(), bucket, key)
+	}
 
 	if err != nil {
 		handleGetObjectError(w, r, err)
@@ -290,15 +299,6 @@ func (s *Service) GetObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeObjectResponse(w, obj)
-}
-
-// getObjectByVersion retrieves an object, optionally by version ID.
-func (s *Service) getObjectByVersion(r *http.Request, bucket, key, versionID string) (*Object, error) {
-	if versionID != "" {
-		return s.storage.GetObjectVersion(r.Context(), bucket, key, versionID)
-	}
-
-	return s.storage.GetObject(r.Context(), bucket, key)
 }
 
 // handleGetObjectError handles errors from GetObject/GetObjectVersion.
@@ -360,7 +360,16 @@ func (s *Service) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	versionID := r.URL.Query().Get("versionId")
-	deleteMarker, err := s.deleteObjectByVersion(r, bucket, key, versionID)
+
+	var deleteMarker *Object
+
+	var err error
+
+	if versionID != "" {
+		deleteMarker, err = s.storage.DeleteObjectVersion(r.Context(), bucket, key, versionID)
+	} else {
+		deleteMarker, err = s.storage.DeleteObject(r.Context(), bucket, key)
+	}
 
 	if err != nil {
 		var bucketErr *BucketError
@@ -387,15 +396,6 @@ func (s *Service) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// deleteObjectByVersion deletes an object, optionally by version ID.
-func (s *Service) deleteObjectByVersion(r *http.Request, bucket, key, versionID string) (*Object, error) {
-	if versionID != "" {
-		return s.storage.DeleteObjectVersion(r.Context(), bucket, key, versionID)
-	}
-
-	return s.storage.DeleteObject(r.Context(), bucket, key)
 }
 
 // HeadObject handles HEAD /{bucket}/{key...} - get object metadata.
