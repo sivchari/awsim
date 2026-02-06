@@ -16,20 +16,32 @@ type QueryServiceHandler func(w http.ResponseWriter, r *http.Request)
 // QueryProtocolDispatcher routes AWS Query protocol requests to the appropriate service
 // based on the Action parameter.
 type QueryProtocolDispatcher struct {
-	// handlers maps service name to service handler.
+	// handlers maps service prefix to service handler.
 	handlers map[string]QueryServiceHandler
+	// actionHandlers maps action name to service handler.
+	actionHandlers map[string]QueryServiceHandler
+	// actionPrefixes maps action name to service prefix.
+	actionPrefixes map[string]string
 }
 
 // NewQueryProtocolDispatcher creates a new Query protocol dispatcher.
 func NewQueryProtocolDispatcher() *QueryProtocolDispatcher {
 	return &QueryProtocolDispatcher{
-		handlers: make(map[string]QueryServiceHandler),
+		handlers:       make(map[string]QueryServiceHandler),
+		actionHandlers: make(map[string]QueryServiceHandler),
+		actionPrefixes: make(map[string]string),
 	}
 }
 
 // Register registers a service handler.
 func (d *QueryProtocolDispatcher) Register(serviceName string, handler QueryServiceHandler) {
 	d.handlers[serviceName] = handler
+}
+
+// RegisterAction registers a handler for a specific action.
+func (d *QueryProtocolDispatcher) RegisterAction(action, servicePrefix string, handler QueryServiceHandler) {
+	d.actionHandlers[action] = handler
+	d.actionPrefixes[action] = servicePrefix
 }
 
 // ServeHTTP implements http.Handler and dispatches to the appropriate service.
@@ -55,9 +67,19 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	r.ContentLength = int64(len(jsonBody))
 	r.Header.Set("Content-Type", "application/x-amz-json-1.0")
 
-	// Dispatch to the appropriate handler based on the service action prefix.
+	// Dispatch to the appropriate handler based on the action name.
+	if handler, ok := d.actionHandlers[action]; ok {
+		if prefix, ok := d.actionPrefixes[action]; ok {
+			r.Header.Set("X-Amz-Target", prefix+"."+action)
+		}
+
+		handler(w, r)
+
+		return
+	}
+
+	// Fallback: try dispatching to any handler (backward compatibility).
 	for serviceName, handler := range d.handlers {
-		// Set the X-Amz-Target header for the handler.
 		r.Header.Set("X-Amz-Target", serviceName+"."+action)
 		handler(w, r)
 

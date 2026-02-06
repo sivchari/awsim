@@ -119,6 +119,12 @@ func (s *Server) RegisterService(svc service.Service) {
 	// Check if service implements Query protocol.
 	if querySvc, ok := svc.(service.QueryProtocolService); ok {
 		s.queryDispatcher.Register(querySvc.TargetPrefix(), querySvc.DispatchAction)
+
+		// Register each action for proper routing.
+		for _, action := range querySvc.Actions() {
+			s.queryDispatcher.RegisterAction(action, querySvc.TargetPrefix(), querySvc.DispatchAction)
+		}
+
 		s.logger.Debug("registered Query protocol service", "name", svc.Name(), "prefix", querySvc.TargetPrefix())
 	}
 

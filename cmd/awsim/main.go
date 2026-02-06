@@ -8,6 +8,7 @@ import (
 	// Register services via init().
 	_ "github.com/sivchari/awsim/internal/service/cloudwatchlogs"
 	_ "github.com/sivchari/awsim/internal/service/dynamodb"
+	_ "github.com/sivchari/awsim/internal/service/ec2"
 	_ "github.com/sivchari/awsim/internal/service/lambda"
 	_ "github.com/sivchari/awsim/internal/service/s3"
 	_ "github.com/sivchari/awsim/internal/service/secretsmanager"
