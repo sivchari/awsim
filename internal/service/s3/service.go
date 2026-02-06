@@ -35,12 +35,12 @@ func (s *Service) Prefix() string {
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Bucket operations
 	r.Handle("GET", "/", s.ListBuckets)
-	r.Handle("PUT", "/{bucket}", s.CreateBucket)
+	r.Handle("PUT", "/{bucket}", s.handleBucketPut)
 	r.Handle("DELETE", "/{bucket}", s.DeleteBucket)
 	r.Handle("HEAD", "/{bucket}", s.HeadBucket)
 
 	// Object list (must be before object operations to handle query params)
-	r.Handle("GET", "/{bucket}", s.ListObjects)
+	r.Handle("GET", "/{bucket}", s.handleBucketGet)
 
 	// Object operations
 	r.Handle("PUT", "/{bucket}/{key...}", s.PutObject)

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 func newS3Client(t *testing.T) *s3.Client {
@@ -529,5 +530,410 @@ func TestS3_PresignedURL_Expired(t *testing.T) {
 	// Should return 403 Forbidden for expired URL
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("expected status 403 for expired URL, got %d", resp.StatusCode)
+	}
+}
+
+func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-versioning-config"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Get versioning status (should be empty initially)
+	result, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to get bucket versioning: %v", err)
+	}
+
+	if result.Status != "" {
+		t.Errorf("expected empty versioning status, got %v", result.Status)
+	}
+
+	// Enable versioning
+	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusEnabled,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to put bucket versioning: %v", err)
+	}
+
+	// Verify versioning is enabled
+	result, err = client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to get bucket versioning: %v", err)
+	}
+
+	if result.Status != s3types.BucketVersioningStatusEnabled {
+		t.Errorf("expected versioning status Enabled, got %v", result.Status)
+	}
+
+	// Suspend versioning
+	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusSuspended,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to suspend bucket versioning: %v", err)
+	}
+
+	// Verify versioning is suspended
+	result, err = client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to get bucket versioning: %v", err)
+	}
+
+	if result.Status != s3types.BucketVersioningStatusSuspended {
+		t.Errorf("expected versioning status Suspended, got %v", result.Status)
+	}
+}
+
+func TestS3_Versioning_PutObjectWithVersioning(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-versioning-put-object"
+	key := "test-versioned-key.txt"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// List and delete all versions
+		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+			Bucket: aws.String(bucketName),
+		})
+		if versions != nil {
+			for _, v := range versions.Versions {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       v.Key,
+					VersionId: v.VersionId,
+				})
+			}
+			for _, dm := range versions.DeleteMarkers {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       dm.Key,
+					VersionId: dm.VersionId,
+				})
+			}
+		}
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Enable versioning
+	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusEnabled,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to enable versioning: %v", err)
+	}
+
+	// Put first version
+	putResult1, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader([]byte("version 1")),
+	})
+	if err != nil {
+		t.Fatalf("failed to put object v1: %v", err)
+	}
+
+	if putResult1.VersionId == nil || *putResult1.VersionId == "" {
+		t.Error("expected version ID for first put, got empty")
+	}
+
+	// Put second version
+	putResult2, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader([]byte("version 2")),
+	})
+	if err != nil {
+		t.Fatalf("failed to put object v2: %v", err)
+	}
+
+	if putResult2.VersionId == nil || *putResult2.VersionId == "" {
+		t.Error("expected version ID for second put, got empty")
+	}
+
+	if *putResult1.VersionId == *putResult2.VersionId {
+		t.Error("expected different version IDs for different puts")
+	}
+
+	// Get latest version (should be v2)
+	getResult, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to get object: %v", err)
+	}
+	defer getResult.Body.Close()
+
+	body, _ := io.ReadAll(getResult.Body)
+	if string(body) != "version 2" {
+		t.Errorf("expected 'version 2', got %q", string(body))
+	}
+
+	// Get first version by version ID
+	getResult1, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket:    aws.String(bucketName),
+		Key:       aws.String(key),
+		VersionId: putResult1.VersionId,
+	})
+	if err != nil {
+		t.Fatalf("failed to get object v1 by version ID: %v", err)
+	}
+	defer getResult1.Body.Close()
+
+	body1, _ := io.ReadAll(getResult1.Body)
+	if string(body1) != "version 1" {
+		t.Errorf("expected 'version 1', got %q", string(body1))
+	}
+}
+
+func TestS3_Versioning_DeleteObjectCreatesDeleteMarker(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-versioning-delete-marker"
+	key := "test-delete-marker-key.txt"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// List and delete all versions
+		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+			Bucket: aws.String(bucketName),
+		})
+		if versions != nil {
+			for _, v := range versions.Versions {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       v.Key,
+					VersionId: v.VersionId,
+				})
+			}
+			for _, dm := range versions.DeleteMarkers {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       dm.Key,
+					VersionId: dm.VersionId,
+				})
+			}
+		}
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Enable versioning
+	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusEnabled,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to enable versioning: %v", err)
+	}
+
+	// Put object
+	putResult, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader([]byte("content")),
+	})
+	if err != nil {
+		t.Fatalf("failed to put object: %v", err)
+	}
+
+	// Delete object (should create delete marker)
+	deleteResult, err := client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to delete object: %v", err)
+	}
+
+	if deleteResult.DeleteMarker == nil || !*deleteResult.DeleteMarker {
+		t.Error("expected delete marker to be true")
+	}
+
+	if deleteResult.VersionId == nil || *deleteResult.VersionId == "" {
+		t.Error("expected version ID for delete marker")
+	}
+
+	// Try to get object (should fail with 404)
+	_, err = client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err == nil {
+		t.Error("expected error when getting deleted object, got nil")
+	}
+
+	// Get object by original version ID (should succeed)
+	getResult, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket:    aws.String(bucketName),
+		Key:       aws.String(key),
+		VersionId: putResult.VersionId,
+	})
+	if err != nil {
+		t.Fatalf("failed to get object by version ID: %v", err)
+	}
+	defer getResult.Body.Close()
+
+	body, _ := io.ReadAll(getResult.Body)
+	if string(body) != "content" {
+		t.Errorf("expected 'content', got %q", string(body))
+	}
+}
+
+func TestS3_Versioning_ListObjectVersions(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-versioning-list-versions"
+	key := "test-list-versions-key.txt"
+
+	// Create bucket
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to create bucket: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// List and delete all versions
+		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+			Bucket: aws.String(bucketName),
+		})
+		if versions != nil {
+			for _, v := range versions.Versions {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       v.Key,
+					VersionId: v.VersionId,
+				})
+			}
+			for _, dm := range versions.DeleteMarkers {
+				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket:    aws.String(bucketName),
+					Key:       dm.Key,
+					VersionId: dm.VersionId,
+				})
+			}
+		}
+		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Enable versioning
+	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusEnabled,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to enable versioning: %v", err)
+	}
+
+	// Put three versions
+	for i := 1; i <= 3; i++ {
+		_, err = client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+			Body:   bytes.NewReader([]byte("version " + string(rune('0'+i)))),
+		})
+		if err != nil {
+			t.Fatalf("failed to put object v%d: %v", i, err)
+		}
+	}
+
+	// Delete object (creates delete marker)
+	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to delete object: %v", err)
+	}
+
+	// List object versions
+	listResult, err := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatalf("failed to list object versions: %v", err)
+	}
+
+	// Should have 3 versions
+	if len(listResult.Versions) != 3 {
+		t.Errorf("expected 3 versions, got %d", len(listResult.Versions))
+	}
+
+	// Should have 1 delete marker
+	if len(listResult.DeleteMarkers) != 1 {
+		t.Errorf("expected 1 delete marker, got %d", len(listResult.DeleteMarkers))
+	}
+
+	// Check that only one version (the latest before delete) or delete marker is marked as latest
+	latestCount := 0
+	for _, v := range listResult.Versions {
+		if v.IsLatest != nil && *v.IsLatest {
+			latestCount++
+		}
+	}
+	for _, dm := range listResult.DeleteMarkers {
+		if dm.IsLatest != nil && *dm.IsLatest {
+			latestCount++
+		}
+	}
+
+	if latestCount != 1 {
+		t.Errorf("expected exactly 1 latest version/marker, got %d", latestCount)
 	}
 }
