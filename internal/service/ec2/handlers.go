@@ -1,3 +1,4 @@
+// Package ec2 provides EC2 service emulation for awsim.
 package ec2
 
 import (
@@ -24,20 +25,20 @@ const (
 func (s *Service) RunInstances(w http.ResponseWriter, r *http.Request) {
 	var req RunInstancesRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.ImageID == "" {
-		writeEC2Error(w, errInvalidParameter, "ImageId is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "ImageId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	instances, reservationID, err := s.storage.RunInstances(r.Context(), &req)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -60,20 +61,20 @@ func (s *Service) RunInstances(w http.ResponseWriter, r *http.Request) {
 func (s *Service) TerminateInstances(w http.ResponseWriter, r *http.Request) {
 	var req TerminateInstancesRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if len(req.InstanceIDs) == 0 {
-		writeEC2Error(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
 
 		return
 	}
 
 	changes, err := s.storage.TerminateInstances(r.Context(), req.InstanceIDs)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -89,19 +90,20 @@ func (s *Service) TerminateInstances(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DescribeInstances(w http.ResponseWriter, r *http.Request) {
 	var req DescribeInstancesRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	reservations, err := s.storage.DescribeInstances(r.Context(), req.InstanceIDs)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
 
 	xmlReservations := make([]XMLReservation, 0, len(reservations))
+
 	for _, res := range reservations {
 		xmlInstances := make([]XMLInstance, 0, len(res.Instances))
 		for _, inst := range res.Instances {
@@ -126,20 +128,20 @@ func (s *Service) DescribeInstances(w http.ResponseWriter, r *http.Request) {
 func (s *Service) StartInstances(w http.ResponseWriter, r *http.Request) {
 	var req StartInstancesRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if len(req.InstanceIDs) == 0 {
-		writeEC2Error(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
 
 		return
 	}
 
 	changes, err := s.storage.StartInstances(r.Context(), req.InstanceIDs)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -155,20 +157,20 @@ func (s *Service) StartInstances(w http.ResponseWriter, r *http.Request) {
 func (s *Service) StopInstances(w http.ResponseWriter, r *http.Request) {
 	var req StopInstancesRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if len(req.InstanceIDs) == 0 {
-		writeEC2Error(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "InstanceIds is required", http.StatusBadRequest)
 
 		return
 	}
 
 	changes, err := s.storage.StopInstances(r.Context(), req.InstanceIDs)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -184,26 +186,26 @@ func (s *Service) StopInstances(w http.ResponseWriter, r *http.Request) {
 func (s *Service) CreateSecurityGroup(w http.ResponseWriter, r *http.Request) {
 	var req CreateSecurityGroupRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.GroupName == "" {
-		writeEC2Error(w, errInvalidParameter, "GroupName is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "GroupName is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.Description == "" {
-		writeEC2Error(w, errInvalidParameter, "Description is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Description is required", http.StatusBadRequest)
 
 		return
 	}
 
 	sg, err := s.storage.CreateSecurityGroup(r.Context(), &req)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -220,20 +222,20 @@ func (s *Service) CreateSecurityGroup(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DeleteSecurityGroup(w http.ResponseWriter, r *http.Request) {
 	var req DeleteSecurityGroupRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.GroupID == "" && req.GroupName == "" {
-		writeEC2Error(w, errInvalidParameter, "GroupId or GroupName is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "GroupId or GroupName is required", http.StatusBadRequest)
 
 		return
 	}
 
 	err := s.storage.DeleteSecurityGroup(r.Context(), req.GroupID, req.GroupName)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -249,20 +251,20 @@ func (s *Service) DeleteSecurityGroup(w http.ResponseWriter, r *http.Request) {
 func (s *Service) AuthorizeSecurityGroupIngress(w http.ResponseWriter, r *http.Request) {
 	var req AuthorizeSecurityGroupIngressRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.GroupID == "" && req.GroupName == "" {
-		writeEC2Error(w, errInvalidParameter, "GroupId or GroupName is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "GroupId or GroupName is required", http.StatusBadRequest)
 
 		return
 	}
 
 	err := s.storage.AuthorizeSecurityGroupIngress(r.Context(), req.GroupID, req.GroupName, req.IPPermissions)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -278,20 +280,20 @@ func (s *Service) AuthorizeSecurityGroupIngress(w http.ResponseWriter, r *http.R
 func (s *Service) AuthorizeSecurityGroupEgress(w http.ResponseWriter, r *http.Request) {
 	var req AuthorizeSecurityGroupEgressRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.GroupID == "" {
-		writeEC2Error(w, errInvalidParameter, "GroupId is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "GroupId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	err := s.storage.AuthorizeSecurityGroupEgress(r.Context(), req.GroupID, req.IPPermissions)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -307,20 +309,20 @@ func (s *Service) AuthorizeSecurityGroupEgress(w http.ResponseWriter, r *http.Re
 func (s *Service) CreateKeyPair(w http.ResponseWriter, r *http.Request) {
 	var req CreateKeyPairRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.KeyName == "" {
-		writeEC2Error(w, errInvalidParameter, "KeyName is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "KeyName is required", http.StatusBadRequest)
 
 		return
 	}
 
 	kp, err := s.storage.CreateKeyPair(r.Context(), req.KeyName, req.KeyType)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -339,20 +341,20 @@ func (s *Service) CreateKeyPair(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DeleteKeyPair(w http.ResponseWriter, r *http.Request) {
 	var req DeleteKeyPairRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.KeyName == "" && req.KeyPairID == "" {
-		writeEC2Error(w, errInvalidParameter, "KeyName or KeyPairId is required", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "KeyName or KeyPairId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	err := s.storage.DeleteKeyPair(r.Context(), req.KeyName, req.KeyPairID)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -368,14 +370,14 @@ func (s *Service) DeleteKeyPair(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DescribeKeyPairs(w http.ResponseWriter, r *http.Request) {
 	var req DescribeKeyPairsRequest
 	if err := readEC2JSONRequest(r, &req); err != nil {
-		writeEC2Error(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
 		return
 	}
 
 	keyPairs, err := s.storage.DescribeKeyPairs(r.Context(), req.KeyNames, req.KeyPairIDs)
 	if err != nil {
-		handleEC2Error(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -426,7 +428,7 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	case "DescribeKeyPairs":
 		s.DescribeKeyPairs(w, r)
 	default:
-		writeEC2Error(w, errInvalidAction, fmt.Sprintf("The action '%s' is not valid", action), http.StatusBadRequest)
+		writeError(w, errInvalidAction, fmt.Sprintf("The action '%s' is not valid", action), http.StatusBadRequest)
 	}
 }
 
@@ -434,10 +436,7 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 func convertToXMLInstance(inst *Instance) XMLInstance {
 	groupSet := make([]XMLGroupIdentifier, 0, len(inst.SecurityGroups))
 	for _, sg := range inst.SecurityGroups {
-		groupSet = append(groupSet, XMLGroupIdentifier{
-			GroupID:   sg.GroupID,
-			GroupName: sg.GroupName,
-		})
+		groupSet = append(groupSet, XMLGroupIdentifier(sg))
 	}
 
 	return XMLInstance{
@@ -494,8 +493,8 @@ func writeEC2XMLResponse(w http.ResponseWriter, v any) {
 	_ = xml.NewEncoder(w).Encode(v)
 }
 
-// writeEC2Error writes an EC2 error response in XML format.
-func writeEC2Error(w http.ResponseWriter, code, message string, status int) {
+// writeError writes an EC2 error response in XML format.
+func writeError(w http.ResponseWriter, code, message string, status int) {
 	requestID := uuid.New().String()
 
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
@@ -513,14 +512,14 @@ func writeEC2Error(w http.ResponseWriter, code, message string, status int) {
 	})
 }
 
-// handleEC2Error handles EC2 errors and writes the appropriate response.
-func handleEC2Error(w http.ResponseWriter, err error) {
-	var ec2Err *EC2Error
+// handleError handles EC2 errors and writes the appropriate response.
+func handleError(w http.ResponseWriter, err error) {
+	var ec2Err *Error
 	if errors.As(err, &ec2Err) {
-		writeEC2Error(w, ec2Err.Code, ec2Err.Message, http.StatusBadRequest)
+		writeError(w, ec2Err.Code, ec2Err.Message, http.StatusBadRequest)
 
 		return
 	}
 
-	writeEC2Error(w, errInternalError, "Internal server error", http.StatusInternalServerError)
+	writeError(w, errInternalError, "Internal server error", http.StatusInternalServerError)
 }

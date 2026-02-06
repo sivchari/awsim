@@ -47,8 +47,8 @@ type Storage interface {
 	StopInstances(ctx context.Context, instanceIDs []string) ([]InstanceStateChange, error)
 	CreateSecurityGroup(ctx context.Context, req *CreateSecurityGroupRequest) (*SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, groupID, groupName string) error
-	AuthorizeSecurityGroupIngress(ctx context.Context, groupID, groupName string, permissions []IpPermission) error
-	AuthorizeSecurityGroupEgress(ctx context.Context, groupID string, permissions []IpPermission) error
+	AuthorizeSecurityGroupIngress(ctx context.Context, groupID, groupName string, permissions []IPPermission) error
+	AuthorizeSecurityGroupEgress(ctx context.Context, groupID string, permissions []IPPermission) error
 	CreateKeyPair(ctx context.Context, keyName, keyType string) (*KeyPair, error)
 	DeleteKeyPair(ctx context.Context, keyName, keyPairID string) error
 	DescribeKeyPairs(ctx context.Context, keyNames, keyPairIDs []string) ([]*KeyPair, error)
@@ -135,7 +135,7 @@ func (m *MemoryStorage) TerminateInstances(_ context.Context, instanceIDs []stri
 	for _, id := range instanceIDs {
 		instance, exists := m.instances[id]
 		if !exists {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
 				Message: fmt.Sprintf("The instance ID '%s' does not exist", id),
 			}
@@ -173,7 +173,7 @@ func (m *MemoryStorage) DescribeInstances(_ context.Context, instanceIDs []strin
 	for _, id := range instanceIDs {
 		instance, exists := m.instances[id]
 		if !exists {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
 				Message: fmt.Sprintf("The instance ID '%s' does not exist", id),
 			}
@@ -214,7 +214,7 @@ func (m *MemoryStorage) StartInstances(_ context.Context, instanceIDs []string) 
 	for _, id := range instanceIDs {
 		instance, exists := m.instances[id]
 		if !exists {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
 				Message: fmt.Sprintf("The instance ID '%s' does not exist", id),
 			}
@@ -243,7 +243,7 @@ func (m *MemoryStorage) StopInstances(_ context.Context, instanceIDs []string) (
 	for _, id := range instanceIDs {
 		instance, exists := m.instances[id]
 		if !exists {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
 				Message: fmt.Sprintf("The instance ID '%s' does not exist", id),
 			}
@@ -269,7 +269,7 @@ func (m *MemoryStorage) CreateSecurityGroup(_ context.Context, req *CreateSecuri
 
 	for _, sg := range m.securityGroups {
 		if sg.GroupName == req.GroupName {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidGroup.Duplicate",
 				Message: fmt.Sprintf("The security group '%s' already exists", req.GroupName),
 			}
@@ -281,8 +281,8 @@ func (m *MemoryStorage) CreateSecurityGroup(_ context.Context, req *CreateSecuri
 		GroupName:    req.GroupName,
 		Description:  req.Description,
 		VpcID:        req.VpcID,
-		IngressRules: []IpPermission{},
-		EgressRules:  []IpPermission{},
+		IngressRules: []IPPermission{},
+		EgressRules:  []IPPermission{},
 	}
 
 	m.securityGroups[sg.GroupID] = sg
@@ -297,7 +297,7 @@ func (m *MemoryStorage) DeleteSecurityGroup(_ context.Context, groupID, groupNam
 
 	if groupID != "" {
 		if _, exists := m.securityGroups[groupID]; !exists {
-			return &EC2Error{
+			return &Error{
 				Code:    "InvalidGroup.NotFound",
 				Message: fmt.Sprintf("The security group '%s' does not exist", groupID),
 			}
@@ -316,20 +316,20 @@ func (m *MemoryStorage) DeleteSecurityGroup(_ context.Context, groupID, groupNam
 		}
 	}
 
-	return &EC2Error{
+	return &Error{
 		Code:    "InvalidGroup.NotFound",
 		Message: fmt.Sprintf("The security group '%s' does not exist", groupName),
 	}
 }
 
 // AuthorizeSecurityGroupIngress adds ingress rules to a security group.
-func (m *MemoryStorage) AuthorizeSecurityGroupIngress(_ context.Context, groupID, groupName string, permissions []IpPermission) error {
+func (m *MemoryStorage) AuthorizeSecurityGroupIngress(_ context.Context, groupID, groupName string, permissions []IPPermission) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	sg := m.findSecurityGroup(groupID, groupName)
 	if sg == nil {
-		return &EC2Error{
+		return &Error{
 			Code:    "InvalidGroup.NotFound",
 			Message: "The security group does not exist",
 		}
@@ -341,13 +341,13 @@ func (m *MemoryStorage) AuthorizeSecurityGroupIngress(_ context.Context, groupID
 }
 
 // AuthorizeSecurityGroupEgress adds egress rules to a security group.
-func (m *MemoryStorage) AuthorizeSecurityGroupEgress(_ context.Context, groupID string, permissions []IpPermission) error {
+func (m *MemoryStorage) AuthorizeSecurityGroupEgress(_ context.Context, groupID string, permissions []IPPermission) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	sg, exists := m.securityGroups[groupID]
 	if !exists {
-		return &EC2Error{
+		return &Error{
 			Code:    "InvalidGroup.NotFound",
 			Message: fmt.Sprintf("The security group '%s' does not exist", groupID),
 		}
@@ -365,7 +365,7 @@ func (m *MemoryStorage) CreateKeyPair(_ context.Context, keyName, _ string) (*Ke
 
 	for _, kp := range m.keyPairs {
 		if kp.KeyName == keyName {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidKeyPair.Duplicate",
 				Message: fmt.Sprintf("The keypair '%s' already exists", keyName),
 			}
@@ -374,7 +374,7 @@ func (m *MemoryStorage) CreateKeyPair(_ context.Context, keyName, _ string) (*Ke
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return nil, &EC2Error{
+		return nil, &Error{
 			Code:    "InternalError",
 			Message: "Failed to generate key pair",
 		}
@@ -382,7 +382,7 @@ func (m *MemoryStorage) CreateKeyPair(_ context.Context, keyName, _ string) (*Ke
 
 	pubKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		return nil, &EC2Error{
+		return nil, &Error{
 			Code:    "InternalError",
 			Message: "Failed to generate public key",
 		}
@@ -415,7 +415,7 @@ func (m *MemoryStorage) DeleteKeyPair(_ context.Context, keyName, keyPairID stri
 
 	if keyPairID != "" {
 		if _, exists := m.keyPairs[keyPairID]; !exists {
-			return &EC2Error{
+			return &Error{
 				Code:    "InvalidKeyPair.NotFound",
 				Message: fmt.Sprintf("The key pair '%s' does not exist", keyPairID),
 			}
@@ -434,7 +434,7 @@ func (m *MemoryStorage) DeleteKeyPair(_ context.Context, keyName, keyPairID stri
 		}
 	}
 
-	return &EC2Error{
+	return &Error{
 		Code:    "InvalidKeyPair.NotFound",
 		Message: fmt.Sprintf("The key pair '%s' does not exist", keyName),
 	}
@@ -446,45 +446,45 @@ func (m *MemoryStorage) DescribeKeyPairs(_ context.Context, keyNames, keyPairIDs
 	defer m.mu.RUnlock()
 
 	if len(keyNames) == 0 && len(keyPairIDs) == 0 {
-		keyPairs := make([]*KeyPair, 0, len(m.keyPairs))
-		for _, kp := range m.keyPairs {
-			keyPairs = append(keyPairs, &KeyPair{
-				KeyName:        kp.KeyName,
-				KeyFingerprint: kp.KeyFingerprint,
-				KeyPairID:      kp.KeyPairID,
-				CreateTime:     kp.CreateTime,
-			})
-		}
-
-		return keyPairs, nil
+		return m.listAllKeyPairs(), nil
 	}
 
+	keyPairSet, err := m.collectKeyPairs(keyNames, keyPairIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.keyPairSetToSlice(keyPairSet), nil
+}
+
+// listAllKeyPairs returns all key pairs without KeyMaterial.
+func (m *MemoryStorage) listAllKeyPairs() []*KeyPair {
+	keyPairs := make([]*KeyPair, 0, len(m.keyPairs))
+
+	for _, kp := range m.keyPairs {
+		keyPairs = append(keyPairs, copyKeyPairInfo(kp))
+	}
+
+	return keyPairs
+}
+
+// collectKeyPairs collects key pairs by names and IDs.
+func (m *MemoryStorage) collectKeyPairs(keyNames, keyPairIDs []string) (map[string]*KeyPair, error) {
 	keyPairSet := make(map[string]*KeyPair)
 
 	for _, name := range keyNames {
-		found := false
-
-		for _, kp := range m.keyPairs {
-			if kp.KeyName == name {
-				keyPairSet[kp.KeyPairID] = kp
-				found = true
-
-				break
-			}
+		kp, err := m.findKeyPairByName(name)
+		if err != nil {
+			return nil, err
 		}
 
-		if !found {
-			return nil, &EC2Error{
-				Code:    "InvalidKeyPair.NotFound",
-				Message: fmt.Sprintf("The key pair '%s' does not exist", name),
-			}
-		}
+		keyPairSet[kp.KeyPairID] = kp
 	}
 
 	for _, id := range keyPairIDs {
 		kp, exists := m.keyPairs[id]
 		if !exists {
-			return nil, &EC2Error{
+			return nil, &Error{
 				Code:    "InvalidKeyPair.NotFound",
 				Message: fmt.Sprintf("The key pair '%s' does not exist", id),
 			}
@@ -493,17 +493,42 @@ func (m *MemoryStorage) DescribeKeyPairs(_ context.Context, keyNames, keyPairIDs
 		keyPairSet[kp.KeyPairID] = kp
 	}
 
-	keyPairs := make([]*KeyPair, 0, len(keyPairSet))
-	for _, kp := range keyPairSet {
-		keyPairs = append(keyPairs, &KeyPair{
-			KeyName:        kp.KeyName,
-			KeyFingerprint: kp.KeyFingerprint,
-			KeyPairID:      kp.KeyPairID,
-			CreateTime:     kp.CreateTime,
-		})
+	return keyPairSet, nil
+}
+
+// findKeyPairByName finds a key pair by name.
+func (m *MemoryStorage) findKeyPairByName(name string) (*KeyPair, error) {
+	for _, kp := range m.keyPairs {
+		if kp.KeyName == name {
+			return kp, nil
+		}
 	}
 
-	return keyPairs, nil
+	return nil, &Error{
+		Code:    "InvalidKeyPair.NotFound",
+		Message: fmt.Sprintf("The key pair '%s' does not exist", name),
+	}
+}
+
+// keyPairSetToSlice converts a key pair set to a slice without KeyMaterial.
+func (m *MemoryStorage) keyPairSetToSlice(keyPairSet map[string]*KeyPair) []*KeyPair {
+	keyPairs := make([]*KeyPair, 0, len(keyPairSet))
+
+	for _, kp := range keyPairSet {
+		keyPairs = append(keyPairs, copyKeyPairInfo(kp))
+	}
+
+	return keyPairs
+}
+
+// copyKeyPairInfo copies key pair info without KeyMaterial.
+func copyKeyPairInfo(kp *KeyPair) *KeyPair {
+	return &KeyPair{
+		KeyName:        kp.KeyName,
+		KeyFingerprint: kp.KeyFingerprint,
+		KeyPairID:      kp.KeyPairID,
+		CreateTime:     kp.CreateTime,
+	}
 }
 
 // findSecurityGroup finds a security group by ID or name.

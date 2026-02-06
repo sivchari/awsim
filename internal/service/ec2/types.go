@@ -43,13 +43,13 @@ type SecurityGroup struct {
 	GroupName    string
 	Description  string
 	VpcID        string
-	IngressRules []IpPermission
-	EgressRules  []IpPermission
+	IngressRules []IPPermission
+	EgressRules  []IPPermission
 	Tags         []Tag
 }
 
-// IpPermission represents an ingress or egress rule.
-type IpPermission struct {
+// IPPermission represents an ingress or egress rule.
+type IPPermission struct {
 	IPProtocol string
 	FromPort   int
 	ToPort     int
@@ -120,13 +120,13 @@ type DeleteSecurityGroupRequest struct {
 type AuthorizeSecurityGroupIngressRequest struct {
 	GroupID       string         `json:"GroupId,omitempty"`
 	GroupName     string         `json:"GroupName,omitempty"`
-	IPPermissions []IpPermission `json:"IpPermissions"`
+	IPPermissions []IPPermission `json:"IPPermissions"`
 }
 
 // AuthorizeSecurityGroupEgressRequest represents an AuthorizeSecurityGroupEgress request.
 type AuthorizeSecurityGroupEgressRequest struct {
 	GroupID       string         `json:"GroupId"`
-	IPPermissions []IpPermission `json:"IpPermissions"`
+	IPPermissions []IPPermission `json:"IPPermissions"`
 }
 
 // CreateKeyPairRequest represents a CreateKeyPair request.
@@ -340,13 +340,13 @@ type XMLError struct {
 	Message string `xml:"Message"`
 }
 
-// EC2Error represents an EC2 error.
-type EC2Error struct {
+// Error represents an EC2 error.
+type Error struct {
 	Code    string
 	Message string
 }
 
 // Error implements the error interface.
-func (e *EC2Error) Error() string {
+func (e *Error) Error() string {
 	return e.Code + ": " + e.Message
 }
