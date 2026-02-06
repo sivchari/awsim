@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -102,7 +103,7 @@ func formToJSON(form map[string][]string) []byte {
 		// e.g., "Attributes.entry.1.key" -> handled specially
 		// Simple values: "Name" -> "Name"
 		if len(values) == 1 {
-			result[key] = values[0]
+			result[key] = parseFormValue(values[0])
 		} else if len(values) > 1 {
 			result[key] = values
 		}
@@ -114,6 +115,23 @@ func formToJSON(form map[string][]string) []byte {
 	jsonBytes, _ := json.Marshal(result)
 
 	return jsonBytes
+}
+
+// parseFormValue converts a form value string to appropriate JSON type.
+// Numeric strings are converted to numbers for proper JSON unmarshaling.
+func parseFormValue(s string) any {
+	// Try to parse as integer.
+	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return i
+	}
+
+	// Try to parse as boolean.
+	if b, err := strconv.ParseBool(s); err == nil {
+		return b
+	}
+
+	// Return as string.
+	return s
 }
 
 // flattenAttributes converts nested Query protocol attributes to JSON format.
