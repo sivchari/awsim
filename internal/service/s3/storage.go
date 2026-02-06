@@ -299,7 +299,7 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 	}
 
 	// Return empty object for non-versioned delete (S3 returns 204 with no body)
-	return &Object{Key: key}, nil //nolint:nilnil // S3 returns empty response for non-versioned delete
+	return &Object{Key: key}, nil
 }
 
 // DeleteObjectVersion deletes a specific version of an object.
@@ -317,7 +317,7 @@ func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, vers
 
 	// S3 doesn't return error if version doesn't exist, returns empty object
 	if deletedObj == nil {
-		return &Object{Key: key, VersionID: versionID}, nil //nolint:nilnil // S3 returns empty response for non-existent version
+		return &Object{Key: key, VersionID: versionID}, nil
 	}
 
 	if len(newVersions) == 0 {
