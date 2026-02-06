@@ -34,13 +34,13 @@ type Parameter struct {
 
 // ParameterMetadata represents parameter metadata for DescribeParameters.
 type ParameterMetadata struct {
-	Name             string `json:"Name"`
-	Type             string `json:"Type"`
-	Description      string `json:"Description,omitempty"`
-	Version          int64  `json:"Version"`
-	LastModifiedDate string `json:"LastModifiedDate"`
-	Tier             string `json:"Tier,omitempty"`
-	DataType         string `json:"DataType,omitempty"`
+	Name             string  `json:"Name"`
+	Type             string  `json:"Type"`
+	Description      string  `json:"Description,omitempty"`
+	Version          int64   `json:"Version"`
+	LastModifiedDate float64 `json:"LastModifiedDate"`
+	Tier             string  `json:"Tier,omitempty"`
+	DataType         string  `json:"DataType,omitempty"`
 }
 
 // PutParameterRequest is the request for PutParameter.
@@ -73,13 +73,13 @@ type GetParameterResponse struct {
 
 // ParameterValue represents a parameter value in responses.
 type ParameterValue struct {
-	Name             string `json:"Name"`
-	Type             string `json:"Type"`
-	Value            string `json:"Value"`
-	Version          int64  `json:"Version"`
-	LastModifiedDate string `json:"LastModifiedDate"`
-	ARN              string `json:"ARN"`
-	DataType         string `json:"DataType,omitempty"`
+	Name             string  `json:"Name"`
+	Type             string  `json:"Type"`
+	Value            string  `json:"Value"`
+	Version          int64   `json:"Version"`
+	LastModifiedDate float64 `json:"LastModifiedDate"`
+	ARN              string  `json:"ARN"`
+	DataType         string  `json:"DataType,omitempty"`
 }
 
 // GetParametersRequest is the request for GetParameters.

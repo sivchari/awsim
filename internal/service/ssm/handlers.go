@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -231,7 +232,7 @@ func parameterToValue(p *Parameter) *ParameterValue {
 		Type:             p.Type,
 		Value:            p.Value,
 		Version:          p.Version,
-		LastModifiedDate: p.LastModifiedDate.Format("2006-01-02T15:04:05.000Z"),
+		LastModifiedDate: toUnixTimestamp(p.LastModifiedDate),
 		ARN:              p.ARN,
 		DataType:         p.DataType,
 	}
@@ -244,10 +245,15 @@ func parameterToMetadata(p *Parameter) *ParameterMetadata {
 		Type:             p.Type,
 		Description:      p.Description,
 		Version:          p.Version,
-		LastModifiedDate: p.LastModifiedDate.Format("2006-01-02T15:04:05.000Z"),
+		LastModifiedDate: toUnixTimestamp(p.LastModifiedDate),
 		Tier:             p.Tier,
 		DataType:         p.DataType,
 	}
+}
+
+// toUnixTimestamp converts a time.Time to Unix timestamp as float64.
+func toUnixTimestamp(t time.Time) float64 {
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9
 }
 
 // handleSSMError handles ParameterError and writes appropriate response.
