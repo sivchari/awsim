@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -400,7 +401,7 @@ func (s *Service) DescribeKeyPairs(w http.ResponseWriter, r *http.Request) {
 
 // DispatchAction routes the request to the appropriate handler based on Action parameter.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
-	action := r.URL.Query().Get("Action")
+	action := extractAction(r)
 
 	switch action {
 	case "RunInstances":
@@ -482,6 +483,22 @@ func readEC2JSONRequest(r *http.Request, v any) error {
 	}
 
 	return nil
+}
+
+// extractAction extracts the action name from the request.
+// It tries X-Amz-Target header first (set by QueryProtocolDispatcher),
+// then falls back to URL query parameter.
+func extractAction(r *http.Request) string {
+	// Try X-Amz-Target header (format: "AmazonEC2.ActionName").
+	target := r.Header.Get("X-Amz-Target")
+	if target != "" {
+		if idx := strings.LastIndex(target, "."); idx >= 0 {
+			return target[idx+1:]
+		}
+	}
+
+	// Fallback to URL query parameter.
+	return r.URL.Query().Get("Action")
 }
 
 // writeEC2XMLResponse writes an XML response with HTTP 200 OK.
