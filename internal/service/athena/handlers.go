@@ -242,9 +242,9 @@ func convertQueryExecutionToOutput(qe *QueryExecution) *QueryExecutionOutput {
 			}
 		}
 
-		if qe.ResultConfiguration.AclConfiguration != nil {
-			output.ResultConfiguration.AclConfiguration = &AclConfigurationOutput{
-				S3AclOption: qe.ResultConfiguration.AclConfiguration.S3AclOption,
+		if qe.ResultConfiguration.ACLConfiguration != nil {
+			output.ResultConfiguration.ACLConfiguration = &ACLConfigurationOutput{
+				S3AclOption: qe.ResultConfiguration.ACLConfiguration.S3AclOption,
 			}
 		}
 	}

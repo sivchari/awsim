@@ -81,6 +81,10 @@ linters:
       - path: internal/service/ec2/types\.go
         linters:
           - tagliatelle
+      # AWS Athena API requires PascalCase JSON field names.
+      - path: internal/service/athena/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
