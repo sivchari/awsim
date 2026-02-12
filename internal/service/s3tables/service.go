@@ -25,28 +25,31 @@ func (s *Service) Name() string {
 }
 
 // Prefix returns the URL prefix for the service.
-// Note: S3 Tables uses /s3tables prefix to avoid conflicts with S3 wildcard routes.
+// S3 Tables routes don't have a common prefix, so we return empty.
+// The router handles S3 Tables paths (/buckets, /namespaces, /tables, /get-table) explicitly.
 func (s *Service) Prefix() string {
-	return "/s3tables"
+	return ""
 }
 
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Table bucket operations
-	r.HandleFunc("POST", "/s3tables/buckets", s.CreateTableBucket)
-	r.HandleFunc("DELETE", "/s3tables/buckets/{tableBucketARN}", s.DeleteTableBucket)
-	r.HandleFunc("GET", "/s3tables/buckets/{tableBucketARN}", s.GetTableBucket)
-	r.HandleFunc("GET", "/s3tables/buckets", s.ListTableBuckets)
+	// SDK uses PUT for Create, GET for List/Get, DELETE for Delete
+	r.HandleFunc("PUT", "/buckets", s.CreateTableBucket)
+	r.HandleFunc("DELETE", "/buckets/{tableBucketARN}", s.DeleteTableBucket)
+	r.HandleFunc("GET", "/buckets/{tableBucketARN}", s.GetTableBucket)
+	r.HandleFunc("GET", "/buckets", s.ListTableBuckets)
 
 	// Namespace operations
-	r.HandleFunc("POST", "/s3tables/namespaces/{tableBucketARN}", s.CreateNamespace)
-	r.HandleFunc("DELETE", "/s3tables/namespaces/{tableBucketARN}/{namespace}", s.DeleteNamespace)
-	r.HandleFunc("GET", "/s3tables/namespaces/{tableBucketARN}/{namespace}", s.GetNamespace)
-	r.HandleFunc("GET", "/s3tables/namespaces/{tableBucketARN}", s.ListNamespaces)
+	r.HandleFunc("PUT", "/namespaces/{tableBucketARN}", s.CreateNamespace)
+	r.HandleFunc("DELETE", "/namespaces/{tableBucketARN}/{namespace}", s.DeleteNamespace)
+	r.HandleFunc("GET", "/namespaces/{tableBucketARN}/{namespace}", s.GetNamespace)
+	r.HandleFunc("GET", "/namespaces/{tableBucketARN}", s.ListNamespaces)
 
 	// Table operations
-	r.HandleFunc("POST", "/s3tables/tables/{tableBucketARN}/{namespace}", s.CreateTable)
-	r.HandleFunc("DELETE", "/s3tables/tables/{tableBucketARN}/{namespace}/{tableName}", s.DeleteTable)
-	r.HandleFunc("GET", "/s3tables/tables/{tableBucketARN}/{namespace}/{tableName}", s.GetTable)
-	r.HandleFunc("GET", "/s3tables/tables/{tableBucketARN}/{namespace}", s.ListTables)
+	r.HandleFunc("PUT", "/tables/{tableBucketARN}/{namespace}", s.CreateTable)
+	r.HandleFunc("DELETE", "/tables/{tableBucketARN}/{namespace}/{tableName}", s.DeleteTable)
+	r.HandleFunc("GET", "/get-table", s.GetTable)
+	r.HandleFunc("GET", "/tables/{tableBucketARN}/{namespace}", s.ListTables)
+	r.HandleFunc("GET", "/tables/{tableBucketARN}", s.ListTables)
 }

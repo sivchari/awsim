@@ -11,7 +11,6 @@ import (
 
 // Path component constants.
 const (
-	pathPrefixS3Tables   = "s3tables"
 	pathPrefixBuckets    = "buckets"
 	pathPrefixNamespaces = "namespaces"
 	pathPrefixTables     = "tables"
@@ -277,8 +276,12 @@ func (s *Service) DeleteTable(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTable handles the GetTable operation.
+// SDK sends: GET /get-table?tableBucketARN=...&namespace=...&name=...
 func (s *Service) GetTable(w http.ResponseWriter, r *http.Request) {
-	tableBucketArn, namespace, tableName := extractFullTableParams(r.URL.Path)
+	tableBucketArn := r.URL.Query().Get("tableBucketARN")
+	namespace := r.URL.Query().Get("namespace")
+	tableName := r.URL.Query().Get("name")
+
 	if tableBucketArn == "" || namespace == "" || tableName == "" {
 		writeError(w, http.StatusBadRequest, errBadRequest, "Table bucket ARN, namespace, and table name are required")
 
@@ -342,12 +345,13 @@ func (s *Service) ListTables(w http.ResponseWriter, r *http.Request) {
 }
 
 // extractTableBucketARN extracts the table bucket ARN from the URL path.
+// Path format: /buckets/{tableBucketARN}
 func extractTableBucketARN(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixBuckets {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 2 && parts[0] == pathPrefixBuckets {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return ""
 		}
@@ -359,12 +363,13 @@ func extractTableBucketARN(path string) string {
 }
 
 // extractTableBucketARNFromNamespacePath extracts the table bucket ARN from a namespace path.
+// Path format: /namespaces/{tableBucketARN}
 func extractTableBucketARNFromNamespacePath(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixNamespaces {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 2 && parts[0] == pathPrefixNamespaces {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return ""
 		}
@@ -376,17 +381,18 @@ func extractTableBucketARNFromNamespacePath(path string) string {
 }
 
 // extractNamespaceParams extracts table bucket ARN and namespace from the URL path.
+// Path format: /namespaces/{tableBucketARN}/{namespace}
 func extractNamespaceParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) >= 4 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixNamespaces {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 3 && parts[0] == pathPrefixNamespaces {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return "", ""
 		}
 
-		namespace, err := url.PathUnescape(parts[3])
+		namespace, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", ""
 		}
@@ -398,17 +404,18 @@ func extractNamespaceParams(path string) (string, string) {
 }
 
 // extractTablePathParams extracts table bucket ARN and namespace from the tables path.
+// Path format: /tables/{tableBucketARN} or /tables/{tableBucketARN}/{namespace}
 func extractTablePathParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) >= 4 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 3 && parts[0] == pathPrefixTables {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return "", ""
 		}
 
-		namespace, err := url.PathUnescape(parts[3])
+		namespace, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", ""
 		}
@@ -416,8 +423,8 @@ func extractTablePathParams(path string) (string, string) {
 		return arn, namespace
 	}
 
-	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 2 && parts[0] == pathPrefixTables {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return "", ""
 		}
@@ -429,22 +436,23 @@ func extractTablePathParams(path string) (string, string) {
 }
 
 // extractFullTableParams extracts table bucket ARN, namespace, and table name from the URL path.
+// Path format: /tables/{tableBucketARN}/{namespace}/{tableName}
 func extractFullTableParams(path string) (string, string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) >= 5 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
-		arn, err := url.PathUnescape(parts[2])
+	if len(parts) >= 4 && parts[0] == pathPrefixTables {
+		arn, err := url.PathUnescape(parts[1])
 		if err != nil {
 			return "", "", ""
 		}
 
-		namespace, err := url.PathUnescape(parts[3])
+		namespace, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", "", ""
 		}
 
-		tableName, err := url.PathUnescape(parts[4])
+		tableName, err := url.PathUnescape(parts[3])
 		if err != nil {
 			return "", "", ""
 		}
