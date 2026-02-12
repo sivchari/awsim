@@ -13,6 +13,15 @@ import (
 const (
 	defaultAccountID = "000000000000"
 	defaultRegion    = "us-east-1"
+
+	// Status constants.
+	statusActive   = "ACTIVE"
+	statusInactive = "INACTIVE"
+	statusRunning  = "RUNNING"
+	statusStopped  = "STOPPED"
+	statusDraining = "DRAINING"
+	statusPending  = "PENDING"
+	statusPrimary  = "PRIMARY"
 )
 
 // Storage defines the interface for ECS storage operations.
@@ -29,9 +38,9 @@ type Storage interface {
 	StopTask(ctx context.Context, cluster, task, reason string) (*Task, error)
 	DescribeTasks(ctx context.Context, cluster string, tasks []string) ([]Task, []Failure, error)
 
-	CreateService(ctx context.Context, req *CreateServiceRequest) (*ECSService, error)
-	DeleteService(ctx context.Context, cluster, service string, force bool) (*ECSService, error)
-	UpdateService(ctx context.Context, req *UpdateServiceRequest) (*ECSService, error)
+	CreateService(ctx context.Context, req *CreateServiceRequest) (*ServiceResource, error)
+	DeleteService(ctx context.Context, cluster, service string, force bool) (*ServiceResource, error)
+	UpdateService(ctx context.Context, req *UpdateServiceRequest) (*ServiceResource, error)
 }
 
 // MemoryStorage implements Storage with in-memory data.
@@ -41,7 +50,7 @@ type MemoryStorage struct {
 	taskDefinitions map[string]*TaskDefinition
 	taskDefFamilies map[string][]string // family -> list of task definition ARNs
 	tasks           map[string]*Task
-	services        map[string]*ECSService
+	services        map[string]*ServiceResource
 }
 
 // NewMemoryStorage creates a new in-memory storage.
@@ -51,7 +60,7 @@ func NewMemoryStorage() *MemoryStorage {
 		taskDefinitions: make(map[string]*TaskDefinition),
 		taskDefFamilies: make(map[string][]string),
 		tasks:           make(map[string]*Task),
-		services:        make(map[string]*ECSService),
+		services:        make(map[string]*ServiceResource),
 	}
 }
 
@@ -95,7 +104,7 @@ func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	cluster := &Cluster{
 		ClusterArn:  arn,
 		ClusterName: name,
-		Status:      "ACTIVE",
+		Status:      statusActive,
 		Tags:        req.Tags,
 	}
 
@@ -134,7 +143,8 @@ func (m *MemoryStorage) DeleteCluster(_ context.Context, cluster string) (*Clust
 		}
 	}
 
-	existing.Status = "INACTIVE"
+	existing.Status = statusInactive
+
 	delete(m.clusters, arn)
 
 	return existing, nil
@@ -178,7 +188,7 @@ func (m *MemoryStorage) ListClusters(_ context.Context, _ int, _ string) ([]stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var arns []string
+	arns := make([]string, 0, len(m.clusters))
 	for arn := range m.clusters {
 		arns = append(arns, arn)
 	}
@@ -203,7 +213,7 @@ func (m *MemoryStorage) RegisterTaskDefinition(_ context.Context, req *RegisterT
 		TaskDefinitionArn:       arn,
 		Family:                  req.Family,
 		Revision:                revision,
-		Status:                  "ACTIVE",
+		Status:                  statusActive,
 		ContainerDefinitions:    req.ContainerDefinitions,
 		CPU:                     req.CPU,
 		Memory:                  req.Memory,
@@ -235,7 +245,7 @@ func (m *MemoryStorage) DeregisterTaskDefinition(_ context.Context, taskDefiniti
 		}
 	}
 
-	td.Status = "INACTIVE"
+	td.Status = statusInactive
 
 	return td, nil
 }
@@ -247,32 +257,14 @@ func (m *MemoryStorage) RunTask(_ context.Context, req *RunTaskRequest) ([]Task,
 
 	clusterArn := m.resolveClusterArn(req.Cluster)
 
-	cluster, ok := m.clusters[clusterArn]
-	if !ok {
-		// Create default cluster if not exists.
-		if req.Cluster == "" || req.Cluster == "default" {
-			cluster = &Cluster{
-				ClusterArn:  clusterArn,
-				ClusterName: "default",
-				Status:      "ACTIVE",
-			}
-			m.clusters[clusterArn] = cluster
-		} else {
-			return nil, nil, &Error{
-				Code:    "ClusterNotFoundException",
-				Message: "The specified cluster was not found",
-			}
-		}
+	cluster, err := m.getOrCreateCluster(clusterArn, req.Cluster)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	tdArn := m.resolveTaskDefinitionArn(req.TaskDefinition)
-
-	td, ok := m.taskDefinitions[tdArn]
-	if !ok {
-		return nil, nil, &Error{
-			Code:    "ClientException",
-			Message: "The specified task definition was not found",
-		}
+	td, err := m.getTaskDefinitionForRun(req.TaskDefinition)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	count := req.Count
@@ -285,45 +277,97 @@ func (m *MemoryStorage) RunTask(_ context.Context, req *RunTaskRequest) ([]Task,
 		launchType = "EC2"
 	}
 
-	var tasks []Task
+	tasks := m.createTasks(clusterArn, td, req, count, launchType)
+	cluster.RunningTasksCount += count
 
-	for i := 0; i < count; i++ {
-		taskID := generateID()
-		now := time.Now()
+	return tasks, nil, nil
+}
 
-		containers := make([]Container, 0, len(td.ContainerDefinitions))
-		for _, cd := range td.ContainerDefinitions {
-			containers = append(containers, Container{
-				ContainerArn: fmt.Sprintf("arn:aws:ecs:%s:%s:container/%s", defaultRegion, defaultAccountID, generateID()),
-				Name:         cd.Name,
-				Image:        cd.Image,
-				LastStatus:   "RUNNING",
-			})
+func (m *MemoryStorage) getOrCreateCluster(clusterArn, clusterName string) (*Cluster, error) {
+	cluster, ok := m.clusters[clusterArn]
+	if ok {
+		return cluster, nil
+	}
+
+	if clusterName == "" || clusterName == "default" {
+		cluster = &Cluster{
+			ClusterArn:  clusterArn,
+			ClusterName: "default",
+			Status:      statusActive,
 		}
+		m.clusters[clusterArn] = cluster
 
-		clusterName := extractClusterName(clusterArn)
-		task := Task{
-			TaskArn:           taskArn(clusterName, taskID),
-			ClusterArn:        clusterArn,
-			TaskDefinitionArn: tdArn,
-			LastStatus:        "RUNNING",
-			DesiredStatus:     "RUNNING",
-			CPU:               td.CPU,
-			Memory:            td.Memory,
-			Containers:        containers,
-			StartedAt:         &now,
-			Group:             req.Group,
-			LaunchType:        launchType,
-			Tags:              req.Tags,
+		return cluster, nil
+	}
+
+	return nil, &Error{
+		Code:    "ClusterNotFoundException",
+		Message: "The specified cluster was not found",
+	}
+}
+
+func (m *MemoryStorage) getTaskDefinitionForRun(taskDef string) (*TaskDefinition, error) {
+	tdArn := m.resolveTaskDefinitionArn(taskDef)
+
+	td, ok := m.taskDefinitions[tdArn]
+	if !ok {
+		return nil, &Error{
+			Code:    "ClientException",
+			Message: "The specified task definition was not found",
 		}
+	}
 
+	return td, nil
+}
+
+func (m *MemoryStorage) createTasks(clusterArn string, td *TaskDefinition, req *RunTaskRequest, count int, launchType string) []Task {
+	tasks := make([]Task, 0, count)
+	tdArn := td.TaskDefinitionArn
+
+	for range count {
+		task := m.createSingleTask(clusterArn, td, tdArn, req, launchType)
 		m.tasks[task.TaskArn] = &task
 		tasks = append(tasks, task)
 	}
 
-	cluster.RunningTasksCount += count
+	return tasks
+}
 
-	return tasks, nil, nil
+func (m *MemoryStorage) createSingleTask(clusterArn string, td *TaskDefinition, tdArn string, req *RunTaskRequest, launchType string) Task {
+	taskID := generateID()
+	now := time.Now()
+	containers := createContainersFromDefinitions(td.ContainerDefinitions)
+	clusterName := extractClusterName(clusterArn)
+
+	return Task{
+		TaskArn:           taskArn(clusterName, taskID),
+		ClusterArn:        clusterArn,
+		TaskDefinitionArn: tdArn,
+		LastStatus:        statusRunning,
+		DesiredStatus:     statusRunning,
+		CPU:               td.CPU,
+		Memory:            td.Memory,
+		Containers:        containers,
+		StartedAt:         &now,
+		Group:             req.Group,
+		LaunchType:        launchType,
+		Tags:              req.Tags,
+	}
+}
+
+func createContainersFromDefinitions(defs []ContainerDefinition) []Container {
+	containers := make([]Container, 0, len(defs))
+
+	for i := range defs {
+		containers = append(containers, Container{
+			ContainerArn: fmt.Sprintf("arn:aws:ecs:%s:%s:container/%s", defaultRegion, defaultAccountID, generateID()),
+			Name:         defs[i].Name,
+			Image:        defs[i].Image,
+			LastStatus:   statusRunning,
+		})
+	}
+
+	return containers
 }
 
 // StopTask stops a running task.
@@ -353,13 +397,13 @@ func (m *MemoryStorage) StopTask(_ context.Context, cluster, taskID, reason stri
 	}
 
 	now := time.Now()
-	task.LastStatus = "STOPPED"
-	task.DesiredStatus = "STOPPED"
+	task.LastStatus = statusStopped
+	task.DesiredStatus = statusStopped
 	task.StoppedAt = &now
 	task.StoppedReason = reason
 
 	for i := range task.Containers {
-		task.Containers[i].LastStatus = "STOPPED"
+		task.Containers[i].LastStatus = statusStopped
 	}
 
 	// Update cluster task count.
@@ -408,7 +452,7 @@ func (m *MemoryStorage) DescribeTasks(_ context.Context, cluster string, taskIDs
 }
 
 // CreateService creates an ECS service.
-func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceRequest) (*ECSService, error) {
+func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceRequest) (*ServiceResource, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -439,7 +483,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 	}
 
 	now := time.Now()
-	svc := &ECSService{
+	svc := &ServiceResource{
 		ServiceArn:     arn,
 		ServiceName:    req.ServiceName,
 		ClusterArn:     clusterArn,
@@ -448,11 +492,11 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 		RunningCount:   0,
 		PendingCount:   req.DesiredCount,
 		LaunchType:     launchType,
-		Status:         "ACTIVE",
+		Status:         statusActive,
 		Deployments: []Deployment{
 			{
 				ID:             generateID(),
-				Status:         "PRIMARY",
+				Status:         statusPrimary,
 				TaskDefinition: m.resolveTaskDefinitionArn(req.TaskDefinition),
 				DesiredCount:   req.DesiredCount,
 				RunningCount:   0,
@@ -471,7 +515,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 }
 
 // DeleteService deletes an ECS service.
-func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string, force bool) (*ECSService, error) {
+func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string, force bool) (*ServiceResource, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -501,7 +545,7 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 		}
 	}
 
-	svc.Status = "INACTIVE"
+	svc.Status = statusInactive
 	delete(m.services, svcArn)
 
 	// Update cluster service count.
@@ -513,7 +557,7 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 }
 
 // UpdateService updates an ECS service.
-func (m *MemoryStorage) UpdateService(_ context.Context, req *UpdateServiceRequest) (*ECSService, error) {
+func (m *MemoryStorage) UpdateService(_ context.Context, req *UpdateServiceRequest) (*ServiceResource, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
