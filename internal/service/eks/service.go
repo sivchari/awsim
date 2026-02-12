@@ -27,23 +27,24 @@ func (s *Service) Name() string {
 }
 
 // Prefix returns the URL prefix for the service.
+// Note: EKS uses /eks prefix to avoid conflicts with S3 wildcard routes.
 func (s *Service) Prefix() string {
-	return ""
+	return "/eks"
 }
 
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Cluster operations
-	r.HandleFunc("POST", "/clusters", s.CreateCluster)
-	r.HandleFunc("DELETE", "/clusters/{name}", s.DeleteCluster)
-	r.HandleFunc("GET", "/clusters/{name}", s.handleClusterGet)
-	r.HandleFunc("GET", "/clusters", s.ListClusters)
+	r.HandleFunc("POST", "/eks/clusters", s.CreateCluster)
+	r.HandleFunc("DELETE", "/eks/clusters/{name}", s.DeleteCluster)
+	r.HandleFunc("GET", "/eks/clusters/{name}", s.handleClusterGet)
+	r.HandleFunc("GET", "/eks/clusters", s.ListClusters)
 
 	// Nodegroup operations
-	r.HandleFunc("POST", "/clusters/{name}/node-groups", s.CreateNodegroup)
-	r.HandleFunc("DELETE", "/clusters/{name}/node-groups/{nodegroupName}", s.DeleteNodegroup)
-	r.HandleFunc("GET", "/clusters/{name}/node-groups/{nodegroupName}", s.DescribeNodegroup)
-	r.HandleFunc("GET", "/clusters/{name}/node-groups", s.ListNodegroups)
+	r.HandleFunc("POST", "/eks/clusters/{name}/node-groups", s.CreateNodegroup)
+	r.HandleFunc("DELETE", "/eks/clusters/{name}/node-groups/{nodegroupName}", s.DeleteNodegroup)
+	r.HandleFunc("GET", "/eks/clusters/{name}/node-groups/{nodegroupName}", s.DescribeNodegroup)
+	r.HandleFunc("GET", "/eks/clusters/{name}/node-groups", s.ListNodegroups)
 }
 
 // handleClusterGet handles GET requests to /clusters/{name}.
