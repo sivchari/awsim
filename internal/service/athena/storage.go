@@ -52,7 +52,7 @@ func NewMemoryStorage() *MemoryStorage {
 }
 
 // StartQueryExecution starts a new query execution.
-func (s *MemoryStorage) StartQueryExecution(_ context.Context, query string, workGroup string, execContext *QueryExecutionContext, resultConfig *ResultConfiguration, executionParams []string) (*QueryExecution, error) {
+func (s *MemoryStorage) StartQueryExecution(_ context.Context, query, workGroup string, execContext *QueryExecutionContext, resultConfig *ResultConfiguration, executionParams []string) (*QueryExecution, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
