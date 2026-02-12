@@ -35,7 +35,7 @@ func (s *Service) TargetPrefix() string {
 func (s *Service) JSONProtocol() {}
 
 // RegisterRoutes registers the routes for this service.
-func (s *Service) RegisterRoutes(r service.Router) {
+func (s *Service) RegisterRoutes(_ service.Router) {
 	// JSON protocol services use DispatchAction for routing
 }
 
