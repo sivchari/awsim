@@ -70,6 +70,9 @@ func (s *Service) Prefix() string {
 // RegisterRoutes registers the IAM routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// IAM uses a single endpoint with Action parameter.
+	// Register both with and without trailing slash for SDK compatibility.
 	r.HandleFunc("POST", "/iam/", s.DispatchAction)
 	r.HandleFunc("GET", "/iam/", s.DispatchAction)
+	r.HandleFunc("POST", "/iam", s.DispatchAction)
+	r.HandleFunc("GET", "/iam", s.DispatchAction)
 }
