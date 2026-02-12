@@ -426,7 +426,7 @@ func TestS3Tables_GetTable(t *testing.T) {
 		t.Errorf("expected table name %s, got %v", tableName, getResult.Name)
 	}
 
-	if getResult.Format == nil || *getResult.Format != "ICEBERG" {
+	if getResult.Format != "ICEBERG" {
 		t.Errorf("expected format ICEBERG, got %v", getResult.Format)
 	}
 }

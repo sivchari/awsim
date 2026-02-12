@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// Path component constants.
+const (
+	pathPrefixS3Tables   = "s3tables"
+	pathPrefixBuckets    = "buckets"
+	pathPrefixNamespaces = "namespaces"
+	pathPrefixTables     = "tables"
+)
+
 // CreateTableBucket handles the CreateTableBucket operation.
 func (s *Service) CreateTableBucket(w http.ResponseWriter, r *http.Request) {
 	var req CreateTableBucketRequest
@@ -31,7 +39,7 @@ func (s *Service) CreateTableBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &CreateTableBucketResponse{Arn: bucket.Arn})
+	writeJSON(w, &CreateTableBucketResponse{Arn: bucket.Arn})
 }
 
 // DeleteTableBucket handles the DeleteTableBucket operation.
@@ -68,7 +76,7 @@ func (s *Service) GetTableBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &GetTableBucketResponse{
+	writeJSON(w, &GetTableBucketResponse{
 		Arn:       bucket.Arn,
 		Name:      bucket.Name,
 		OwnerID:   bucket.OwnerID,
@@ -95,7 +103,7 @@ func (s *Service) ListTableBuckets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListTableBucketsResponse{
+	writeJSON(w, &ListTableBucketsResponse{
 		TableBuckets: buckets,
 	})
 }
@@ -129,7 +137,7 @@ func (s *Service) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &CreateNamespaceResponse{
+	writeJSON(w, &CreateNamespaceResponse{
 		Namespace:      ns.Namespace,
 		TableBucketArn: ns.TableBucketArn,
 	})
@@ -169,7 +177,7 @@ func (s *Service) GetNamespace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &GetNamespaceResponse{
+	writeJSON(w, &GetNamespaceResponse{
 		Namespace:      ns.Namespace,
 		TableBucketArn: ns.TableBucketArn,
 		OwnerID:        ns.OwnerID,
@@ -204,7 +212,7 @@ func (s *Service) ListNamespaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListNamespacesResponse{
+	writeJSON(w, &ListNamespacesResponse{
 		Namespaces: namespaces,
 	})
 }
@@ -244,7 +252,7 @@ func (s *Service) CreateTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &CreateTableResponse{
+	writeJSON(w, &CreateTableResponse{
 		TableArn:     table.Arn,
 		VersionToken: table.VersionToken,
 	})
@@ -284,7 +292,7 @@ func (s *Service) GetTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &GetTableResponse{
+	writeJSON(w, &GetTableResponse{
 		Arn:               table.Arn,
 		Name:              table.Name,
 		Namespace:         []string{table.Namespace},
@@ -328,19 +336,17 @@ func (s *Service) ListTables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListTablesResponse{
+	writeJSON(w, &ListTablesResponse{
 		Tables: tables,
 	})
 }
 
 // extractTableBucketARN extracts the table bucket ARN from the URL path.
-// Expected path: /s3tables/buckets/{tableBucketARN}
 func extractTableBucketARN(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: s3tables/buckets/{encodedARN}
-	if len(parts) >= 3 && parts[0] == "s3tables" && parts[1] == "buckets" {
+	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixBuckets {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return ""
@@ -353,13 +359,11 @@ func extractTableBucketARN(path string) string {
 }
 
 // extractTableBucketARNFromNamespacePath extracts the table bucket ARN from a namespace path.
-// Expected path: /s3tables/namespaces/{tableBucketARN} or /s3tables/namespaces/{tableBucketARN}/{namespace}
 func extractTableBucketARNFromNamespacePath(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: s3tables/namespaces/{encodedARN}...
-	if len(parts) >= 3 && parts[0] == "s3tables" && parts[1] == "namespaces" {
+	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixNamespaces {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return ""
@@ -372,13 +376,11 @@ func extractTableBucketARNFromNamespacePath(path string) string {
 }
 
 // extractNamespaceParams extracts table bucket ARN and namespace from the URL path.
-// Expected path: /s3tables/namespaces/{tableBucketARN}/{namespace}
 func extractNamespaceParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: s3tables/namespaces/{encodedARN}/{namespace}
-	if len(parts) >= 4 && parts[0] == "s3tables" && parts[1] == "namespaces" {
+	if len(parts) >= 4 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixNamespaces {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", ""
@@ -396,13 +398,11 @@ func extractNamespaceParams(path string) (string, string) {
 }
 
 // extractTablePathParams extracts table bucket ARN and namespace from the tables path.
-// Expected path: /s3tables/tables/{tableBucketARN}/{namespace}
 func extractTablePathParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: s3tables/tables/{encodedARN}/{namespace}...
-	if len(parts) >= 4 && parts[0] == "s3tables" && parts[1] == "tables" {
+	if len(parts) >= 4 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", ""
@@ -416,8 +416,7 @@ func extractTablePathParams(path string) (string, string) {
 		return arn, namespace
 	}
 
-	// If only ARN is present: s3tables/tables/{encodedARN}
-	if len(parts) >= 3 && parts[0] == "s3tables" && parts[1] == "tables" {
+	if len(parts) >= 3 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", ""
@@ -430,13 +429,11 @@ func extractTablePathParams(path string) (string, string) {
 }
 
 // extractFullTableParams extracts table bucket ARN, namespace, and table name from the URL path.
-// Expected path: /s3tables/tables/{tableBucketARN}/{namespace}/{tableName}
 func extractFullTableParams(path string) (string, string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: s3tables/tables/{encodedARN}/{namespace}/{tableName}
-	if len(parts) >= 5 && parts[0] == "s3tables" && parts[1] == "tables" {
+	if len(parts) >= 5 && parts[0] == pathPrefixS3Tables && parts[1] == pathPrefixTables {
 		arn, err := url.PathUnescape(parts[2])
 		if err != nil {
 			return "", "", ""
@@ -459,9 +456,9 @@ func extractFullTableParams(path string) (string, string, string) {
 }
 
 // writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
