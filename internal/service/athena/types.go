@@ -71,14 +71,14 @@ type QueryExecutionStatus struct {
 	StateChangeReason      string
 	SubmissionDateTime     time.Time
 	CompletionDateTime     *time.Time
-	AthenaError            *AthenaError
+	QueryError             *QueryError
 	PublishedKmsKey        string
 	SourceOperationArn     string
 	ReservedCapacityStatus *ReservedCapacityStatus
 }
 
-// AthenaError represents an Athena error.
-type AthenaError struct {
+// QueryError represents an Athena query error.
+type QueryError struct {
 	ErrorCategory int32
 	ErrorType     int32
 	Retryable     bool
@@ -87,7 +87,7 @@ type AthenaError struct {
 
 // ReservedCapacityStatus represents reserved capacity status.
 type ReservedCapacityStatus struct {
-	UsedReservationId string
+	UsedReservationID string
 }
 
 // QueryExecutionStatistics represents statistics about query execution.
@@ -217,12 +217,12 @@ type ResultReuseByAgeConfiguration struct {
 
 // StartQueryExecutionResponse is the response for StartQueryExecution.
 type StartQueryExecutionResponse struct {
-	QueryExecutionId string `json:"QueryExecutionId"`
+	QueryExecutionID string `json:"QueryExecutionId"`
 }
 
 // StopQueryExecutionRequest is the request for StopQueryExecution.
 type StopQueryExecutionRequest struct {
-	QueryExecutionId string `json:"QueryExecutionId"`
+	QueryExecutionID string `json:"QueryExecutionId"`
 }
 
 // StopQueryExecutionResponse is the response for StopQueryExecution.
@@ -230,7 +230,7 @@ type StopQueryExecutionResponse struct{}
 
 // GetQueryExecutionRequest is the request for GetQueryExecution.
 type GetQueryExecutionRequest struct {
-	QueryExecutionId string `json:"QueryExecutionId"`
+	QueryExecutionID string `json:"QueryExecutionId"`
 }
 
 // GetQueryExecutionResponse is the response for GetQueryExecution.
@@ -362,7 +362,7 @@ type ListQueryExecutionsRequest struct {
 
 // ListQueryExecutionsResponse is the response for ListQueryExecutions.
 type ListQueryExecutionsResponse struct {
-	QueryExecutionIds []string `json:"QueryExecutionIds,omitempty"`
+	QueryExecutionIDs []string `json:"QueryExecutionIds,omitempty"`
 	NextToken         string   `json:"NextToken,omitempty"`
 }
 
@@ -398,13 +398,13 @@ type ErrorResponse struct {
 	Message string `json:"Message"`
 }
 
-// AthenaServiceError represents an Athena service error.
-type AthenaServiceError struct {
+// ServiceError represents an Athena service error.
+type ServiceError struct {
 	Code    string
 	Message string
 }
 
 // Error implements the error interface.
-func (e *AthenaServiceError) Error() string {
+func (e *ServiceError) Error() string {
 	return e.Message
 }

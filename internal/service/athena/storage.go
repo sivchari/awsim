@@ -62,7 +62,7 @@ func (s *MemoryStorage) StartQueryExecution(_ context.Context, query string, wor
 
 	// Verify workgroup exists.
 	if _, ok := s.workGroups[workGroup]; !ok {
-		return nil, &AthenaServiceError{
+		return nil, &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s is not found.", workGroup),
 		}
@@ -100,9 +100,13 @@ func (s *MemoryStorage) StartQueryExecution(_ context.Context, query string, wor
 	}
 
 	s.queryExecutions[queryExecutionID] = qe
+	s.queryResults[queryExecutionID] = createMockResultSet()
 
-	// Create mock result set.
-	s.queryResults[queryExecutionID] = &ResultSet{
+	return qe, nil
+}
+
+func createMockResultSet() *ResultSet {
+	return &ResultSet{
 		Rows: []Row{
 			{Data: []Datum{{VarCharValue: "column1"}, {VarCharValue: "column2"}}},
 			{Data: []Datum{{VarCharValue: "value1"}, {VarCharValue: "value2"}}},
@@ -114,8 +118,6 @@ func (s *MemoryStorage) StartQueryExecution(_ context.Context, query string, wor
 			},
 		},
 	}
-
-	return qe, nil
 }
 
 // StopQueryExecution stops a running query execution.
@@ -125,7 +127,7 @@ func (s *MemoryStorage) StopQueryExecution(_ context.Context, queryExecutionID s
 
 	qe, ok := s.queryExecutions[queryExecutionID]
 	if !ok {
-		return &AthenaServiceError{
+		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("QueryExecution %s is not found.", queryExecutionID),
 		}
@@ -149,7 +151,7 @@ func (s *MemoryStorage) GetQueryExecution(_ context.Context, queryExecutionID st
 
 	qe, ok := s.queryExecutions[queryExecutionID]
 	if !ok {
-		return nil, &AthenaServiceError{
+		return nil, &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("QueryExecution %s is not found.", queryExecutionID),
 		}
@@ -159,20 +161,20 @@ func (s *MemoryStorage) GetQueryExecution(_ context.Context, queryExecutionID st
 }
 
 // GetQueryResults retrieves results for a query execution.
-func (s *MemoryStorage) GetQueryResults(_ context.Context, queryExecutionID string, _ string, _ int32) (*ResultSet, string, error) {
+func (s *MemoryStorage) GetQueryResults(_ context.Context, queryExecutionID, _ string, _ int32) (*ResultSet, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	qe, ok := s.queryExecutions[queryExecutionID]
 	if !ok {
-		return nil, "", &AthenaServiceError{
+		return nil, "", &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("QueryExecution %s is not found.", queryExecutionID),
 		}
 	}
 
 	if qe.Status.State != QueryExecutionStateSucceeded {
-		return nil, "", &AthenaServiceError{
+		return nil, "", &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: "Query has not yet finished. Current state: " + string(qe.Status.State),
 		}
@@ -191,7 +193,7 @@ func (s *MemoryStorage) GetQueryResults(_ context.Context, queryExecutionID stri
 }
 
 // ListQueryExecutions lists query execution IDs.
-func (s *MemoryStorage) ListQueryExecutions(_ context.Context, workGroup string, _ string, maxResults int32) ([]string, string, error) {
+func (s *MemoryStorage) ListQueryExecutions(_ context.Context, workGroup, _ string, maxResults int32) ([]string, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -208,7 +210,7 @@ func (s *MemoryStorage) ListQueryExecutions(_ context.Context, workGroup string,
 
 		ids = append(ids, id)
 
-		if int32(len(ids)) >= maxResults {
+		if len(ids) >= int(maxResults) {
 			break
 		}
 	}
@@ -222,7 +224,7 @@ func (s *MemoryStorage) CreateWorkGroup(_ context.Context, name string, configur
 	defer s.mu.Unlock()
 
 	if _, ok := s.workGroups[name]; ok {
-		return &AthenaServiceError{
+		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s already exists.", name),
 		}
@@ -247,14 +249,14 @@ func (s *MemoryStorage) DeleteWorkGroup(_ context.Context, name string, recursiv
 	defer s.mu.Unlock()
 
 	if name == "primary" {
-		return &AthenaServiceError{
+		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: "Cannot delete the primary workgroup.",
 		}
 	}
 
 	if _, ok := s.workGroups[name]; !ok {
-		return &AthenaServiceError{
+		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s is not found.", name),
 		}
@@ -264,7 +266,7 @@ func (s *MemoryStorage) DeleteWorkGroup(_ context.Context, name string, recursiv
 	if !recursiveDelete {
 		for _, qe := range s.queryExecutions {
 			if qe.WorkGroup == name {
-				return &AthenaServiceError{
+				return &ServiceError{
 					Code:    errInvalidRequestException,
 					Message: fmt.Sprintf("WorkGroup %s has query executions. Set RecursiveDeleteOption to true to delete.", name),
 				}

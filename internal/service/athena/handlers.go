@@ -40,7 +40,7 @@ func (s *Service) StartQueryExecution(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONResponse(w, StartQueryExecutionResponse{
-		QueryExecutionId: qe.QueryExecutionID,
+		QueryExecutionID: qe.QueryExecutionID,
 	})
 }
 
@@ -53,13 +53,13 @@ func (s *Service) StopQueryExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.QueryExecutionId == "" {
+	if req.QueryExecutionID == "" {
 		writeAthenaError(w, errInvalidRequestException, "QueryExecutionId is required.", http.StatusBadRequest)
 
 		return
 	}
 
-	if err := s.storage.StopQueryExecution(r.Context(), req.QueryExecutionId); err != nil {
+	if err := s.storage.StopQueryExecution(r.Context(), req.QueryExecutionID); err != nil {
 		handleAthenaError(w, err)
 
 		return
@@ -77,13 +77,13 @@ func (s *Service) GetQueryExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.QueryExecutionId == "" {
+	if req.QueryExecutionID == "" {
 		writeAthenaError(w, errInvalidRequestException, "QueryExecutionId is required.", http.StatusBadRequest)
 
 		return
 	}
 
-	qe, err := s.storage.GetQueryExecution(r.Context(), req.QueryExecutionId)
+	qe, err := s.storage.GetQueryExecution(r.Context(), req.QueryExecutionID)
 	if err != nil {
 		handleAthenaError(w, err)
 
@@ -140,7 +140,7 @@ func (s *Service) ListQueryExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONResponse(w, ListQueryExecutionsResponse{
-		QueryExecutionIds: ids,
+		QueryExecutionIDs: ids,
 		NextToken:         nextToken,
 	})
 }
@@ -229,25 +229,7 @@ func convertQueryExecutionToOutput(qe *QueryExecution) *QueryExecutionOutput {
 		SubstatementType:    qe.SubstatementType,
 	}
 
-	if qe.ResultConfiguration != nil {
-		output.ResultConfiguration = &ResultConfigurationOutput{
-			OutputLocation:      qe.ResultConfiguration.OutputLocation,
-			ExpectedBucketOwner: qe.ResultConfiguration.ExpectedBucketOwner,
-		}
-
-		if qe.ResultConfiguration.EncryptionConfiguration != nil {
-			output.ResultConfiguration.EncryptionConfiguration = &EncryptionConfigurationOutput{
-				EncryptionOption: qe.ResultConfiguration.EncryptionConfiguration.EncryptionOption,
-				KmsKey:           qe.ResultConfiguration.EncryptionConfiguration.KmsKey,
-			}
-		}
-
-		if qe.ResultConfiguration.ACLConfiguration != nil {
-			output.ResultConfiguration.ACLConfiguration = &ACLConfigurationOutput{
-				S3AclOption: qe.ResultConfiguration.ACLConfiguration.S3AclOption,
-			}
-		}
-	}
+	output.ResultConfiguration = convertResultConfigToOutput(qe.ResultConfiguration)
 
 	if qe.QueryExecutionContext != nil {
 		output.QueryExecutionContext = &QueryExecutionContextOutput{
@@ -269,27 +251,64 @@ func convertQueryExecutionToOutput(qe *QueryExecution) *QueryExecutionOutput {
 		}
 	}
 
-	if qe.Statistics != nil {
-		output.Statistics = &QueryExecutionStatisticsOutput{
-			EngineExecutionTimeInMillis:      qe.Statistics.EngineExecutionTimeInMillis,
-			DataScannedInBytes:               qe.Statistics.DataScannedInBytes,
-			DataManifestLocation:             qe.Statistics.DataManifestLocation,
-			TotalExecutionTimeInMillis:       qe.Statistics.TotalExecutionTimeInMillis,
-			QueryQueueTimeInMillis:           qe.Statistics.QueryQueueTimeInMillis,
-			ServicePreProcessingTimeInMillis: qe.Statistics.ServicePreProcessingTimeInMillis,
-			QueryPlanningTimeInMillis:        qe.Statistics.QueryPlanningTimeInMillis,
-			ServiceProcessingTimeInMillis:    qe.Statistics.ServiceProcessingTimeInMillis,
+	output.Statistics = convertStatisticsToOutput(qe.Statistics)
+	output.EngineVersion = convertEngineVersionToOutput(qe.EngineVersion)
+
+	return output
+}
+
+func convertResultConfigToOutput(cfg *ResultConfiguration) *ResultConfigurationOutput {
+	if cfg == nil {
+		return nil
+	}
+
+	output := &ResultConfigurationOutput{
+		OutputLocation:      cfg.OutputLocation,
+		ExpectedBucketOwner: cfg.ExpectedBucketOwner,
+	}
+
+	if cfg.EncryptionConfiguration != nil {
+		output.EncryptionConfiguration = &EncryptionConfigurationOutput{
+			EncryptionOption: cfg.EncryptionConfiguration.EncryptionOption,
+			KmsKey:           cfg.EncryptionConfiguration.KmsKey,
 		}
 	}
 
-	if qe.EngineVersion != nil {
-		output.EngineVersion = &EngineVersionOutput{
-			SelectedEngineVersion:  qe.EngineVersion.SelectedEngineVersion,
-			EffectiveEngineVersion: qe.EngineVersion.EffectiveEngineVersion,
+	if cfg.ACLConfiguration != nil {
+		output.ACLConfiguration = &ACLConfigurationOutput{
+			S3AclOption: cfg.ACLConfiguration.S3AclOption,
 		}
 	}
 
 	return output
+}
+
+func convertStatisticsToOutput(stats *QueryExecutionStatistics) *QueryExecutionStatisticsOutput {
+	if stats == nil {
+		return nil
+	}
+
+	return &QueryExecutionStatisticsOutput{
+		EngineExecutionTimeInMillis:      stats.EngineExecutionTimeInMillis,
+		DataScannedInBytes:               stats.DataScannedInBytes,
+		DataManifestLocation:             stats.DataManifestLocation,
+		TotalExecutionTimeInMillis:       stats.TotalExecutionTimeInMillis,
+		QueryQueueTimeInMillis:           stats.QueryQueueTimeInMillis,
+		ServicePreProcessingTimeInMillis: stats.ServicePreProcessingTimeInMillis,
+		QueryPlanningTimeInMillis:        stats.QueryPlanningTimeInMillis,
+		ServiceProcessingTimeInMillis:    stats.ServiceProcessingTimeInMillis,
+	}
+}
+
+func convertEngineVersionToOutput(ev *EngineVersion) *EngineVersionOutput {
+	if ev == nil {
+		return nil
+	}
+
+	return &EngineVersionOutput{
+		SelectedEngineVersion:  ev.SelectedEngineVersion,
+		EffectiveEngineVersion: ev.EffectiveEngineVersion,
+	}
 }
 
 // convertResultSetToOutput converts internal ResultSet to API output.
@@ -308,9 +327,7 @@ func convertResultSetToOutput(rs *ResultSet) *ResultSetOutput {
 		}
 
 		for _, datum := range row.Data {
-			rowOutput.Data = append(rowOutput.Data, DatumOutput{
-				VarCharValue: datum.VarCharValue,
-			})
+			rowOutput.Data = append(rowOutput.Data, DatumOutput(datum))
 		}
 
 		output.Rows = append(output.Rows, rowOutput)
@@ -321,19 +338,8 @@ func convertResultSetToOutput(rs *ResultSet) *ResultSetOutput {
 			ColumnInfo: make([]ColumnInfoOutput, 0, len(rs.ResultSetMetadata.ColumnInfo)),
 		}
 
-		for _, col := range rs.ResultSetMetadata.ColumnInfo {
-			output.ResultSetMetadata.ColumnInfo = append(output.ResultSetMetadata.ColumnInfo, ColumnInfoOutput{
-				CatalogName:   col.CatalogName,
-				SchemaName:    col.SchemaName,
-				TableName:     col.TableName,
-				Name:          col.Name,
-				Label:         col.Label,
-				Type:          col.Type,
-				Precision:     col.Precision,
-				Scale:         col.Scale,
-				Nullable:      col.Nullable,
-				CaseSensitive: col.CaseSensitive,
-			})
+		for i := range rs.ResultSetMetadata.ColumnInfo {
+			output.ResultSetMetadata.ColumnInfo = append(output.ResultSetMetadata.ColumnInfo, ColumnInfoOutput(rs.ResultSetMetadata.ColumnInfo[i]))
 		}
 	}
 
@@ -379,15 +385,15 @@ func writeAthenaError(w http.ResponseWriter, code, message string, status int) {
 
 // handleAthenaError handles Athena errors and writes the appropriate response.
 func handleAthenaError(w http.ResponseWriter, err error) {
-	var athenaErr *AthenaServiceError
-	if errors.As(err, &athenaErr) {
+	var svcErr *ServiceError
+	if errors.As(err, &svcErr) {
 		status := http.StatusBadRequest
 
-		if athenaErr.Code == errInternalServerException {
+		if svcErr.Code == errInternalServerException {
 			status = http.StatusInternalServerError
 		}
 
-		writeAthenaError(w, athenaErr.Code, athenaErr.Message, status)
+		writeAthenaError(w, svcErr.Code, svcErr.Message, status)
 
 		return
 	}
