@@ -69,7 +69,7 @@ func (r *Router) Handle(method, pattern string, handler http.HandlerFunc) {
 // Returns empty string for patterns without service prefixes.
 func extractRoutePrefix(pattern string) string {
 	// Known service prefixes that need isolation from wildcard routes
-	prefixes := []string{"/lambda", "/eks"}
+	prefixes := []string{"/lambda", "/eks", "/iam"}
 
 	for _, prefix := range prefixes {
 		if len(pattern) >= len(prefix) && pattern[:len(prefix)] == prefix {
