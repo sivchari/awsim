@@ -363,7 +363,7 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 func TestS3Tables_GetTable(t *testing.T) {
 	client := newS3TablesClient(t)
 	ctx := t.Context()
-	bucketName := "test-get-table-bucket"
+	bucketName := "test-get-table-test-bucket"
 	namespaceName := "testgettablenamespace"
 	tableName := "testgettable"
 
