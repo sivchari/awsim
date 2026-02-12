@@ -45,7 +45,7 @@ type ResultConfiguration struct {
 	OutputLocation          string
 	EncryptionConfiguration *EncryptionConfiguration
 	ExpectedBucketOwner     string
-	AclConfiguration        *AclConfiguration
+	ACLConfiguration        *ACLConfiguration
 }
 
 // EncryptionConfiguration represents encryption configuration.
@@ -54,8 +54,8 @@ type EncryptionConfiguration struct {
 	KmsKey           string
 }
 
-// AclConfiguration represents ACL configuration.
-type AclConfiguration struct {
+// ACLConfiguration represents ACL configuration.
+type ACLConfiguration struct {
 	S3AclOption string
 }
 
@@ -258,7 +258,7 @@ type ResultConfigurationOutput struct {
 	OutputLocation          string                         `json:"OutputLocation,omitempty"`
 	EncryptionConfiguration *EncryptionConfigurationOutput `json:"EncryptionConfiguration,omitempty"`
 	ExpectedBucketOwner     string                         `json:"ExpectedBucketOwner,omitempty"`
-	AclConfiguration        *AclConfigurationOutput        `json:"AclConfiguration,omitempty"`
+	ACLConfiguration        *ACLConfigurationOutput        `json:"AclConfiguration,omitempty"`
 }
 
 // EncryptionConfigurationOutput represents encryption configuration in API response.
@@ -267,8 +267,8 @@ type EncryptionConfigurationOutput struct {
 	KmsKey           string `json:"KmsKey,omitempty"`
 }
 
-// AclConfigurationOutput represents ACL configuration in API response.
-type AclConfigurationOutput struct {
+// ACLConfigurationOutput represents ACL configuration in API response.
+type ACLConfigurationOutput struct {
 	S3AclOption string `json:"S3AclOption"`
 }
 
