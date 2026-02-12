@@ -13,10 +13,10 @@ type TableBucket struct {
 
 // Table represents an S3 table.
 type Table struct {
-	Arn               string    `json:"tableARN"`
+	Arn               string    `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN //nolint:tagliatelle // AWS API uses tableARN
 	Name              string    `json:"name"`
 	Namespace         string    `json:"namespace"`
-	TableBucketArn    string    `json:"tableBucketARN"`
+	TableBucketArn    string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
 	Type              string    `json:"type"`
 	Format            string    `json:"format"`
 	VersionToken      string    `json:"versionToken"`
@@ -32,7 +32,7 @@ type Table struct {
 // Namespace represents an S3 Tables namespace.
 type Namespace struct {
 	Namespace      []string  `json:"namespace"`
-	TableBucketArn string    `json:"tableBucketARN"`
+	TableBucketArn string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
 	OwnerID        string    `json:"ownerAccountId"`
 	CreatedAt      time.Time `json:"createdAt"`
 	CreatedBy      string    `json:"createdBy"`
@@ -50,12 +50,12 @@ type CreateTableBucketResponse struct {
 
 // DeleteTableBucketRequest represents a DeleteTableBucket request.
 type DeleteTableBucketRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
 }
 
 // GetTableBucketRequest represents a GetTableBucket request.
 type GetTableBucketRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 }
 
 // GetTableBucketResponse represents a GetTableBucket response.
@@ -89,32 +89,32 @@ type TableBucketSummary struct {
 
 // CreateNamespaceRequest represents a CreateNamespace request.
 type CreateNamespaceRequest struct {
-	TableBucketArn string   `json:"tableBucketARN"`
+	TableBucketArn string   `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      []string `json:"namespace"`
 }
 
 // CreateNamespaceResponse represents a CreateNamespace response.
 type CreateNamespaceResponse struct {
 	Namespace      []string `json:"namespace"`
-	TableBucketArn string   `json:"tableBucketARN"`
+	TableBucketArn string   `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 }
 
 // DeleteNamespaceRequest represents a DeleteNamespace request.
 type DeleteNamespaceRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      string `json:"namespace"`
 }
 
 // GetNamespaceRequest represents a GetNamespace request.
 type GetNamespaceRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      string `json:"namespace"`
 }
 
 // GetNamespaceResponse represents a GetNamespace response.
 type GetNamespaceResponse struct {
 	Namespace      []string  `json:"namespace"`
-	TableBucketArn string    `json:"tableBucketARN"`
+	TableBucketArn string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	OwnerID        string    `json:"ownerAccountId"`
 	CreatedAt      time.Time `json:"createdAt"`
 	CreatedBy      string    `json:"createdBy"`
@@ -122,7 +122,7 @@ type GetNamespaceResponse struct {
 
 // ListNamespacesRequest represents a ListNamespaces request.
 type ListNamespacesRequest struct {
-	TableBucketArn    string `json:"tableBucketARN"`
+	TableBucketArn    string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	ContinuationToken string `json:"continuationToken,omitempty"`
 	MaxNamespaces     int    `json:"maxNamespaces,omitempty"`
 	Prefix            string `json:"prefix,omitempty"`
@@ -144,7 +144,7 @@ type NamespaceSummary struct {
 
 // CreateTableRequest represents a CreateTable request.
 type CreateTableRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      string `json:"namespace"`
 	Name           string `json:"name"`
 	Format         string `json:"format"`
@@ -152,13 +152,13 @@ type CreateTableRequest struct {
 
 // CreateTableResponse represents a CreateTable response.
 type CreateTableResponse struct {
-	TableArn     string `json:"tableARN"`
+	TableArn     string `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN
 	VersionToken string `json:"versionToken"`
 }
 
 // DeleteTableRequest represents a DeleteTable request.
 type DeleteTableRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      string `json:"namespace"`
 	Name           string `json:"name"`
 	VersionToken   string `json:"versionToken,omitempty"`
@@ -166,17 +166,17 @@ type DeleteTableRequest struct {
 
 // GetTableRequest represents a GetTable request.
 type GetTableRequest struct {
-	TableBucketArn string `json:"tableBucketARN"`
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace      string `json:"namespace"`
 	Name           string `json:"name"`
 }
 
 // GetTableResponse represents a GetTable response.
 type GetTableResponse struct {
-	Arn               string    `json:"tableARN"`
+	Arn               string    `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN
 	Name              string    `json:"name"`
 	Namespace         []string  `json:"namespace"`
-	TableBucketArn    string    `json:"tableBucketARN"`
+	TableBucketArn    string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Type              string    `json:"type"`
 	Format            string    `json:"format"`
 	VersionToken      string    `json:"versionToken"`
@@ -191,7 +191,7 @@ type GetTableResponse struct {
 
 // ListTablesRequest represents a ListTables request.
 type ListTablesRequest struct {
-	TableBucketArn    string `json:"tableBucketARN"`
+	TableBucketArn    string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Namespace         string `json:"namespace,omitempty"`
 	ContinuationToken string `json:"continuationToken,omitempty"`
 	MaxTables         int    `json:"maxTables,omitempty"`
@@ -206,7 +206,7 @@ type ListTablesResponse struct {
 
 // TableSummary represents a summary of a table.
 type TableSummary struct {
-	Arn        string    `json:"tableARN"`
+	Arn        string    `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN
 	Name       string    `json:"name"`
 	Namespace  []string  `json:"namespace"`
 	Type       string    `json:"type"`

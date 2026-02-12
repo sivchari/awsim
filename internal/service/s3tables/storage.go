@@ -388,6 +388,7 @@ func (s *MemoryStorage) GetTable(_ context.Context, tableBucketArn, namespace, n
 
 	tableKey := tableBucketArn + "/" + namespace
 	table, exists := s.tables[tableKey][name]
+
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -414,58 +415,68 @@ func (s *MemoryStorage) ListTables(_ context.Context, tableBucketArn, namespace,
 		maxTables = defaultMaxItems
 	}
 
+	if namespace != "" {
+		return s.listTablesInNamespace(tableBucketArn, namespace, prefix, maxTables), nil
+	}
+
+	return s.listTablesAcrossNamespaces(tableBucketArn, prefix, maxTables), nil
+}
+
+// listTablesInNamespace lists tables in a specific namespace.
+func (s *MemoryStorage) listTablesInNamespace(tableBucketArn, namespace, prefix string, maxTables int) []TableSummary {
+	tables := make([]TableSummary, 0)
+	tableKey := tableBucketArn + "/" + namespace
+
+	for _, table := range s.tables[tableKey] {
+		if prefix != "" && !strings.HasPrefix(table.Name, prefix) {
+			continue
+		}
+
+		tables = append(tables, tableToSummary(table))
+
+		if len(tables) >= maxTables {
+			break
+		}
+	}
+
+	return tables
+}
+
+// listTablesAcrossNamespaces lists tables across all namespaces.
+func (s *MemoryStorage) listTablesAcrossNamespaces(tableBucketArn, prefix string, maxTables int) []TableSummary {
 	tables := make([]TableSummary, 0)
 
-	// If namespace is specified, list tables in that namespace only
-	if namespace != "" {
-		tableKey := tableBucketArn + "/" + namespace
-		for _, table := range s.tables[tableKey] {
+	for key, tablemap := range s.tables {
+		if !strings.HasPrefix(key, tableBucketArn+"/") {
+			continue
+		}
+
+		for _, table := range tablemap {
 			if prefix != "" && !strings.HasPrefix(table.Name, prefix) {
 				continue
 			}
 
-			tables = append(tables, TableSummary{
-				Arn:        table.Arn,
-				Name:       table.Name,
-				Namespace:  []string{table.Namespace},
-				Type:       table.Type,
-				CreatedAt:  table.CreatedAt,
-				ModifiedAt: table.ModifiedAt,
-			})
+			tables = append(tables, tableToSummary(table))
 
 			if len(tables) >= maxTables {
-				break
-			}
-		}
-	} else {
-		// List all tables across all namespaces
-		for key, tablemap := range s.tables {
-			if !strings.HasPrefix(key, tableBucketArn+"/") {
-				continue
-			}
-
-			for _, table := range tablemap {
-				if prefix != "" && !strings.HasPrefix(table.Name, prefix) {
-					continue
-				}
-
-				tables = append(tables, TableSummary{
-					Arn:        table.Arn,
-					Name:       table.Name,
-					Namespace:  []string{table.Namespace},
-					Type:       table.Type,
-					CreatedAt:  table.CreatedAt,
-					ModifiedAt: table.ModifiedAt,
-				})
-
-				if len(tables) >= maxTables {
-					return tables, nil
-				}
+				return tables
 			}
 		}
 	}
 
-	return tables, nil
+	return tables
+}
+
+// tableToSummary converts a Table to TableSummary.
+func tableToSummary(table *Table) TableSummary {
+	return TableSummary{
+		Arn:        table.Arn,
+		Name:       table.Name,
+		Namespace:  []string{table.Namespace},
+		Type:       table.Type,
+		CreatedAt:  table.CreatedAt,
+		ModifiedAt: table.ModifiedAt,
+	}
 }
 
 // extractBucketNameFromArn extracts the bucket name from a table bucket ARN.
