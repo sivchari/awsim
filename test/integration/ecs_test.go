@@ -215,8 +215,8 @@ func TestECS_RegisterAndDeregisterTaskDefinition(t *testing.T) {
 		t.Fatal("deregistered task definition is nil")
 	}
 
-	if *deregisterOutput.TaskDefinition.Status != "INACTIVE" {
-		t.Errorf("task definition status mismatch: got %s, want INACTIVE", *deregisterOutput.TaskDefinition.Status)
+	if deregisterOutput.TaskDefinition.Status != types.TaskDefinitionStatusInactive {
+		t.Errorf("task definition status mismatch: got %s, want INACTIVE", deregisterOutput.TaskDefinition.Status)
 	}
 }
 
