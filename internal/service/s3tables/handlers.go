@@ -345,7 +345,6 @@ func (s *Service) ListTables(w http.ResponseWriter, r *http.Request) {
 }
 
 // extractTableBucketARN extracts the table bucket ARN from the URL path.
-// Path format: /buckets/{tableBucketARN}
 func extractTableBucketARN(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
@@ -363,7 +362,6 @@ func extractTableBucketARN(path string) string {
 }
 
 // extractTableBucketARNFromNamespacePath extracts the table bucket ARN from a namespace path.
-// Path format: /namespaces/{tableBucketARN}
 func extractTableBucketARNFromNamespacePath(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
@@ -381,7 +379,6 @@ func extractTableBucketARNFromNamespacePath(path string) string {
 }
 
 // extractNamespaceParams extracts table bucket ARN and namespace from the URL path.
-// Path format: /namespaces/{tableBucketARN}/{namespace}
 func extractNamespaceParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
@@ -404,7 +401,6 @@ func extractNamespaceParams(path string) (string, string) {
 }
 
 // extractTablePathParams extracts table bucket ARN and namespace from the tables path.
-// Path format: /tables/{tableBucketARN} or /tables/{tableBucketARN}/{namespace}
 func extractTablePathParams(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
@@ -436,7 +432,6 @@ func extractTablePathParams(path string) (string, string) {
 }
 
 // extractFullTableParams extracts table bucket ARN, namespace, and table name from the URL path.
-// Path format: /tables/{tableBucketARN}/{namespace}/{tableName}
 func extractFullTableParams(path string) (string, string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
