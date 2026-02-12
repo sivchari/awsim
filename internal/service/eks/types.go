@@ -56,7 +56,7 @@ type VpcConfigResponse struct {
 type KubernetesNetworkConfig struct {
 	ServiceIpv4Cidr string `json:"serviceIpv4Cidr,omitempty"`
 	ServiceIpv6Cidr string `json:"serviceIpv6Cidr,omitempty"`
-	IpFamily        string `json:"ipFamily,omitempty"`
+	IPFamily        string `json:"ipFamily,omitempty"`
 }
 
 // Logging represents the cluster logging configuration.
