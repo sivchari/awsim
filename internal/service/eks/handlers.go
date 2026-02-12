@@ -16,6 +16,13 @@ const (
 	errInternalServerError = "InternalServerError"
 )
 
+// Path components.
+const (
+	pathPrefixEKS      = "eks"
+	pathPrefixClusters = "clusters"
+	pathPrefixNodeGrps = "node-groups"
+)
+
 // CreateCluster handles the CreateCluster operation.
 func (s *Service) CreateCluster(w http.ResponseWriter, r *http.Request) {
 	var req CreateClusterRequest
@@ -234,7 +241,7 @@ func extractClusterName(path string) string {
 	parts := strings.Split(path, "/")
 
 	// Expected: eks/clusters/{name} or eks/clusters/{name}/node-groups...
-	if len(parts) >= 3 && parts[0] == "eks" && parts[1] == "clusters" {
+	if len(parts) >= 3 && parts[0] == pathPrefixEKS && parts[1] == pathPrefixClusters {
 		return parts[2]
 	}
 
@@ -248,7 +255,7 @@ func extractClusterAndNodegroupName(path string) (string, string) {
 	parts := strings.Split(path, "/")
 
 	// Expected: eks/clusters/{clusterName}/node-groups/{nodegroupName}
-	if len(parts) >= 5 && parts[0] == "eks" && parts[1] == "clusters" && parts[3] == "node-groups" {
+	if len(parts) >= 5 && parts[0] == pathPrefixEKS && parts[1] == pathPrefixClusters && parts[3] == pathPrefixNodeGrps {
 		return parts[2], parts[4]
 	}
 
