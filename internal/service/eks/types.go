@@ -2,11 +2,19 @@ package eks
 
 import "time"
 
+// EpochTime is a custom type for serializing time.Time to Unix epoch seconds.
+type EpochTime float64
+
+// NewEpochTime creates an EpochTime from time.Time.
+func NewEpochTime(t time.Time) EpochTime {
+	return EpochTime(float64(t.UnixNano()) / 1e9)
+}
+
 // Cluster represents an EKS cluster.
 type Cluster struct {
 	Name                       string                     `json:"name"`
 	Arn                        string                     `json:"arn"`
-	CreatedAt                  *time.Time                 `json:"createdAt,omitempty"`
+	CreatedAt                  *EpochTime                 `json:"createdAt,omitempty"`
 	Version                    string                     `json:"version,omitempty"`
 	Endpoint                   string                     `json:"endpoint,omitempty"`
 	RoleArn                    string                     `json:"roleArn,omitempty"`
@@ -180,8 +188,8 @@ type Nodegroup struct {
 	ClusterName    string              `json:"clusterName"`
 	Version        string              `json:"version,omitempty"`
 	ReleaseVersion string              `json:"releaseVersion,omitempty"`
-	CreatedAt      *time.Time          `json:"createdAt,omitempty"`
-	ModifiedAt     *time.Time          `json:"modifiedAt,omitempty"`
+	CreatedAt      *EpochTime          `json:"createdAt,omitempty"`
+	ModifiedAt     *EpochTime          `json:"modifiedAt,omitempty"`
 	Status         string              `json:"status"`
 	CapacityType   string              `json:"capacityType,omitempty"`
 	ScalingConfig  *NodegroupScaling   `json:"scalingConfig,omitempty"`
