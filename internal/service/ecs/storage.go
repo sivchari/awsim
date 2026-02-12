@@ -549,7 +549,7 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 		}
 	}
 
-	svc.Status = statusInactive
+	svc.Status = statusDraining
 
 	delete(m.services, svcArn)
 
