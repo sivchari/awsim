@@ -227,29 +227,29 @@ func (s *Service) ListNodegroups(w http.ResponseWriter, r *http.Request) {
 }
 
 // extractClusterName extracts the cluster name from the URL path.
-// Expected paths: /clusters/{name} or /clusters/{name}/node-groups...
+// Expected paths: /eks/clusters/{name} or /eks/clusters/{name}/node-groups...
 func extractClusterName(path string) string {
 	// Remove leading slash and split.
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: clusters/{name} or clusters/{name}/node-groups...
-	if len(parts) >= 2 && parts[0] == "clusters" {
-		return parts[1]
+	// Expected: eks/clusters/{name} or eks/clusters/{name}/node-groups...
+	if len(parts) >= 3 && parts[0] == "eks" && parts[1] == "clusters" {
+		return parts[2]
 	}
 
 	return ""
 }
 
 // extractClusterAndNodegroupName extracts both cluster and nodegroup names from the URL path.
-// Expected path: /clusters/{clusterName}/node-groups/{nodegroupName}.
+// Expected path: /eks/clusters/{clusterName}/node-groups/{nodegroupName}.
 func extractClusterAndNodegroupName(path string) (string, string) {
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
 
-	// Expected: clusters/{clusterName}/node-groups/{nodegroupName}
-	if len(parts) >= 4 && parts[0] == "clusters" && parts[2] == "node-groups" {
-		return parts[1], parts[3]
+	// Expected: eks/clusters/{clusterName}/node-groups/{nodegroupName}
+	if len(parts) >= 5 && parts[0] == "eks" && parts[1] == "clusters" && parts[3] == "node-groups" {
+		return parts[2], parts[4]
 	}
 
 	return "", ""

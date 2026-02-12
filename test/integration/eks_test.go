@@ -26,7 +26,7 @@ func newEKSClient(t *testing.T) *eks.Client {
 	}
 
 	return eks.NewFromConfig(cfg, func(o *eks.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566")
+		o.BaseEndpoint = aws.String("http://localhost:4566/eks")
 	})
 }
 
