@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -16,14 +17,19 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 
-	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+	b, err := json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal timestamp: %w", err)
+	}
+
+	return b, nil
 }
 
 // UnmarshalJSON unmarshals a Unix epoch seconds value to a timestamp.
 func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	var v float64
 	if err := json.Unmarshal(data, &v); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal timestamp: %w", err)
 	}
 
 	sec := int64(v)
