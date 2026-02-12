@@ -62,7 +62,19 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 		}
 	}
 
+	cluster := s.buildCluster(req)
+	cluster.Status = statusActive
+
+	s.clusters[req.Name] = cluster
+	s.nodegroups[req.Name] = make(map[string]*Nodegroup)
+
+	return cluster, nil
+}
+
+// buildCluster builds a Cluster from a CreateClusterRequest.
+func (s *MemoryStorage) buildCluster(req *CreateClusterRequest) *Cluster {
 	now := time.Now()
+
 	version := req.Version
 	if version == "" {
 		version = defaultKubernetesVersion
@@ -71,66 +83,25 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	clusterArn := fmt.Sprintf("arn:aws:eks:%s:%s:cluster/%s", s.region, s.accountID, req.Name)
 	endpoint := fmt.Sprintf("https://%s.gr7.%s.eks.amazonaws.com", uuid.New().String()[:8], s.region)
 	oidcIssuer := fmt.Sprintf("https://oidc.eks.%s.amazonaws.com/id/%s", s.region, uuid.New().String()[:32])
-
-	// Generate fake certificate authority data
 	caData := base64.StdEncoding.EncodeToString([]byte("fake-certificate-authority-data"))
 
-	var vpcConfig *VpcConfigResponse
-	if req.ResourcesVpcConfig != nil {
-		endpointPublicAccess := true
-		endpointPrivateAccess := false
-		if req.ResourcesVpcConfig.EndpointPublicAccess != nil {
-			endpointPublicAccess = *req.ResourcesVpcConfig.EndpointPublicAccess
-		}
-		if req.ResourcesVpcConfig.EndpointPrivateAccess != nil {
-			endpointPrivateAccess = *req.ResourcesVpcConfig.EndpointPrivateAccess
-		}
-
-		vpcConfig = &VpcConfigResponse{
-			SubnetIDs:              req.ResourcesVpcConfig.SubnetIDs,
-			SecurityGroupIDs:       req.ResourcesVpcConfig.SecurityGroupIDs,
-			ClusterSecurityGroupID: fmt.Sprintf("sg-%s", uuid.New().String()[:17]),
-			VpcID:                  fmt.Sprintf("vpc-%s", uuid.New().String()[:17]),
-			EndpointPublicAccess:   endpointPublicAccess,
-			EndpointPrivateAccess:  endpointPrivateAccess,
-			PublicAccessCidrs:      req.ResourcesVpcConfig.PublicAccessCidrs,
-		}
-		if len(vpcConfig.PublicAccessCidrs) == 0 {
-			vpcConfig.PublicAccessCidrs = []string{"0.0.0.0/0"}
-		}
-	}
-
 	cluster := &Cluster{
-		Name:               req.Name,
-		Arn:                clusterArn,
-		CreatedAt:          &now,
-		Version:            version,
-		Endpoint:           endpoint,
-		RoleArn:            req.RoleArn,
-		ResourcesVpcConfig: vpcConfig,
-		KubernetesNetworkConfig: &KubernetesNetworkConfig{
-			ServiceIpv4Cidr: "10.100.0.0/16",
-			IpFamily:        "ipv4",
-		},
-		Identity: &Identity{
-			Oidc: &OIDC{
-				Issuer: oidcIssuer,
-			},
-		},
-		Status: statusCreating,
-		CertificateAuthority: &Certificate{
-			Data: caData,
-		},
-		PlatformVersion:  defaultPlatformVersion,
-		Tags:             req.Tags,
-		EncryptionConfig: req.EncryptionConfig,
-		Health: &ClusterHealth{
-			Issues: []ClusterIssue{},
-		},
-	}
-
-	if req.Logging != nil {
-		cluster.Logging = req.Logging
+		Name:                    req.Name,
+		Arn:                     clusterArn,
+		CreatedAt:               &now,
+		Version:                 version,
+		Endpoint:                endpoint,
+		RoleArn:                 req.RoleArn,
+		ResourcesVpcConfig:      s.buildVpcConfig(req.ResourcesVpcConfig),
+		KubernetesNetworkConfig: &KubernetesNetworkConfig{ServiceIpv4Cidr: "10.100.0.0/16", IPFamily: "ipv4"},
+		Identity:                &Identity{Oidc: &OIDC{Issuer: oidcIssuer}},
+		Status:                  statusCreating,
+		CertificateAuthority:    &Certificate{Data: caData},
+		PlatformVersion:         defaultPlatformVersion,
+		Tags:                    req.Tags,
+		EncryptionConfig:        req.EncryptionConfig,
+		Health:                  &ClusterHealth{Issues: []ClusterIssue{}},
+		Logging:                 req.Logging,
 	}
 
 	if req.AccessConfig != nil {
@@ -140,13 +111,40 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 		}
 	}
 
-	// Set status to ACTIVE immediately for testing purposes.
-	cluster.Status = statusActive
+	return cluster
+}
 
-	s.clusters[req.Name] = cluster
-	s.nodegroups[req.Name] = make(map[string]*Nodegroup)
+// buildVpcConfig builds a VpcConfigResponse from a VpcConfigRequest.
+func (s *MemoryStorage) buildVpcConfig(req *VpcConfigRequest) *VpcConfigResponse {
+	if req == nil {
+		return nil
+	}
 
-	return cluster, nil
+	endpointPublicAccess := true
+	endpointPrivateAccess := false
+
+	if req.EndpointPublicAccess != nil {
+		endpointPublicAccess = *req.EndpointPublicAccess
+	}
+
+	if req.EndpointPrivateAccess != nil {
+		endpointPrivateAccess = *req.EndpointPrivateAccess
+	}
+
+	publicCidrs := req.PublicAccessCidrs
+	if len(publicCidrs) == 0 {
+		publicCidrs = []string{"0.0.0.0/0"}
+	}
+
+	return &VpcConfigResponse{
+		SubnetIDs:              req.SubnetIDs,
+		SecurityGroupIDs:       req.SecurityGroupIDs,
+		ClusterSecurityGroupID: fmt.Sprintf("sg-%s", uuid.New().String()[:17]),
+		VpcID:                  fmt.Sprintf("vpc-%s", uuid.New().String()[:17]),
+		EndpointPublicAccess:   endpointPublicAccess,
+		EndpointPrivateAccess:  endpointPrivateAccess,
+		PublicAccessCidrs:      publicCidrs,
+	}
 }
 
 // DeleteCluster deletes an EKS cluster.
@@ -162,7 +160,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, name string) (*Cluster,
 		}
 	}
 
-	// Check if there are any nodegroups
+	// Check if there are any nodegroups.
 	if nodegroups, ok := s.nodegroups[name]; ok && len(nodegroups) > 0 {
 		return nil, &Error{
 			Code:    "ResourceInUseException",
@@ -171,6 +169,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, name string) (*Cluster,
 	}
 
 	cluster.Status = statusDeleting
+
 	delete(s.clusters, name)
 	delete(s.nodegroups, name)
 
@@ -226,6 +225,16 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 		}
 	}
 
+	nodegroup := s.buildNodegroup(req, cluster.Version)
+	nodegroup.Status = statusActive
+
+	s.nodegroups[req.ClusterName][req.NodegroupName] = nodegroup
+
+	return nodegroup, nil
+}
+
+// buildNodegroup builds a Nodegroup from a CreateNodegroupRequest.
+func (s *MemoryStorage) buildNodegroup(req *CreateNodegroupRequest, clusterVersion string) *Nodegroup {
 	now := time.Now()
 	nodegroupArn := fmt.Sprintf("arn:aws:eks:%s:%s:nodegroup/%s/%s/%s",
 		s.region, s.accountID, req.ClusterName, req.NodegroupName, uuid.New().String()[:8])
@@ -250,19 +259,15 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 		minSize := 1
 		maxSize := 2
 		desiredSize := 1
-		scalingConfig = &NodegroupScaling{
-			MinSize:     &minSize,
-			MaxSize:     &maxSize,
-			DesiredSize: &desiredSize,
-		}
+		scalingConfig = &NodegroupScaling{MinSize: &minSize, MaxSize: &maxSize, DesiredSize: &desiredSize}
 	}
 
-	nodegroup := &Nodegroup{
+	return &Nodegroup{
 		NodegroupName:  req.NodegroupName,
 		NodegroupArn:   nodegroupArn,
 		ClusterName:    req.ClusterName,
-		Version:        cluster.Version,
-		ReleaseVersion: fmt.Sprintf("%s-20231116", cluster.Version),
+		Version:        clusterVersion,
+		ReleaseVersion: fmt.Sprintf("%s-20231116", clusterVersion),
 		CreatedAt:      &now,
 		ModifiedAt:     &now,
 		Status:         statusCreating,
@@ -280,21 +285,10 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 		LaunchTemplate: req.LaunchTemplate,
 		Tags:           req.Tags,
 		Resources: &NodegroupResources{
-			AutoScalingGroups: []AutoScalingGroup{
-				{Name: fmt.Sprintf("eks-%s-%s", req.NodegroupName, uuid.New().String()[:8])},
-			},
+			AutoScalingGroups: []AutoScalingGroup{{Name: fmt.Sprintf("eks-%s-%s", req.NodegroupName, uuid.New().String()[:8])}},
 		},
-		Health: &NodegroupHealth{
-			Issues: []Issue{},
-		},
+		Health: &NodegroupHealth{Issues: []Issue{}},
 	}
-
-	// Set status to ACTIVE immediately for testing purposes.
-	nodegroup.Status = statusActive
-
-	s.nodegroups[req.ClusterName][req.NodegroupName] = nodegroup
-
-	return nodegroup, nil
 }
 
 // DeleteNodegroup deletes an EKS node group.
@@ -326,6 +320,7 @@ func (s *MemoryStorage) DeleteNodegroup(_ context.Context, clusterName, nodegrou
 	}
 
 	nodegroup.Status = statusDeleting
+
 	delete(s.nodegroups[clusterName], nodegroupName)
 
 	return nodegroup, nil
