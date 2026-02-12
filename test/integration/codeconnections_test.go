@@ -37,7 +37,7 @@ func TestCodeConnections_CreateAndDeleteConnection(t *testing.T) {
 	// Create connection.
 	createOutput, err := client.CreateConnection(ctx, &codeconnections.CreateConnectionInput{
 		ConnectionName: aws.String("test-connection"),
-		ProviderType:   types.ProviderTypeGitHub,
+		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connection: %v", err)
@@ -68,7 +68,7 @@ func TestCodeConnections_GetConnection(t *testing.T) {
 	// Create connection.
 	createOutput, err := client.CreateConnection(ctx, &codeconnections.CreateConnectionInput{
 		ConnectionName: aws.String("test-get-connection"),
-		ProviderType:   types.ProviderTypeGitHub,
+		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connection: %v", err)
@@ -117,7 +117,7 @@ func TestCodeConnections_ListConnections(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		output, err := client.CreateConnection(ctx, &codeconnections.CreateConnectionInput{
 			ConnectionName: aws.String("test-list-connection-" + string(rune('a'+i))),
-			ProviderType:   types.ProviderTypeGitHub,
+			ProviderType:   types.ProviderTypeGithub,
 		})
 		if err != nil {
 			t.Fatalf("failed to create connection %d: %v", i, err)
@@ -136,7 +136,7 @@ func TestCodeConnections_ListConnections(t *testing.T) {
 
 	// List connections.
 	listOutput, err := client.ListConnections(ctx, &codeconnections.ListConnectionsInput{
-		MaxResults: aws.Int32(10),
+		MaxResults: 10,
 	})
 	if err != nil {
 		t.Fatalf("failed to list connections: %v", err)
@@ -156,7 +156,7 @@ func TestCodeConnections_CreateAndDeleteHost(t *testing.T) {
 	// Create host.
 	createOutput, err := client.CreateHost(ctx, &codeconnections.CreateHostInput{
 		Name:             aws.String("test-host"),
-		ProviderType:     types.ProviderTypeGitHubEnterpriseServer,
+		ProviderType:     types.ProviderTypeGithubEnterpriseServer,
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
@@ -188,7 +188,7 @@ func TestCodeConnections_GetHost(t *testing.T) {
 	// Create host.
 	createOutput, err := client.CreateHost(ctx, &codeconnections.CreateHostInput{
 		Name:             aws.String("test-get-host"),
-		ProviderType:     types.ProviderTypeGitHubEnterpriseServer,
+		ProviderType:     types.ProviderTypeGithubEnterpriseServer,
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
@@ -229,7 +229,7 @@ func TestCodeConnections_ListHosts(t *testing.T) {
 	// Create a host.
 	createOutput, err := client.CreateHost(ctx, &codeconnections.CreateHostInput{
 		Name:             aws.String("test-list-host"),
-		ProviderType:     types.ProviderTypeGitHubEnterpriseServer,
+		ProviderType:     types.ProviderTypeGithubEnterpriseServer,
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
@@ -246,7 +246,7 @@ func TestCodeConnections_ListHosts(t *testing.T) {
 
 	// List hosts.
 	listOutput, err := client.ListHosts(ctx, &codeconnections.ListHostsInput{
-		MaxResults: aws.Int32(10),
+		MaxResults: 10,
 	})
 	if err != nil {
 		t.Fatalf("failed to list hosts: %v", err)
@@ -266,7 +266,7 @@ func TestCodeConnections_UpdateHost(t *testing.T) {
 	// Create host.
 	createOutput, err := client.CreateHost(ctx, &codeconnections.CreateHostInput{
 		Name:             aws.String("test-update-host"),
-		ProviderType:     types.ProviderTypeGitHubEnterpriseServer,
+		ProviderType:     types.ProviderTypeGithubEnterpriseServer,
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
@@ -339,7 +339,7 @@ func TestCodeConnections_TagResource(t *testing.T) {
 	// Create connection.
 	createOutput, err := client.CreateConnection(ctx, &codeconnections.CreateConnectionInput{
 		ConnectionName: aws.String("test-tag-connection"),
-		ProviderType:   types.ProviderTypeGitHub,
+		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connection: %v", err)
@@ -387,7 +387,7 @@ func TestCodeConnections_UntagResource(t *testing.T) {
 	// Create connection with tags.
 	createOutput, err := client.CreateConnection(ctx, &codeconnections.CreateConnectionInput{
 		ConnectionName: aws.String("test-untag-connection"),
-		ProviderType:   types.ProviderTypeGitHub,
+		ProviderType:   types.ProviderTypeGithub,
 		Tags: []types.Tag{
 			{Key: aws.String("Environment"), Value: aws.String("Test")},
 			{Key: aws.String("Project"), Value: aws.String("awsim")},
