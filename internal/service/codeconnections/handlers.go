@@ -1,3 +1,4 @@
+// Package codeconnections provides AWS CodeConnections service emulation.
 package codeconnections
 
 import (
@@ -18,57 +19,50 @@ const (
 	errInvalidInputException   = "InvalidInputException"
 )
 
+// handlerFunc is the type for action handler functions.
+type handlerFunc func(http.ResponseWriter, *http.Request)
+
+// getActionHandlers returns the action handlers map.
+func (s *Service) getActionHandlers() map[string]handlerFunc {
+	return map[string]handlerFunc{
+		// Connection operations
+		"CreateConnection": s.CreateConnection,
+		"GetConnection":    s.GetConnection,
+		"DeleteConnection": s.DeleteConnection,
+		"ListConnections":  s.ListConnections,
+		// Host operations
+		"CreateHost": s.CreateHost,
+		"GetHost":    s.GetHost,
+		"DeleteHost": s.DeleteHost,
+		"ListHosts":  s.ListHosts,
+		"UpdateHost": s.UpdateHost,
+		// Repository link operations
+		"CreateRepositoryLink": s.CreateRepositoryLink,
+		"GetRepositoryLink":    s.GetRepositoryLink,
+		"DeleteRepositoryLink": s.DeleteRepositoryLink,
+		"ListRepositoryLinks":  s.ListRepositoryLinks,
+		"UpdateRepositoryLink": s.UpdateRepositoryLink,
+		// Tag operations
+		"ListTagsForResource": s.ListTagsForResource,
+		"TagResource":         s.TagResource,
+		"UntagResource":       s.UntagResource,
+	}
+}
+
 // DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
 	action := strings.TrimPrefix(target, "CodeConnections_20231201.")
 
-	switch action {
-	// Connection operations
-	case "CreateConnection":
-		s.CreateConnection(w, r)
-	case "GetConnection":
-		s.GetConnection(w, r)
-	case "DeleteConnection":
-		s.DeleteConnection(w, r)
-	case "ListConnections":
-		s.ListConnections(w, r)
+	handlers := s.getActionHandlers()
 
-	// Host operations
-	case "CreateHost":
-		s.CreateHost(w, r)
-	case "GetHost":
-		s.GetHost(w, r)
-	case "DeleteHost":
-		s.DeleteHost(w, r)
-	case "ListHosts":
-		s.ListHosts(w, r)
-	case "UpdateHost":
-		s.UpdateHost(w, r)
+	if handler, ok := handlers[action]; ok {
+		handler(w, r)
 
-	// Repository link operations
-	case "CreateRepositoryLink":
-		s.CreateRepositoryLink(w, r)
-	case "GetRepositoryLink":
-		s.GetRepositoryLink(w, r)
-	case "DeleteRepositoryLink":
-		s.DeleteRepositoryLink(w, r)
-	case "ListRepositoryLinks":
-		s.ListRepositoryLinks(w, r)
-	case "UpdateRepositoryLink":
-		s.UpdateRepositoryLink(w, r)
-
-	// Tag operations
-	case "ListTagsForResource":
-		s.ListTagsForResource(w, r)
-	case "TagResource":
-		s.TagResource(w, r)
-	case "UntagResource":
-		s.UntagResource(w, r)
-
-	default:
-		writeCodeConnectionsError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
+		return
 	}
+
+	writeCodeConnectionsError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 }
 
 // CreateConnection handles the CreateConnection action.
@@ -593,7 +587,7 @@ func convertVpcConfigToOutput(cfg *VpcConfiguration) *VpcConfigOutput {
 		VpcID:            cfg.VpcID,
 		SubnetIDs:        cfg.SubnetIDs,
 		SecurityGroupIDs: cfg.SecurityGroupIDs,
-		TlsCertificate:   cfg.TlsCertificate,
+		TLSCertificate:   cfg.TLSCertificate,
 	}
 }
 
@@ -607,7 +601,7 @@ func convertVpcConfigInputToInternal(input *VpcConfigInput) *VpcConfiguration {
 		VpcID:            input.VpcID,
 		SubnetIDs:        input.SubnetIDs,
 		SecurityGroupIDs: input.SecurityGroupIDs,
-		TlsCertificate:   input.TlsCertificate,
+		TLSCertificate:   input.TLSCertificate,
 	}
 }
 

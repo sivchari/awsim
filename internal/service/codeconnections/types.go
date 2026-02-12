@@ -56,7 +56,7 @@ type VpcConfiguration struct {
 	VpcID            string
 	SubnetIDs        []string
 	SecurityGroupIDs []string
-	TlsCertificate   string
+	TLSCertificate   string
 }
 
 // RepositoryLink represents a repository link.
@@ -148,7 +148,7 @@ type VpcConfigInput struct {
 	VpcID            string   `json:"VpcId"`
 	SubnetIDs        []string `json:"SubnetIds"`
 	SecurityGroupIDs []string `json:"SecurityGroupIds"`
-	TlsCertificate   string   `json:"TlsCertificate,omitempty"`
+	TLSCertificate   string   `json:"TLSCertificate,omitempty"`
 }
 
 // CreateHostResponse is the response for CreateHost.
@@ -176,7 +176,7 @@ type VpcConfigOutput struct {
 	VpcID            string   `json:"VpcId,omitempty"`
 	SubnetIDs        []string `json:"SubnetIds,omitempty"`
 	SecurityGroupIDs []string `json:"SecurityGroupIds,omitempty"`
-	TlsCertificate   string   `json:"TlsCertificate,omitempty"`
+	TLSCertificate   string   `json:"TLSCertificate,omitempty"`
 }
 
 // DeleteHostRequest is the request for DeleteHost.
