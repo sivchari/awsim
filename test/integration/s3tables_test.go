@@ -25,7 +25,7 @@ func newS3TablesClient(t *testing.T) *s3tables.Client {
 	}
 
 	return s3tables.NewFromConfig(cfg, func(o *s3tables.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566/s3tables")
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
 
