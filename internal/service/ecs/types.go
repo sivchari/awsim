@@ -1,6 +1,37 @@
 package ecs
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// Timestamp is a custom time type that marshals to Unix epoch seconds for AWS SDK compatibility.
+type Timestamp struct {
+	time.Time
+}
+
+// MarshalJSON marshals the timestamp as Unix epoch seconds (float).
+func (t Timestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+}
+
+// UnmarshalJSON unmarshals a Unix epoch seconds value to a timestamp.
+func (t *Timestamp) UnmarshalJSON(data []byte) error {
+	var v float64
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	sec := int64(v)
+	nsec := int64((v - float64(sec)) * 1e9)
+	t.Time = time.Unix(sec, nsec)
+
+	return nil
+}
 
 // Cluster represents an ECS cluster.
 type Cluster struct {
@@ -67,8 +98,8 @@ type Task struct {
 	CPU                  string      `json:"cpu,omitempty"`
 	Memory               string      `json:"memory,omitempty"`
 	Containers           []Container `json:"containers"`
-	StartedAt            *time.Time  `json:"startedAt,omitempty"`
-	StoppedAt            *time.Time  `json:"stoppedAt,omitempty"`
+	StartedAt            *Timestamp  `json:"startedAt,omitempty"`
+	StoppedAt            *Timestamp  `json:"stoppedAt,omitempty"`
 	StoppedReason        string      `json:"stoppedReason,omitempty"`
 	Group                string      `json:"group,omitempty"`
 	LaunchType           string      `json:"launchType,omitempty"`
@@ -88,7 +119,7 @@ type Container struct {
 
 // NetworkBinding represents a network binding.
 type NetworkBinding struct {
-	BindIP        string `json:"bindIP,omitempty"`
+	BindIP        string `json:"bindIp,omitempty"`
 	ContainerPort int    `json:"containerPort"`
 	HostPort      int    `json:"hostPort,omitempty"`
 	Protocol      string `json:"protocol,omitempty"`
@@ -117,8 +148,8 @@ type Deployment struct {
 	DesiredCount   int        `json:"desiredCount"`
 	RunningCount   int        `json:"runningCount"`
 	PendingCount   int        `json:"pendingCount"`
-	CreatedAt      *time.Time `json:"createdAt,omitempty"`
-	UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
+	CreatedAt      *Timestamp `json:"createdAt,omitempty"`
+	UpdatedAt      *Timestamp `json:"updatedAt,omitempty"`
 }
 
 // Tag represents a resource tag.

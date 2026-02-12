@@ -68,6 +68,10 @@ func generateID() string {
 	return uuid.New().String()[:8]
 }
 
+func newTimestamp() *Timestamp {
+	return &Timestamp{Time: time.Now()}
+}
+
 func clusterArn(name string) string {
 	return fmt.Sprintf("arn:aws:ecs:%s:%s:cluster/%s", defaultRegion, defaultAccountID, name)
 }
@@ -337,7 +341,6 @@ func (m *MemoryStorage) createTasks(clusterArn string, td *TaskDefinition, req *
 
 func (m *MemoryStorage) createSingleTask(clusterArn string, td *TaskDefinition, tdArn string, req *RunTaskRequest, launchType string) Task {
 	taskID := generateID()
-	now := time.Now()
 	containers := createContainersFromDefinitions(td.ContainerDefinitions)
 	clusterName := extractClusterName(clusterArn)
 
@@ -350,7 +353,7 @@ func (m *MemoryStorage) createSingleTask(clusterArn string, td *TaskDefinition, 
 		CPU:               td.CPU,
 		Memory:            td.Memory,
 		Containers:        containers,
-		StartedAt:         &now,
+		StartedAt:         newTimestamp(),
 		Group:             req.Group,
 		LaunchType:        launchType,
 		Tags:              req.Tags,
@@ -398,10 +401,9 @@ func (m *MemoryStorage) StopTask(_ context.Context, cluster, taskID, reason stri
 		}
 	}
 
-	now := time.Now()
 	task.LastStatus = statusStopped
 	task.DesiredStatus = statusStopped
-	task.StoppedAt = &now
+	task.StoppedAt = newTimestamp()
 	task.StoppedReason = reason
 
 	for i := range task.Containers {
@@ -486,7 +488,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 		launchType = "EC2"
 	}
 
-	now := time.Now()
+	ts := newTimestamp()
 	svc := &ServiceResource{
 		ServiceArn:     arn,
 		ServiceName:    req.ServiceName,
@@ -505,8 +507,8 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 				DesiredCount:   req.DesiredCount,
 				RunningCount:   0,
 				PendingCount:   req.DesiredCount,
-				CreatedAt:      &now,
-				UpdatedAt:      &now,
+				CreatedAt:      ts,
+				UpdatedAt:      ts,
 			},
 		},
 		Tags: req.Tags,
@@ -593,10 +595,9 @@ func (m *MemoryStorage) UpdateService(_ context.Context, req *UpdateServiceReque
 
 	// Update deployment.
 	if len(svc.Deployments) > 0 {
-		now := time.Now()
 		svc.Deployments[0].TaskDefinition = svc.TaskDefinition
 		svc.Deployments[0].DesiredCount = svc.DesiredCount
-		svc.Deployments[0].UpdatedAt = &now
+		svc.Deployments[0].UpdatedAt = newTimestamp()
 	}
 
 	return svc, nil
