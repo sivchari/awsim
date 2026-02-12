@@ -240,7 +240,7 @@ type GetQueryExecutionResponse struct {
 
 // QueryExecutionOutput represents query execution in API response.
 type QueryExecutionOutput struct {
-	QueryExecutionId      string                          `json:"QueryExecutionId"`
+	QueryExecutionID      string                          `json:"QueryExecutionId"`
 	Query                 string                          `json:"Query"`
 	StatementType         string                          `json:"StatementType,omitempty"`
 	ResultConfiguration   *ResultConfigurationOutput      `json:"ResultConfiguration,omitempty"`
@@ -306,7 +306,7 @@ type EngineVersionOutput struct {
 
 // GetQueryResultsRequest is the request for GetQueryResults.
 type GetQueryResultsRequest struct {
-	QueryExecutionId string `json:"QueryExecutionId"`
+	QueryExecutionID string `json:"QueryExecutionId"`
 	NextToken        string `json:"NextToken,omitempty"`
 	MaxResults       int32  `json:"MaxResults,omitempty"`
 }

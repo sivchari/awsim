@@ -104,13 +104,13 @@ func (s *Service) GetQueryResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.QueryExecutionId == "" {
+	if req.QueryExecutionID == "" {
 		writeAthenaError(w, errInvalidRequestException, "QueryExecutionId is required.", http.StatusBadRequest)
 
 		return
 	}
 
-	rs, nextToken, err := s.storage.GetQueryResults(r.Context(), req.QueryExecutionId, req.NextToken, req.MaxResults)
+	rs, nextToken, err := s.storage.GetQueryResults(r.Context(), req.QueryExecutionID, req.NextToken, req.MaxResults)
 	if err != nil {
 		handleAthenaError(w, err)
 
@@ -221,7 +221,7 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 // convertQueryExecutionToOutput converts internal QueryExecution to API output.
 func convertQueryExecutionToOutput(qe *QueryExecution) *QueryExecutionOutput {
 	output := &QueryExecutionOutput{
-		QueryExecutionId:    qe.QueryExecutionID,
+		QueryExecutionID:    qe.QueryExecutionID,
 		Query:               qe.Query,
 		StatementType:       qe.StatementType,
 		WorkGroup:           qe.WorkGroup,
