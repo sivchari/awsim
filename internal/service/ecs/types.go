@@ -4,127 +4,127 @@ import "time"
 
 // Cluster represents an ECS cluster.
 type Cluster struct {
-	ClusterArn                        string
-	ClusterName                       string
-	Status                            string
-	RegisteredContainerInstancesCount int
-	RunningTasksCount                 int
-	PendingTasksCount                 int
-	ActiveServicesCount               int
-	Tags                              []Tag
+	ClusterArn                        string `json:"clusterArn"`
+	ClusterName                       string `json:"clusterName"`
+	Status                            string `json:"status"`
+	RegisteredContainerInstancesCount int    `json:"registeredContainerInstancesCount"`
+	RunningTasksCount                 int    `json:"runningTasksCount"`
+	PendingTasksCount                 int    `json:"pendingTasksCount"`
+	ActiveServicesCount               int    `json:"activeServicesCount"`
+	Tags                              []Tag  `json:"tags,omitempty"`
 }
 
 // TaskDefinition represents an ECS task definition.
 type TaskDefinition struct {
-	TaskDefinitionArn       string
-	Family                  string
-	Revision                int
-	Status                  string
-	ContainerDefinitions    []ContainerDefinition
-	CPU                     string
-	Memory                  string
-	NetworkMode             string
-	RequiresCompatibilities []string
-	ExecutionRoleArn        string
-	TaskRoleArn             string
-	Tags                    []Tag
+	TaskDefinitionArn       string                `json:"taskDefinitionArn"`
+	Family                  string                `json:"family"`
+	Revision                int                   `json:"revision"`
+	Status                  string                `json:"status"`
+	ContainerDefinitions    []ContainerDefinition `json:"containerDefinitions"`
+	CPU                     string                `json:"cpu,omitempty"`
+	Memory                  string                `json:"memory,omitempty"`
+	NetworkMode             string                `json:"networkMode,omitempty"`
+	RequiresCompatibilities []string              `json:"requiresCompatibilities,omitempty"`
+	ExecutionRoleArn        string                `json:"executionRoleArn,omitempty"`
+	TaskRoleArn             string                `json:"taskRoleArn,omitempty"`
+	Tags                    []Tag                 `json:"tags,omitempty"`
 }
 
 // ContainerDefinition represents a container in a task definition.
 type ContainerDefinition struct {
-	Name         string
-	Image        string
-	CPU          int
-	Memory       int
-	Essential    bool
-	PortMappings []PortMapping
-	Environment  []KeyValuePair
-	Command      []string
-	EntryPoint   []string
+	Name         string         `json:"name"`
+	Image        string         `json:"image"`
+	CPU          int            `json:"cpu,omitempty"`
+	Memory       int            `json:"memory,omitempty"`
+	Essential    bool           `json:"essential"`
+	PortMappings []PortMapping  `json:"portMappings,omitempty"`
+	Environment  []KeyValuePair `json:"environment,omitempty"`
+	Command      []string       `json:"command,omitempty"`
+	EntryPoint   []string       `json:"entryPoint,omitempty"`
 }
 
 // PortMapping represents a port mapping.
 type PortMapping struct {
-	ContainerPort int
-	HostPort      int
-	Protocol      string
+	ContainerPort int    `json:"containerPort"`
+	HostPort      int    `json:"hostPort,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
 }
 
 // KeyValuePair represents a key-value pair.
 type KeyValuePair struct {
-	Name  string
-	Value string
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // Task represents a running task.
 type Task struct {
-	TaskArn              string
-	ClusterArn           string
-	TaskDefinitionArn    string
-	ContainerInstanceArn string
-	LastStatus           string
-	DesiredStatus        string
-	CPU                  string
-	Memory               string
-	Containers           []Container
-	StartedAt            *time.Time
-	StoppedAt            *time.Time
-	StoppedReason        string
-	Group                string
-	LaunchType           string
-	Tags                 []Tag
+	TaskArn              string      `json:"taskArn"`
+	ClusterArn           string      `json:"clusterArn"`
+	TaskDefinitionArn    string      `json:"taskDefinitionArn"`
+	ContainerInstanceArn string      `json:"containerInstanceArn,omitempty"`
+	LastStatus           string      `json:"lastStatus"`
+	DesiredStatus        string      `json:"desiredStatus"`
+	CPU                  string      `json:"cpu,omitempty"`
+	Memory               string      `json:"memory,omitempty"`
+	Containers           []Container `json:"containers"`
+	StartedAt            *time.Time  `json:"startedAt,omitempty"`
+	StoppedAt            *time.Time  `json:"stoppedAt,omitempty"`
+	StoppedReason        string      `json:"stoppedReason,omitempty"`
+	Group                string      `json:"group,omitempty"`
+	LaunchType           string      `json:"launchType,omitempty"`
+	Tags                 []Tag       `json:"tags,omitempty"`
 }
 
 // Container represents a container in a task.
 type Container struct {
-	ContainerArn    string
-	Name            string
-	Image           string
-	LastStatus      string
-	ExitCode        *int
-	Reason          string
-	NetworkBindings []NetworkBinding
+	ContainerArn    string           `json:"containerArn"`
+	Name            string           `json:"name"`
+	Image           string           `json:"image,omitempty"`
+	LastStatus      string           `json:"lastStatus"`
+	ExitCode        *int             `json:"exitCode,omitempty"`
+	Reason          string           `json:"reason,omitempty"`
+	NetworkBindings []NetworkBinding `json:"networkBindings,omitempty"`
 }
 
 // NetworkBinding represents a network binding.
 type NetworkBinding struct {
-	BindIP        string
-	ContainerPort int
-	HostPort      int
-	Protocol      string
+	BindIP        string `json:"bindIP,omitempty"`
+	ContainerPort int    `json:"containerPort"`
+	HostPort      int    `json:"hostPort,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
 }
 
 // ServiceResource represents an ECS service.
 type ServiceResource struct {
-	ServiceArn     string
-	ServiceName    string
-	ClusterArn     string
-	TaskDefinition string
-	DesiredCount   int
-	RunningCount   int
-	PendingCount   int
-	LaunchType     string
-	Status         string
-	Deployments    []Deployment
-	Tags           []Tag
+	ServiceArn     string       `json:"serviceArn"`
+	ServiceName    string       `json:"serviceName"`
+	ClusterArn     string       `json:"clusterArn"`
+	TaskDefinition string       `json:"taskDefinition"`
+	DesiredCount   int          `json:"desiredCount"`
+	RunningCount   int          `json:"runningCount"`
+	PendingCount   int          `json:"pendingCount"`
+	LaunchType     string       `json:"launchType,omitempty"`
+	Status         string       `json:"status"`
+	Deployments    []Deployment `json:"deployments,omitempty"`
+	Tags           []Tag        `json:"tags,omitempty"`
 }
 
 // Deployment represents a service deployment.
 type Deployment struct {
-	ID             string
-	Status         string
-	TaskDefinition string
-	DesiredCount   int
-	RunningCount   int
-	PendingCount   int
-	CreatedAt      *time.Time
-	UpdatedAt      *time.Time
+	ID             string     `json:"id"`
+	Status         string     `json:"status"`
+	TaskDefinition string     `json:"taskDefinition"`
+	DesiredCount   int        `json:"desiredCount"`
+	RunningCount   int        `json:"runningCount"`
+	PendingCount   int        `json:"pendingCount"`
+	CreatedAt      *time.Time `json:"createdAt,omitempty"`
+	UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
 }
 
 // Tag represents a resource tag.
 type Tag struct {
-	Key   string
-	Value string
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // Request types.
