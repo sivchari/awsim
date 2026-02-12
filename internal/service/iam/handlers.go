@@ -489,48 +489,14 @@ func (s *Service) ListAccessKeys(w http.ResponseWriter, r *http.Request) {
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	action := extractAction(r)
 
-	switch action {
-	case "CreateUser":
-		s.CreateUser(w, r)
-	case "DeleteUser":
-		s.DeleteUser(w, r)
-	case "GetUser":
-		s.GetUser(w, r)
-	case "ListUsers":
-		s.ListUsers(w, r)
-	case "CreateRole":
-		s.CreateRole(w, r)
-	case "DeleteRole":
-		s.DeleteRole(w, r)
-	case "GetRole":
-		s.GetRole(w, r)
-	case "ListRoles":
-		s.ListRoles(w, r)
-	case "CreatePolicy":
-		s.CreatePolicy(w, r)
-	case "DeletePolicy":
-		s.DeletePolicy(w, r)
-	case "GetPolicy":
-		s.GetPolicy(w, r)
-	case "ListPolicies":
-		s.ListPolicies(w, r)
-	case "AttachUserPolicy":
-		s.AttachUserPolicy(w, r)
-	case "DetachUserPolicy":
-		s.DetachUserPolicy(w, r)
-	case "AttachRolePolicy":
-		s.AttachRolePolicy(w, r)
-	case "DetachRolePolicy":
-		s.DetachRolePolicy(w, r)
-	case "CreateAccessKey":
-		s.CreateAccessKey(w, r)
-	case "DeleteAccessKey":
-		s.DeleteAccessKey(w, r)
-	case "ListAccessKeys":
-		s.ListAccessKeys(w, r)
-	default:
+	handler, ok := s.actionHandlers[action]
+	if !ok {
 		writeIAMError(w, errInvalidAction, fmt.Sprintf("The action '%s' is not valid", action), http.StatusBadRequest)
+
+		return
 	}
+
+	handler(w, r)
 }
 
 // getFormValue extracts a form value from the request.

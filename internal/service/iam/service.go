@@ -2,6 +2,8 @@
 package iam
 
 import (
+	"net/http"
+
 	"github.com/sivchari/awsim/internal/service"
 )
 
@@ -11,13 +13,47 @@ func init() {
 
 // Service implements the IAM service.
 type Service struct {
-	storage Storage
+	storage        Storage
+	actionHandlers map[string]http.HandlerFunc
 }
 
 // New creates a new IAM service.
 func New(storage Storage) *Service {
-	return &Service{
+	s := &Service{
 		storage: storage,
+	}
+	s.initActionHandlers()
+
+	return s
+}
+
+// initActionHandlers initializes the action handlers map.
+func (s *Service) initActionHandlers() {
+	s.actionHandlers = map[string]http.HandlerFunc{
+		// User management
+		"CreateUser": s.CreateUser,
+		"DeleteUser": s.DeleteUser,
+		"GetUser":    s.GetUser,
+		"ListUsers":  s.ListUsers,
+		// Role management
+		"CreateRole": s.CreateRole,
+		"DeleteRole": s.DeleteRole,
+		"GetRole":    s.GetRole,
+		"ListRoles":  s.ListRoles,
+		// Policy management
+		"CreatePolicy": s.CreatePolicy,
+		"DeletePolicy": s.DeletePolicy,
+		"GetPolicy":    s.GetPolicy,
+		"ListPolicies": s.ListPolicies,
+		// Policy attachments
+		"AttachUserPolicy": s.AttachUserPolicy,
+		"DetachUserPolicy": s.DetachUserPolicy,
+		"AttachRolePolicy": s.AttachRolePolicy,
+		"DetachRolePolicy": s.DetachRolePolicy,
+		// Access keys
+		"CreateAccessKey": s.CreateAccessKey,
+		"DeleteAccessKey": s.DeleteAccessKey,
+		"ListAccessKeys":  s.ListAccessKeys,
 	}
 }
 
