@@ -1,3 +1,4 @@
+// Package ecs implements the Amazon ECS service emulator.
 package ecs
 
 import (

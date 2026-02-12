@@ -94,8 +94,8 @@ type NetworkBinding struct {
 	Protocol      string
 }
 
-// ECSService represents an ECS service.
-type ECSService struct {
+// ServiceResource represents an ECS service.
+type ServiceResource struct {
 	ServiceArn     string
 	ServiceName    string
 	ClusterArn     string
@@ -271,17 +271,17 @@ type DescribeTasksResponse struct {
 
 // CreateServiceResponse represents a CreateService response.
 type CreateServiceResponse struct {
-	Service *ECSService `json:"service"`
+	Service *ServiceResource `json:"service"`
 }
 
 // DeleteServiceResponse represents a DeleteService response.
 type DeleteServiceResponse struct {
-	Service *ECSService `json:"service"`
+	Service *ServiceResource `json:"service"`
 }
 
 // UpdateServiceResponse represents an UpdateService response.
 type UpdateServiceResponse struct {
-	Service *ECSService `json:"service"`
+	Service *ServiceResource `json:"service"`
 }
 
 // Failure represents a failure in a batch operation.
