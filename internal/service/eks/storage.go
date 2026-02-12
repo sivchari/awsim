@@ -73,7 +73,7 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 
 // buildCluster builds a Cluster from a CreateClusterRequest.
 func (s *MemoryStorage) buildCluster(req *CreateClusterRequest) *Cluster {
-	now := time.Now()
+	now := NewEpochTime(time.Now())
 
 	version := req.Version
 	if version == "" {
@@ -235,7 +235,7 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 
 // buildNodegroup builds a Nodegroup from a CreateNodegroupRequest.
 func (s *MemoryStorage) buildNodegroup(req *CreateNodegroupRequest, clusterVersion string) *Nodegroup {
-	now := time.Now()
+	now := NewEpochTime(time.Now())
 	nodegroupArn := fmt.Sprintf("arn:aws:eks:%s:%s:nodegroup/%s/%s/%s",
 		s.region, s.accountID, req.ClusterName, req.NodegroupName, uuid.New().String()[:8])
 
