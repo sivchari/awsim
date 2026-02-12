@@ -155,8 +155,10 @@ func (m *MemoryStorage) DescribeClusters(_ context.Context, clusters []string) (
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var result []Cluster
-	var failures []Failure
+	var (
+		result   []Cluster
+		failures []Failure
+	)
 
 	// If no clusters specified, return all.
 	if len(clusters) == 0 {
@@ -421,8 +423,10 @@ func (m *MemoryStorage) DescribeTasks(_ context.Context, cluster string, taskIDs
 
 	clusterArn := m.resolveClusterArn(cluster)
 
-	var tasks []Task
-	var failures []Failure
+	var (
+		tasks    []Task
+		failures []Failure
+	)
 
 	for _, taskID := range taskIDs {
 		found := false
@@ -546,6 +550,7 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 	}
 
 	svc.Status = statusInactive
+
 	delete(m.services, svcArn)
 
 	// Update cluster service count.
@@ -587,8 +592,8 @@ func (m *MemoryStorage) UpdateService(_ context.Context, req *UpdateServiceReque
 	}
 
 	// Update deployment.
-	now := time.Now()
 	if len(svc.Deployments) > 0 {
+		now := time.Now()
 		svc.Deployments[0].TaskDefinition = svc.TaskDefinition
 		svc.Deployments[0].DesiredCount = svc.DesiredCount
 		svc.Deployments[0].UpdatedAt = &now
