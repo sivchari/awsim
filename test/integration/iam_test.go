@@ -500,14 +500,16 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 
 	t.Cleanup(func() {
 		// List and delete all access keys first
-		listResult, _ := client.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
+		listResult, err := client.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
 			UserName: aws.String(userName),
 		})
-		for _, key := range listResult.AccessKeyMetadata {
-			_, _ = client.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
-				UserName:    aws.String(userName),
-				AccessKeyId: key.AccessKeyId,
-			})
+		if err == nil && listResult != nil {
+			for _, key := range listResult.AccessKeyMetadata {
+				_, _ = client.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+					UserName:    aws.String(userName),
+					AccessKeyId: key.AccessKeyId,
+				})
+			}
 		}
 		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
 			UserName: aws.String(userName),
