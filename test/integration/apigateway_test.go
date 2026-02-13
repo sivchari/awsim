@@ -26,7 +26,7 @@ func newAPIGatewayClient(t *testing.T) *apigateway.Client {
 	}
 
 	return apigateway.NewFromConfig(cfg, func(o *apigateway.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566")
+		o.BaseEndpoint = aws.String("http://localhost:4566/apigateway")
 	})
 }
 
