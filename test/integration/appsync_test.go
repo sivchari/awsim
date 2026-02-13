@@ -3,10 +3,11 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/appsync"
 	"github.com/aws/aws-sdk-go-v2/service/appsync/types"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestAppSync_CreateGraphqlApi(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create a GraphQL API.
 	result, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -43,7 +44,7 @@ func TestAppSync_GetGraphqlApi(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create a GraphQL API first.
 	createResult, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -75,7 +76,7 @@ func TestAppSync_ListGraphqlApis(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create some APIs.
 	var apiIDs []*string
@@ -108,7 +109,7 @@ func TestAppSync_DeleteGraphqlApi(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create an API.
 	createResult, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -136,7 +137,7 @@ func TestAppSync_CreateDataSource(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create an API first.
 	apiResult, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -171,7 +172,7 @@ func TestAppSync_CreateResolver(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create an API first.
 	apiResult, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -215,7 +216,7 @@ func TestAppSync_StartSchemaCreation(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createAppSyncClient(t, ctx)
+	client := createAppSyncClient(t)
 
 	// Create an API first.
 	apiResult, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
@@ -253,12 +254,20 @@ func TestAppSync_StartSchemaCreation(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func createAppSyncClient(t *testing.T, ctx context.Context) *appsync.Client {
+func createAppSyncClient(t *testing.T) *appsync.Client {
 	t.Helper()
 
-	cfg := loadAWSConfig(t, ctx)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
 
 	return appsync.NewFromConfig(cfg, func(o *appsync.Options) {
-		o.BaseEndpoint = aws.String(testEndpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
