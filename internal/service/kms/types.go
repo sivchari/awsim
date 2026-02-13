@@ -337,13 +337,13 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// KMSError represents a KMS service error.
-type KMSError struct {
+// ServiceError represents a KMS service error.
+type ServiceError struct {
 	Code    string
 	Message string
 }
 
 // Error implements the error interface.
-func (e *KMSError) Error() string {
+func (e *ServiceError) Error() string {
 	return e.Message
 }

@@ -3,6 +3,7 @@ package kms
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -405,23 +406,25 @@ func writeKMSError(w http.ResponseWriter, code, message string, status int) {
 
 // handleKMSError handles KMS errors.
 func handleKMSError(w http.ResponseWriter, err error) {
-	if kmsErr, ok := err.(*KMSError); ok {
-		status := http.StatusBadRequest
-		switch kmsErr.Code {
-		case errNotFound:
-			status = http.StatusNotFound
-		case errDisabled, errInvalidKeyState, errInvalidKeyUsage:
-			status = http.StatusBadRequest
-		case errInvalidCiphertext, errIncorrectKey:
-			status = http.StatusBadRequest
-		case errAlreadyExists:
-			status = http.StatusConflict
-		}
-
-		writeKMSError(w, kmsErr.Code, kmsErr.Message, status)
+	var svcErr *ServiceError
+	if errors.As(err, &svcErr) {
+		status := getErrorStatus(svcErr.Code)
+		writeKMSError(w, svcErr.Code, svcErr.Message, status)
 
 		return
 	}
 
 	writeKMSError(w, "InternalServiceError", err.Error(), http.StatusInternalServerError)
+}
+
+// getErrorStatus returns the HTTP status code for a given error code.
+func getErrorStatus(code string) int {
+	switch code {
+	case errNotFound:
+		return http.StatusNotFound
+	case errAlreadyExists:
+		return http.StatusConflict
+	default:
+		return http.StatusBadRequest
+	}
 }
