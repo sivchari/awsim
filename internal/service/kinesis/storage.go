@@ -260,7 +260,7 @@ func (s *MemoryStorage) ListStreams(_ context.Context, exclusiveStartStreamName 
 }
 
 // ListShards lists shards for a stream.
-func (s *MemoryStorage) ListShards(_ context.Context, streamName string, _ string, maxResults int32) ([]*Shard, string, error) {
+func (s *MemoryStorage) ListShards(_ context.Context, streamName, _ string, maxResults int32) ([]*Shard, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -291,7 +291,7 @@ func (s *MemoryStorage) ListShards(_ context.Context, streamName string, _ strin
 }
 
 // PutRecord puts a single record to a stream.
-func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, data []byte, partitionKey string, explicitHashKey string) (string, string, error) {
+func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, data []byte, partitionKey, explicitHashKey string) (string, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,7 +380,7 @@ func (s *MemoryStorage) PutRecords(_ context.Context, streamName string, records
 }
 
 // GetShardIterator gets a shard iterator.
-func (s *MemoryStorage) GetShardIterator(_ context.Context, streamName, shardID, iteratorType string, startingSeqNum string, _ float64) (string, error) {
+func (s *MemoryStorage) GetShardIterator(_ context.Context, streamName, shardID, iteratorType, startingSeqNum string, _ float64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -394,7 +394,7 @@ func (s *MemoryStorage) GetShardIterator(_ context.Context, streamName, shardID,
 		return "", &ServiceError{Code: errResourceNotFound, Message: "Shard not found"}
 	}
 
-	position := 0
+	var position int
 
 	switch iteratorType {
 	case string(ShardIteratorTypeTrimHorizon):
