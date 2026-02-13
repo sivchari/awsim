@@ -399,12 +399,12 @@ func (s *Service) DeleteEndpointGroup(w http.ResponseWriter, r *http.Request) {
 
 // acceleratorToOutput converts an Accelerator to AcceleratorOutput.
 func acceleratorToOutput(acc *Accelerator) *AcceleratorOutput {
-	ipSets := make([]IpSetOutput, len(acc.IpSets))
-	for i, ip := range acc.IpSets {
-		ipSets[i] = IpSetOutput{
-			IpFamily:        ip.IpFamily,
-			IpAddresses:     ip.IpAddresses,
-			IpAddressFamily: ip.IpAddressFamily,
+	ipSets := make([]IPSetOutput, len(acc.IPSets))
+	for i, ip := range acc.IPSets {
+		ipSets[i] = IPSetOutput{
+			IPFamily:        ip.IPFamily,
+			IPAddresses:     ip.IPAddresses,
+			IPAddressFamily: ip.IPAddressFamily,
 		}
 	}
 
@@ -419,9 +419,9 @@ func acceleratorToOutput(acc *Accelerator) *AcceleratorOutput {
 	return &AcceleratorOutput{
 		AcceleratorArn: acc.AcceleratorArn,
 		Name:           acc.Name,
-		IpAddressType:  string(acc.IpAddressType),
+		IPAddressType:  string(acc.IPAddressType),
 		Enabled:        acc.Enabled,
-		IpSets:         ipSets,
+		IPSets:         ipSets,
 		DNSName:        acc.DNSName,
 		Status:         string(acc.Status),
 		CreatedTime:    float64(acc.CreatedTime.Unix()),
@@ -435,10 +435,7 @@ func acceleratorToOutput(acc *Accelerator) *AcceleratorOutput {
 func listenerToOutput(l *Listener) *ListenerOutput {
 	portRanges := make([]PortRangeOutput, len(l.PortRanges))
 	for i, pr := range l.PortRanges {
-		portRanges[i] = PortRangeOutput{
-			FromPort: pr.FromPort,
-			ToPort:   pr.ToPort,
-		}
+		portRanges[i] = PortRangeOutput(pr)
 	}
 
 	return &ListenerOutput{
@@ -464,10 +461,7 @@ func endpointGroupToOutput(eg *EndpointGroup) *EndpointGroupOutput {
 
 	portOverrides := make([]PortOverrideOutput, len(eg.PortOverrides))
 	for i, po := range eg.PortOverrides {
-		portOverrides[i] = PortOverrideOutput{
-			ListenerPort: po.ListenerPort,
-			EndpointPort: po.EndpointPort,
-		}
+		portOverrides[i] = PortOverrideOutput(po)
 	}
 
 	return &EndpointGroupOutput{

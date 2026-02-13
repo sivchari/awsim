@@ -73,25 +73,25 @@ func (s *MemoryStorage) CreateAccelerator(_ context.Context, req *CreateAccelera
 		enabled = *req.Enabled
 	}
 
-	ipAddressType := IpAddressTypeIPv4
+	ipAddressType := IPAddressTypeIPv4
 	if req.IpAddressType != "" {
-		ipAddressType = IpAddressType(req.IpAddressType)
+		ipAddressType = IPAddressType(req.IpAddressType)
 	}
 
 	// Generate static IP addresses.
-	ipSets := []IpSet{
+	ipSets := []IPSet{
 		{
-			IpFamily:        "IPv4",
-			IpAddresses:     []string{generateIPAddress(), generateIPAddress()},
-			IpAddressFamily: "IPv4",
+			IPFamily:        "IPv4",
+			IPAddresses:     []string{generateIPAddress(), generateIPAddress()},
+			IPAddressFamily: "IPv4",
 		},
 	}
 
-	if ipAddressType == IpAddressTypeDualStack {
-		ipSets = append(ipSets, IpSet{
-			IpFamily:        "IPv6",
-			IpAddresses:     []string{generateIPv6Address()},
-			IpAddressFamily: "IPv6",
+	if ipAddressType == IPAddressTypeDualStack {
+		ipSets = append(ipSets, IPSet{
+			IPFamily:        "IPv6",
+			IPAddresses:     []string{generateIPv6Address()},
+			IPAddressFamily: "IPv6",
 		})
 	}
 
@@ -99,16 +99,16 @@ func (s *MemoryStorage) CreateAccelerator(_ context.Context, req *CreateAccelera
 	accelerator := &Accelerator{
 		AcceleratorArn: arn,
 		Name:           req.Name,
-		IpAddressType:  ipAddressType,
+		IPAddressType:  ipAddressType,
 		Enabled:        enabled,
-		IpSets:         ipSets,
+		IPSets:         ipSets,
 		DNSName:        fmt.Sprintf("%s.awsglobalaccelerator.com", acceleratorID[:8]),
 		Status:         AcceleratorStatusDeployed,
 		CreatedTime:    now,
 		LastModified:   now,
 	}
 
-	if ipAddressType == IpAddressTypeDualStack {
+	if ipAddressType == IPAddressTypeDualStack {
 		accelerator.DualStackDNS = fmt.Sprintf("%s.dualstack.awsglobalaccelerator.com", acceleratorID[:8])
 	}
 
@@ -165,7 +165,7 @@ func (s *MemoryStorage) UpdateAccelerator(_ context.Context, arn, name, ipAddres
 	}
 
 	if ipAddressType != "" {
-		accelerator.IpAddressType = IpAddressType(ipAddressType)
+		accelerator.IPAddressType = IPAddressType(ipAddressType)
 	}
 
 	if enabled != nil {
@@ -225,10 +225,7 @@ func (s *MemoryStorage) CreateListener(_ context.Context, req *CreateListenerReq
 
 	portRanges := make([]PortRange, len(req.PortRanges))
 	for i, pr := range req.PortRanges {
-		portRanges[i] = PortRange{
-			FromPort: pr.FromPort,
-			ToPort:   pr.ToPort,
-		}
+		portRanges[i] = PortRange(pr)
 	}
 
 	clientAffinity := ClientAffinityNone
@@ -297,10 +294,7 @@ func (s *MemoryStorage) UpdateListener(_ context.Context, req *UpdateListenerReq
 	if len(req.PortRanges) > 0 {
 		portRanges := make([]PortRange, len(req.PortRanges))
 		for i, pr := range req.PortRanges {
-			portRanges[i] = PortRange{
-				FromPort: pr.FromPort,
-				ToPort:   pr.ToPort,
-			}
+			portRanges[i] = PortRange(pr)
 		}
 
 		listener.PortRanges = portRanges
@@ -371,41 +365,18 @@ func (s *MemoryStorage) CreateEndpointGroup(_ context.Context, req *CreateEndpoi
 		thresholdCount = *req.ThresholdCount
 	}
 
-	endpoints := make([]EndpointDescription, len(req.EndpointConfigurations))
-	for i, ec := range req.EndpointConfigurations {
-		clientIPPreservation := false
-		if ec.ClientIPPreservationEnabled != nil {
-			clientIPPreservation = *ec.ClientIPPreservationEnabled
-		}
-
-		endpoints[i] = EndpointDescription{
-			EndpointID:                  ec.EndpointID,
-			Weight:                      ec.Weight,
-			HealthState:                 HealthStateInitial,
-			ClientIPPreservationEnabled: clientIPPreservation,
-		}
-	}
-
-	portOverrides := make([]PortOverride, len(req.PortOverrides))
-	for i, po := range req.PortOverrides {
-		portOverrides[i] = PortOverride{
-			ListenerPort: po.ListenerPort,
-			EndpointPort: po.EndpointPort,
-		}
-	}
-
 	endpointGroup := &EndpointGroup{
 		EndpointGroupArn:           arn,
 		ListenerArn:                req.ListenerArn,
 		EndpointGroupRegion:        req.EndpointGroupRegion,
-		EndpointDescriptions:       endpoints,
+		EndpointDescriptions:       convertEndpointConfigs(req.EndpointConfigurations),
 		TrafficDialPercentage:      trafficDialPercentage,
 		HealthCheckPort:            req.HealthCheckPort,
 		HealthCheckProtocol:        healthCheckProtocol,
 		HealthCheckPath:            req.HealthCheckPath,
 		HealthCheckIntervalSeconds: healthCheckIntervalSeconds,
 		ThresholdCount:             thresholdCount,
-		PortOverrides:              portOverrides,
+		PortOverrides:              convertPortOverrides(req.PortOverrides),
 	}
 
 	s.endpointGroups[arn] = endpointGroup
@@ -459,22 +430,7 @@ func (s *MemoryStorage) UpdateEndpointGroup(_ context.Context, req *UpdateEndpoi
 	}
 
 	if len(req.EndpointConfigurations) > 0 {
-		endpoints := make([]EndpointDescription, len(req.EndpointConfigurations))
-		for i, ec := range req.EndpointConfigurations {
-			clientIPPreservation := false
-			if ec.ClientIPPreservationEnabled != nil {
-				clientIPPreservation = *ec.ClientIPPreservationEnabled
-			}
-
-			endpoints[i] = EndpointDescription{
-				EndpointID:                  ec.EndpointID,
-				Weight:                      ec.Weight,
-				HealthState:                 HealthStateInitial,
-				ClientIPPreservationEnabled: clientIPPreservation,
-			}
-		}
-
-		eg.EndpointDescriptions = endpoints
+		eg.EndpointDescriptions = convertEndpointConfigs(req.EndpointConfigurations)
 	}
 
 	if req.TrafficDialPercentage != nil {
@@ -502,15 +458,7 @@ func (s *MemoryStorage) UpdateEndpointGroup(_ context.Context, req *UpdateEndpoi
 	}
 
 	if len(req.PortOverrides) > 0 {
-		portOverrides := make([]PortOverride, len(req.PortOverrides))
-		for i, po := range req.PortOverrides {
-			portOverrides[i] = PortOverride{
-				ListenerPort: po.ListenerPort,
-				EndpointPort: po.EndpointPort,
-			}
-		}
-
-		eg.PortOverrides = portOverrides
+		eg.PortOverrides = convertPortOverrides(req.PortOverrides)
 	}
 
 	return eg, nil
@@ -546,4 +494,36 @@ func randomByte() int {
 	id := uuid.New()
 
 	return int(id[0])
+}
+
+// convertEndpointConfigs converts EndpointConfigInput to EndpointDescription.
+func convertEndpointConfigs(configs []EndpointConfigInput) []EndpointDescription {
+	endpoints := make([]EndpointDescription, len(configs))
+
+	for i, ec := range configs {
+		clientIPPreservation := false
+		if ec.ClientIPPreservationEnabled != nil {
+			clientIPPreservation = *ec.ClientIPPreservationEnabled
+		}
+
+		endpoints[i] = EndpointDescription{
+			EndpointID:                  ec.EndpointID,
+			Weight:                      ec.Weight,
+			HealthState:                 HealthStateInitial,
+			ClientIPPreservationEnabled: clientIPPreservation,
+		}
+	}
+
+	return endpoints
+}
+
+// convertPortOverrides converts PortOverrideInput to PortOverride.
+func convertPortOverrides(overrides []PortOverrideInput) []PortOverride {
+	portOverrides := make([]PortOverride, len(overrides))
+
+	for i, po := range overrides {
+		portOverrides[i] = PortOverride(po)
+	}
+
+	return portOverrides
 }
