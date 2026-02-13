@@ -306,10 +306,7 @@ func (s *MemoryStorage) AdminCreateUser(_ context.Context, req *AdminCreateUserR
 		user.Attributes = make([]UserAttribute, len(req.UserAttributes))
 
 		for i, attr := range req.UserAttributes {
-			user.Attributes[i] = UserAttribute{
-				Name:  attr.Name,
-				Value: attr.Value,
-			}
+			user.Attributes[i] = UserAttribute(attr)
 		}
 	}
 
@@ -421,10 +418,7 @@ func (s *MemoryStorage) SignUp(_ context.Context, req *SignUpRequest) (*User, er
 		user.Attributes = make([]UserAttribute, len(req.UserAttributes))
 
 		for i, attr := range req.UserAttributes {
-			user.Attributes[i] = UserAttribute{
-				Name:  attr.Name,
-				Value: attr.Value,
-			}
+			user.Attributes[i] = UserAttribute(attr)
 		}
 	}
 

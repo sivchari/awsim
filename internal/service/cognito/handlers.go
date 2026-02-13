@@ -480,10 +480,7 @@ func convertAttributes(attrs []UserAttribute) []UserAttributeOutput {
 	outputs := make([]UserAttributeOutput, len(attrs))
 
 	for i, attr := range attrs {
-		outputs[i] = UserAttributeOutput{
-			Name:  attr.Name,
-			Value: attr.Value,
-		}
+		outputs[i] = UserAttributeOutput(attr)
 	}
 
 	return outputs
