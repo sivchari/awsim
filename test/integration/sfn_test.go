@@ -101,7 +101,7 @@ func TestSFN_ListStateMachines(t *testing.T) {
 
 	// List state machines.
 	listOutput, err := client.ListStateMachines(ctx, &sfn.ListStateMachinesInput{
-		MaxResults: aws.Int32(100),
+		MaxResults: 100,
 	})
 	if err != nil {
 		t.Fatalf("failed to list state machines: %v", err)
@@ -206,7 +206,7 @@ func TestSFN_ListExecutions(t *testing.T) {
 	// List executions.
 	listOutput, err := client.ListExecutions(ctx, &sfn.ListExecutionsInput{
 		StateMachineArn: createOutput.StateMachineArn,
-		MaxResults:      aws.Int32(100),
+		MaxResults:      100,
 	})
 	if err != nil {
 		t.Fatalf("failed to list executions: %v", err)
@@ -249,7 +249,7 @@ func TestSFN_GetExecutionHistory(t *testing.T) {
 	// Get execution history.
 	historyOutput, err := client.GetExecutionHistory(ctx, &sfn.GetExecutionHistoryInput{
 		ExecutionArn: startOutput.ExecutionArn,
-		MaxResults:   aws.Int32(100),
+		MaxResults:   100,
 	})
 	if err != nil {
 		t.Fatalf("failed to get execution history: %v", err)
