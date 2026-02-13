@@ -117,6 +117,10 @@ linters:
       - path: internal/service/ecr/types\.go
         linters:
           - tagliatelle
+      # AWS API Gateway API requires PascalCase JSON field names.
+      - path: internal/service/apigateway/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
