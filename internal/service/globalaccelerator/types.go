@@ -13,13 +13,13 @@ const (
 	AcceleratorStatusInProgress AcceleratorStatus = "IN_PROGRESS"
 )
 
-// IpAddressType represents the IP address type.
-type IpAddressType string
+// IPAddressType represents the IP address type.
+type IPAddressType string
 
 // IP address types.
 const (
-	IpAddressTypeIPv4      IpAddressType = "IPV4"
-	IpAddressTypeDualStack IpAddressType = "DUAL_STACK"
+	IPAddressTypeIPv4      IPAddressType = "IPV4"
+	IPAddressTypeDualStack IPAddressType = "DUAL_STACK"
 )
 
 // Protocol represents the protocol type.
@@ -64,9 +64,9 @@ const (
 type Accelerator struct {
 	AcceleratorArn string
 	Name           string
-	IpAddressType  IpAddressType
+	IPAddressType  IPAddressType
 	Enabled        bool
-	IpSets         []IpSet
+	IPSets         []IPSet
 	DNSName        string
 	Status         AcceleratorStatus
 	CreatedTime    time.Time
@@ -75,11 +75,11 @@ type Accelerator struct {
 	Events         []AcceleratorEvent
 }
 
-// IpSet represents an IP set.
-type IpSet struct {
-	IpFamily        string
-	IpAddresses     []string
-	IpAddressFamily string
+// IPSet represents an IP set.
+type IPSet struct {
+	IPFamily        string
+	IPAddresses     []string
+	IPAddressFamily string
 }
 
 // AcceleratorEvent represents an event for an accelerator.
@@ -165,9 +165,9 @@ type CreateAcceleratorResponse struct {
 type AcceleratorOutput struct {
 	AcceleratorArn string        `json:"AcceleratorArn"`
 	Name           string        `json:"Name"`
-	IpAddressType  string        `json:"IpAddressType"`
+	IPAddressType  string        `json:"IpAddressType"`
 	Enabled        bool          `json:"Enabled"`
-	IpSets         []IpSetOutput `json:"IpSets,omitempty"`
+	IPSets         []IPSetOutput `json:"IpSets,omitempty"`
 	DNSName        string        `json:"DnsName"`
 	Status         string        `json:"Status"`
 	CreatedTime    float64       `json:"CreatedTime"`
@@ -176,11 +176,11 @@ type AcceleratorOutput struct {
 	Events         []EventOutput `json:"Events,omitempty"`
 }
 
-// IpSetOutput represents an IP set in API responses.
-type IpSetOutput struct {
-	IpFamily        string   `json:"IpFamily,omitempty"`
-	IpAddresses     []string `json:"IpAddresses"`
-	IpAddressFamily string   `json:"IpAddressFamily,omitempty"`
+// IPSetOutput represents an IP set in API responses.
+type IPSetOutput struct {
+	IPFamily        string   `json:"IpFamily,omitempty"`
+	IPAddresses     []string `json:"IpAddresses"`
+	IPAddressFamily string   `json:"IpAddressFamily,omitempty"`
 }
 
 // EventOutput represents an event in API responses.
