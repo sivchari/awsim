@@ -89,6 +89,10 @@ linters:
       - path: internal/service/codeconnections/types\.go
         linters:
           - tagliatelle
+      # AWS KMS API requires PascalCase JSON field names.
+      - path: internal/service/kms/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
