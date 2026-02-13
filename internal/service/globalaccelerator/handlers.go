@@ -133,7 +133,7 @@ func (s *Service) UpdateAccelerator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accelerator, err := s.storage.UpdateAccelerator(r.Context(), req.AcceleratorArn, req.Name, req.IpAddressType, req.Enabled)
+	accelerator, err := s.storage.UpdateAccelerator(r.Context(), req.AcceleratorArn, req.Name, req.IPAddressType, req.Enabled)
 	if err != nil {
 		handleError(w, err)
 
@@ -400,12 +400,9 @@ func (s *Service) DeleteEndpointGroup(w http.ResponseWriter, r *http.Request) {
 // acceleratorToOutput converts an Accelerator to AcceleratorOutput.
 func acceleratorToOutput(acc *Accelerator) *AcceleratorOutput {
 	ipSets := make([]IPSetOutput, len(acc.IPSets))
+
 	for i, ip := range acc.IPSets {
-		ipSets[i] = IPSetOutput{
-			IPFamily:        ip.IPFamily,
-			IPAddresses:     ip.IPAddresses,
-			IPAddressFamily: ip.IPAddressFamily,
-		}
+		ipSets[i] = IPSetOutput(ip)
 	}
 
 	events := make([]EventOutput, len(acc.Events))

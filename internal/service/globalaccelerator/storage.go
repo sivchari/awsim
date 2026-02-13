@@ -74,8 +74,8 @@ func (s *MemoryStorage) CreateAccelerator(_ context.Context, req *CreateAccelera
 	}
 
 	ipAddressType := IPAddressTypeIPv4
-	if req.IpAddressType != "" {
-		ipAddressType = IPAddressType(req.IpAddressType)
+	if req.IPAddressType != "" {
+		ipAddressType = IPAddressType(req.IPAddressType)
 	}
 
 	// Generate static IP addresses.

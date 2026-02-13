@@ -143,8 +143,8 @@ type PortOverride struct {
 // CreateAcceleratorRequest is the request for CreateAccelerator.
 type CreateAcceleratorRequest struct {
 	Name             string   `json:"Name"`
-	IpAddressType    string   `json:"IpAddressType,omitempty"`
-	IpAddresses      []string `json:"IpAddresses,omitempty"`
+	IPAddressType    string   `json:"IpAddressType,omitempty"`
+	IPAddresses      []string `json:"IpAddresses,omitempty"`
 	Enabled          *bool    `json:"Enabled,omitempty"`
 	IdempotencyToken string   `json:"IdempotencyToken"`
 	Tags             []Tag    `json:"Tags,omitempty"`
@@ -215,7 +215,7 @@ type ListAcceleratorsResponse struct {
 type UpdateAcceleratorRequest struct {
 	AcceleratorArn string `json:"AcceleratorArn"`
 	Name           string `json:"Name,omitempty"`
-	IpAddressType  string `json:"IpAddressType,omitempty"`
+	IPAddressType  string `json:"IpAddressType,omitempty"`
 	Enabled        *bool  `json:"Enabled,omitempty"`
 }
 
