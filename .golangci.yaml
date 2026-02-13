@@ -97,6 +97,10 @@ linters:
       - path: internal/service/globalaccelerator/types\.go
         linters:
           - tagliatelle
+      # AWS Cognito API requires PascalCase JSON field names.
+      - path: internal/service/cognito/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
