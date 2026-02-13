@@ -149,6 +149,10 @@ linters:
       - path: internal/service/cloudwatch/types\.go
         linters:
           - tagliatelle
+      # AWS Firehose API requires PascalCase JSON field names.
+      - path: internal/service/firehose/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
