@@ -141,6 +141,10 @@ linters:
       - path: internal/service/xray/storage\.go
         linters:
           - tagliatelle
+      # AWS Batch API requires specific JSON field names.
+      - path: internal/service/batch/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
