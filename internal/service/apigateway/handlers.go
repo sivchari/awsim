@@ -88,7 +88,7 @@ func (s *Service) DeleteRestAPI(w http.ResponseWriter, r *http.Request) {
 
 // CreateResource handles the CreateResource API.
 func (s *Service) CreateResource(w http.ResponseWriter, r *http.Request) {
-	restApiID, parentID := extractResourceParams(r.URL.Path)
+	restAPIID, parentID := extractResourceParams(r.URL.Path)
 
 	var req CreateResourceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -97,7 +97,7 @@ func (s *Service) CreateResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resource, err := s.storage.CreateResource(r.Context(), restApiID, parentID, req.PathPart)
+	resource, err := s.storage.CreateResource(r.Context(), restAPIID, parentID, req.PathPart)
 	if err != nil {
 		handleError(w, err)
 
@@ -110,9 +110,9 @@ func (s *Service) CreateResource(w http.ResponseWriter, r *http.Request) {
 
 // GetResource handles the GetResource API.
 func (s *Service) GetResource(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID := extractRestApiAndResourceID(r.URL.Path)
+	restAPIID, resourceID := extractRestAPIAndResourceID(r.URL.Path)
 
-	resource, err := s.storage.GetResource(r.Context(), restApiID, resourceID)
+	resource, err := s.storage.GetResource(r.Context(), restAPIID, resourceID)
 	if err != nil {
 		handleError(w, err)
 
@@ -128,9 +128,9 @@ func (s *Service) GetResources(w http.ResponseWriter, r *http.Request) {
 	// Extract restApiId from path: /apigateway/restapis/{restApiId}/resources
 	path := strings.TrimPrefix(r.URL.Path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
-	restApiID := parts[0]
+	restAPIID := parts[0]
 
-	resources, nextPosition, err := s.storage.GetResources(r.Context(), restApiID, 25, "")
+	resources, nextPosition, err := s.storage.GetResources(r.Context(), restAPIID, 25, "")
 	if err != nil {
 		handleError(w, err)
 
@@ -153,9 +153,9 @@ func (s *Service) GetResources(w http.ResponseWriter, r *http.Request) {
 
 // DeleteResource handles the DeleteResource API.
 func (s *Service) DeleteResource(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID := extractRestApiAndResourceID(r.URL.Path)
+	restAPIID, resourceID := extractRestAPIAndResourceID(r.URL.Path)
 
-	if err := s.storage.DeleteResource(r.Context(), restApiID, resourceID); err != nil {
+	if err := s.storage.DeleteResource(r.Context(), restAPIID, resourceID); err != nil {
 		handleError(w, err)
 
 		return
@@ -166,7 +166,7 @@ func (s *Service) DeleteResource(w http.ResponseWriter, r *http.Request) {
 
 // PutMethod handles the PutMethod API.
 func (s *Service) PutMethod(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID, httpMethod := extractMethodParams(r.URL.Path)
+	restAPIID, resourceID, httpMethod := extractMethodParams(r.URL.Path)
 
 	var req PutMethodRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -175,7 +175,7 @@ func (s *Service) PutMethod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	method, err := s.storage.PutMethod(r.Context(), restApiID, resourceID, httpMethod, &req)
+	method, err := s.storage.PutMethod(r.Context(), restAPIID, resourceID, httpMethod, &req)
 	if err != nil {
 		handleError(w, err)
 
@@ -188,9 +188,9 @@ func (s *Service) PutMethod(w http.ResponseWriter, r *http.Request) {
 
 // GetMethod handles the GetMethod API.
 func (s *Service) GetMethod(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID, httpMethod := extractMethodParams(r.URL.Path)
+	restAPIID, resourceID, httpMethod := extractMethodParams(r.URL.Path)
 
-	method, err := s.storage.GetMethod(r.Context(), restApiID, resourceID, httpMethod)
+	method, err := s.storage.GetMethod(r.Context(), restAPIID, resourceID, httpMethod)
 	if err != nil {
 		handleError(w, err)
 
@@ -203,7 +203,7 @@ func (s *Service) GetMethod(w http.ResponseWriter, r *http.Request) {
 
 // PutIntegration handles the PutIntegration API.
 func (s *Service) PutIntegration(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID, httpMethod := extractIntegrationParams(r.URL.Path)
+	restAPIID, resourceID, httpMethod := extractIntegrationParams(r.URL.Path)
 
 	var req PutIntegrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -212,7 +212,7 @@ func (s *Service) PutIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	integration, err := s.storage.PutIntegration(r.Context(), restApiID, resourceID, httpMethod, &req)
+	integration, err := s.storage.PutIntegration(r.Context(), restAPIID, resourceID, httpMethod, &req)
 	if err != nil {
 		handleError(w, err)
 
@@ -225,9 +225,9 @@ func (s *Service) PutIntegration(w http.ResponseWriter, r *http.Request) {
 
 // GetIntegration handles the GetIntegration API.
 func (s *Service) GetIntegration(w http.ResponseWriter, r *http.Request) {
-	restApiID, resourceID, httpMethod := extractIntegrationParams(r.URL.Path)
+	restAPIID, resourceID, httpMethod := extractIntegrationParams(r.URL.Path)
 
-	integration, err := s.storage.GetIntegration(r.Context(), restApiID, resourceID, httpMethod)
+	integration, err := s.storage.GetIntegration(r.Context(), restAPIID, resourceID, httpMethod)
 	if err != nil {
 		handleError(w, err)
 
@@ -240,7 +240,7 @@ func (s *Service) GetIntegration(w http.ResponseWriter, r *http.Request) {
 
 // CreateDeployment handles the CreateDeployment API.
 func (s *Service) CreateDeployment(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractDeploymentRestApiID(r.URL.Path)
+	restAPIID := extractDeploymentRestAPIID(r.URL.Path)
 
 	var req CreateDeploymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -249,7 +249,7 @@ func (s *Service) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deployment, err := s.storage.CreateDeployment(r.Context(), restApiID, &req)
+	deployment, err := s.storage.CreateDeployment(r.Context(), restAPIID, &req)
 	if err != nil {
 		handleError(w, err)
 
@@ -262,9 +262,9 @@ func (s *Service) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 
 // GetDeployment handles the GetDeployment API.
 func (s *Service) GetDeployment(w http.ResponseWriter, r *http.Request) {
-	restApiID, deploymentID := extractRestApiAndDeploymentID(r.URL.Path)
+	restAPIID, deploymentID := extractRestAPIAndDeploymentID(r.URL.Path)
 
-	deployment, err := s.storage.GetDeployment(r.Context(), restApiID, deploymentID)
+	deployment, err := s.storage.GetDeployment(r.Context(), restAPIID, deploymentID)
 	if err != nil {
 		handleError(w, err)
 
@@ -277,9 +277,9 @@ func (s *Service) GetDeployment(w http.ResponseWriter, r *http.Request) {
 
 // GetDeployments handles the GetDeployments API.
 func (s *Service) GetDeployments(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractDeploymentRestApiID(r.URL.Path)
+	restAPIID := extractDeploymentRestAPIID(r.URL.Path)
 
-	deployments, nextPosition, err := s.storage.GetDeployments(r.Context(), restApiID, 25, "")
+	deployments, nextPosition, err := s.storage.GetDeployments(r.Context(), restAPIID, 25, "")
 	if err != nil {
 		handleError(w, err)
 
@@ -302,9 +302,9 @@ func (s *Service) GetDeployments(w http.ResponseWriter, r *http.Request) {
 
 // DeleteDeployment handles the DeleteDeployment API.
 func (s *Service) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
-	restApiID, deploymentID := extractRestApiAndDeploymentID(r.URL.Path)
+	restAPIID, deploymentID := extractRestAPIAndDeploymentID(r.URL.Path)
 
-	if err := s.storage.DeleteDeployment(r.Context(), restApiID, deploymentID); err != nil {
+	if err := s.storage.DeleteDeployment(r.Context(), restAPIID, deploymentID); err != nil {
 		handleError(w, err)
 
 		return
@@ -315,7 +315,7 @@ func (s *Service) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
 
 // CreateStage handles the CreateStage API.
 func (s *Service) CreateStage(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractStageRestApiID(r.URL.Path)
+	restAPIID := extractStageRestAPIID(r.URL.Path)
 
 	var req CreateStageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -324,7 +324,7 @@ func (s *Service) CreateStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stage, err := s.storage.CreateStage(r.Context(), restApiID, &req)
+	stage, err := s.storage.CreateStage(r.Context(), restAPIID, &req)
 	if err != nil {
 		handleError(w, err)
 
@@ -337,9 +337,9 @@ func (s *Service) CreateStage(w http.ResponseWriter, r *http.Request) {
 
 // GetStage handles the GetStage API.
 func (s *Service) GetStage(w http.ResponseWriter, r *http.Request) {
-	restApiID, stageName := extractRestApiAndStageName(r.URL.Path)
+	restAPIID, stageName := extractRestAPIAndStageName(r.URL.Path)
 
-	stage, err := s.storage.GetStage(r.Context(), restApiID, stageName)
+	stage, err := s.storage.GetStage(r.Context(), restAPIID, stageName)
 	if err != nil {
 		handleError(w, err)
 
@@ -352,9 +352,9 @@ func (s *Service) GetStage(w http.ResponseWriter, r *http.Request) {
 
 // GetStages handles the GetStages API.
 func (s *Service) GetStages(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractStageRestApiID(r.URL.Path)
+	restAPIID := extractStageRestAPIID(r.URL.Path)
 
-	stages, err := s.storage.GetStages(r.Context(), restApiID)
+	stages, err := s.storage.GetStages(r.Context(), restAPIID)
 	if err != nil {
 		handleError(w, err)
 
@@ -376,9 +376,9 @@ func (s *Service) GetStages(w http.ResponseWriter, r *http.Request) {
 
 // DeleteStage handles the DeleteStage API.
 func (s *Service) DeleteStage(w http.ResponseWriter, r *http.Request) {
-	restApiID, stageName := extractRestApiAndStageName(r.URL.Path)
+	restAPIID, stageName := extractRestAPIAndStageName(r.URL.Path)
 
-	if err := s.storage.DeleteStage(r.Context(), restApiID, stageName); err != nil {
+	if err := s.storage.DeleteStage(r.Context(), restAPIID, stageName); err != nil {
 		handleError(w, err)
 
 		return
@@ -483,7 +483,7 @@ func extractPathParam(path, prefix string) string {
 }
 
 // extractResourceParams extracts restApiId and parentId from the path.
-func extractResourceParams(path string) (restApiID, parentID string) {
+func extractResourceParams(path string) (restAPIID, parentID string) {
 	// Path: /apigateway/restapis/{restApiId}/resources/{parentId}
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -495,8 +495,8 @@ func extractResourceParams(path string) (restApiID, parentID string) {
 	return "", ""
 }
 
-// extractRestApiAndResourceID extracts restApiId and resourceId from the path.
-func extractRestApiAndResourceID(path string) (restApiID, resourceID string) {
+// extractRestAPIAndResourceID extracts restApiId and resourceId from the path.
+func extractRestAPIAndResourceID(path string) (restAPIID, resourceID string) {
 	// Path: /apigateway/restapis/{restApiId}/resources/{resourceId}
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -509,7 +509,7 @@ func extractRestApiAndResourceID(path string) (restApiID, resourceID string) {
 }
 
 // extractMethodParams extracts restApiId, resourceId, and httpMethod from the path.
-func extractMethodParams(path string) (restApiID, resourceID, httpMethod string) {
+func extractMethodParams(path string) (restAPIID, resourceID, httpMethod string) {
 	// Path: /apigateway/restapis/{restApiId}/resources/{resourceId}/methods/{httpMethod}
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -522,7 +522,7 @@ func extractMethodParams(path string) (restApiID, resourceID, httpMethod string)
 }
 
 // extractIntegrationParams extracts restApiId, resourceId, and httpMethod from the path.
-func extractIntegrationParams(path string) (restApiID, resourceID, httpMethod string) {
+func extractIntegrationParams(path string) (restAPIID, resourceID, httpMethod string) {
 	// Path: /apigateway/restapis/{restApiId}/resources/{resourceId}/methods/{httpMethod}/integration
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -534,8 +534,8 @@ func extractIntegrationParams(path string) (restApiID, resourceID, httpMethod st
 	return "", "", ""
 }
 
-// extractDeploymentRestApiID extracts restApiId from the deployments path.
-func extractDeploymentRestApiID(path string) string {
+// extractDeploymentRestAPIID extracts restApiId from the deployments path.
+func extractDeploymentRestAPIID(path string) string {
 	// Path: /apigateway/restapis/{restApiId}/deployments
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -547,8 +547,8 @@ func extractDeploymentRestApiID(path string) string {
 	return ""
 }
 
-// extractRestApiAndDeploymentID extracts restApiId and deploymentId from the path.
-func extractRestApiAndDeploymentID(path string) (restApiID, deploymentID string) {
+// extractRestAPIAndDeploymentID extracts restApiId and deploymentId from the path.
+func extractRestAPIAndDeploymentID(path string) (restAPIID, deploymentID string) {
 	// Path: /apigateway/restapis/{restApiId}/deployments/{deploymentId}
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -560,8 +560,8 @@ func extractRestApiAndDeploymentID(path string) (restApiID, deploymentID string)
 	return "", ""
 }
 
-// extractStageRestApiID extracts restApiId from the stages path.
-func extractStageRestApiID(path string) string {
+// extractStageRestAPIID extracts restApiId from the stages path.
+func extractStageRestAPIID(path string) string {
 	// Path: /apigateway/restapis/{restApiId}/stages
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
@@ -573,8 +573,8 @@ func extractStageRestApiID(path string) string {
 	return ""
 }
 
-// extractRestApiAndStageName extracts restApiId and stageName from the path.
-func extractRestApiAndStageName(path string) (restApiID, stageName string) {
+// extractRestAPIAndStageName extracts restApiId and stageName from the path.
+func extractRestAPIAndStageName(path string) (restAPIID, stageName string) {
 	// Path: /apigateway/restapis/{restApiId}/stages/{stageName}
 	path = strings.TrimPrefix(path, "/apigateway/restapis/")
 	parts := strings.Split(path, "/")
