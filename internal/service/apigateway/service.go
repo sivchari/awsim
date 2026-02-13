@@ -34,10 +34,10 @@ func (s *Service) Prefix() string {
 // RegisterRoutes registers the API Gateway routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// REST API routes.
-	r.HandleFunc("POST", "/apigateway/restapis", s.CreateRestApi)
-	r.HandleFunc("GET", "/apigateway/restapis", s.GetRestApis)
-	r.HandleFunc("GET", "/apigateway/restapis/{restApiId}", s.GetRestApi)
-	r.HandleFunc("DELETE", "/apigateway/restapis/{restApiId}", s.DeleteRestApi)
+	r.HandleFunc("POST", "/apigateway/restapis", s.CreateRestAPI)
+	r.HandleFunc("GET", "/apigateway/restapis", s.GetRestAPIs)
+	r.HandleFunc("GET", "/apigateway/restapis/{restApiId}", s.GetRestAPI)
+	r.HandleFunc("DELETE", "/apigateway/restapis/{restApiId}", s.DeleteRestAPI)
 
 	// Resource routes.
 	r.HandleFunc("POST", "/apigateway/restapis/{restApiId}/resources/{parentId}", s.CreateResource)

@@ -2,16 +2,16 @@ package apigateway
 
 import "time"
 
-// RestApi represents an API Gateway REST API.
-type RestApi struct {
+// RestAPI represents an API Gateway REST API.
+type RestAPI struct {
 	ID                     string            `json:"id"`
 	Name                   string            `json:"name"`
 	Description            string            `json:"description,omitempty"`
 	CreatedDate            time.Time         `json:"createdDate"`
 	Version                string            `json:"version,omitempty"`
-	ApiKeySource           string            `json:"apiKeySource,omitempty"`
+	APIKeySource           string            `json:"apiKeySource,omitempty"`
 	EndpointConfiguration  *EndpointConfig   `json:"endpointConfiguration,omitempty"`
-	DisableExecuteApiEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
+	DisableExecuteAPIEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
 	Tags                   map[string]string `json:"tags,omitempty"`
 	RootResourceID         string            `json:"-"` // Internal use.
 }
@@ -20,7 +20,7 @@ type RestApi struct {
 type EndpointConfig struct {
 	Types          []string `json:"types,omitempty"`
 	VpcEndpointIDs []string `json:"vpcEndpointIds,omitempty"`
-	IpAddressType  string   `json:"ipAddressType,omitempty"`
+	IPAddressType  string   `json:"ipAddressType,omitempty"`
 }
 
 // Resource represents an API Gateway resource.
@@ -36,7 +36,7 @@ type Resource struct {
 type Method struct {
 	HTTPMethod        string       `json:"httpMethod"`
 	AuthorizationType string       `json:"authorizationType,omitempty"`
-	ApiKeyRequired    bool         `json:"apiKeyRequired,omitempty"`
+	APIKeyRequired    bool         `json:"apiKeyRequired,omitempty"`
 	OperationName     string       `json:"operationName,omitempty"`
 	MethodIntegration *Integration `json:"methodIntegration,omitempty"`
 }
@@ -76,34 +76,34 @@ type Stage struct {
 	Tags                map[string]string `json:"tags,omitempty"`
 }
 
-// CreateRestApiRequest represents a CreateRestApi request.
-type CreateRestApiRequest struct {
+// CreateRestAPIRequest represents a CreateRestApi request.
+type CreateRestAPIRequest struct {
 	Name                   string            `json:"name"`
 	Description            string            `json:"description,omitempty"`
 	Version                string            `json:"version,omitempty"`
-	ApiKeySource           string            `json:"apiKeySource,omitempty"`
+	APIKeySource           string            `json:"apiKeySource,omitempty"`
 	EndpointConfiguration  *EndpointConfig   `json:"endpointConfiguration,omitempty"`
-	DisableExecuteApiEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
+	DisableExecuteAPIEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
 	Tags                   map[string]string `json:"tags,omitempty"`
 }
 
-// CreateRestApiResponse represents a CreateRestApi response.
-type CreateRestApiResponse struct {
+// CreateRestAPIResponse represents a CreateRestApi response.
+type CreateRestAPIResponse struct {
 	ID                     string            `json:"id"`
 	Name                   string            `json:"name"`
 	Description            string            `json:"description,omitempty"`
 	CreatedDate            float64           `json:"createdDate"`
 	Version                string            `json:"version,omitempty"`
-	ApiKeySource           string            `json:"apiKeySource,omitempty"`
+	APIKeySource           string            `json:"apiKeySource,omitempty"`
 	EndpointConfiguration  *EndpointConfig   `json:"endpointConfiguration,omitempty"`
-	DisableExecuteApiEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
+	DisableExecuteAPIEndpt bool              `json:"disableExecuteApiEndpoint,omitempty"`
 	Tags                   map[string]string `json:"tags,omitempty"`
-	RootResourceId         string            `json:"rootResourceId,omitempty"`
+	RootResourceID         string            `json:"rootResourceId,omitempty"`
 }
 
-// GetRestApisResponse represents a GetRestApis response.
-type GetRestApisResponse struct {
-	Items    []CreateRestApiResponse `json:"item,omitempty"`
+// GetRestAPIsResponse represents a GetRestApis response.
+type GetRestAPIsResponse struct {
+	Items    []CreateRestAPIResponse `json:"item,omitempty"`
 	Position string                  `json:"position,omitempty"`
 }
 
@@ -125,7 +125,7 @@ type ResourceResponse struct {
 type MethodOutput struct {
 	HTTPMethod        string             `json:"httpMethod,omitempty"`
 	AuthorizationType string             `json:"authorizationType,omitempty"`
-	ApiKeyRequired    bool               `json:"apiKeyRequired,omitempty"`
+	APIKeyRequired    bool               `json:"apiKeyRequired,omitempty"`
 	OperationName     string             `json:"operationName,omitempty"`
 	MethodIntegration *IntegrationOutput `json:"methodIntegration,omitempty"`
 }
@@ -155,7 +155,7 @@ type GetResourcesResponse struct {
 // PutMethodRequest represents a PutMethod request.
 type PutMethodRequest struct {
 	AuthorizationType string `json:"authorizationType"`
-	ApiKeyRequired    bool   `json:"apiKeyRequired,omitempty"`
+	APIKeyRequired    bool   `json:"apiKeyRequired,omitempty"`
 	OperationName     string `json:"operationName,omitempty"`
 }
 

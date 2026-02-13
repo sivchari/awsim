@@ -11,7 +11,7 @@ import (
 
 // Error codes.
 const (
-	errRestApiNotFound    = "NotFoundException"
+	errRestAPINotFound    = "NotFoundException"
 	errResourceNotFound   = "NotFoundException"
 	errMethodNotFound     = "NotFoundException"
 	errDeploymentNotFound = "NotFoundException"
@@ -21,42 +21,42 @@ const (
 
 // Storage defines the API Gateway storage interface.
 type Storage interface {
-	CreateRestApi(ctx context.Context, req *CreateRestApiRequest) (*RestApi, error)
-	GetRestApi(ctx context.Context, restApiID string) (*RestApi, error)
-	GetRestApis(ctx context.Context, limit int32, position string) ([]*RestApi, string, error)
-	DeleteRestApi(ctx context.Context, restApiID string) error
+	CreateRestAPI(ctx context.Context, req *CreateRestAPIRequest) (*RestAPI, error)
+	GetRestAPI(ctx context.Context, restAPIID string) (*RestAPI, error)
+	GetRestAPIs(ctx context.Context, limit int32, position string) ([]*RestAPI, string, error)
+	DeleteRestAPI(ctx context.Context, restAPIID string) error
 
-	CreateResource(ctx context.Context, restApiID, parentID, pathPart string) (*Resource, error)
-	GetResource(ctx context.Context, restApiID, resourceID string) (*Resource, error)
-	GetResources(ctx context.Context, restApiID string, limit int32, position string) ([]*Resource, string, error)
-	DeleteResource(ctx context.Context, restApiID, resourceID string) error
+	CreateResource(ctx context.Context, restAPIID, parentID, pathPart string) (*Resource, error)
+	GetResource(ctx context.Context, restAPIID, resourceID string) (*Resource, error)
+	GetResources(ctx context.Context, restAPIID string, limit int32, position string) ([]*Resource, string, error)
+	DeleteResource(ctx context.Context, restAPIID, resourceID string) error
 
-	PutMethod(ctx context.Context, restApiID, resourceID, httpMethod string, req *PutMethodRequest) (*Method, error)
-	GetMethod(ctx context.Context, restApiID, resourceID, httpMethod string) (*Method, error)
+	PutMethod(ctx context.Context, restAPIID, resourceID, httpMethod string, req *PutMethodRequest) (*Method, error)
+	GetMethod(ctx context.Context, restAPIID, resourceID, httpMethod string) (*Method, error)
 
-	PutIntegration(ctx context.Context, restApiID, resourceID, httpMethod string, req *PutIntegrationRequest) (*Integration, error)
-	GetIntegration(ctx context.Context, restApiID, resourceID, httpMethod string) (*Integration, error)
+	PutIntegration(ctx context.Context, restAPIID, resourceID, httpMethod string, req *PutIntegrationRequest) (*Integration, error)
+	GetIntegration(ctx context.Context, restAPIID, resourceID, httpMethod string) (*Integration, error)
 
-	CreateDeployment(ctx context.Context, restApiID string, req *CreateDeploymentRequest) (*Deployment, error)
-	GetDeployment(ctx context.Context, restApiID, deploymentID string) (*Deployment, error)
-	GetDeployments(ctx context.Context, restApiID string, limit int32, position string) ([]*Deployment, string, error)
-	DeleteDeployment(ctx context.Context, restApiID, deploymentID string) error
+	CreateDeployment(ctx context.Context, restAPIID string, req *CreateDeploymentRequest) (*Deployment, error)
+	GetDeployment(ctx context.Context, restAPIID, deploymentID string) (*Deployment, error)
+	GetDeployments(ctx context.Context, restAPIID string, limit int32, position string) ([]*Deployment, string, error)
+	DeleteDeployment(ctx context.Context, restAPIID, deploymentID string) error
 
-	CreateStage(ctx context.Context, restApiID string, req *CreateStageRequest) (*Stage, error)
-	GetStage(ctx context.Context, restApiID, stageName string) (*Stage, error)
-	GetStages(ctx context.Context, restApiID string) ([]*Stage, error)
-	DeleteStage(ctx context.Context, restApiID, stageName string) error
+	CreateStage(ctx context.Context, restAPIID string, req *CreateStageRequest) (*Stage, error)
+	GetStage(ctx context.Context, restAPIID, stageName string) (*Stage, error)
+	GetStages(ctx context.Context, restAPIID string) ([]*Stage, error)
+	DeleteStage(ctx context.Context, restAPIID, stageName string) error
 }
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
 	mu       sync.RWMutex
-	restApis map[string]*restApiData
+	restAPIs map[string]*restAPIData
 }
 
-// restApiData holds REST API information and its resources.
-type restApiData struct {
-	api         *RestApi
+// restAPIData holds REST API information and its resources.
+type restAPIData struct {
+	api         *RestAPI
 	resources   map[string]*Resource // keyed by resource ID
 	deployments map[string]*Deployment
 	stages      map[string]*Stage // keyed by stage name
@@ -65,12 +65,12 @@ type restApiData struct {
 // NewMemoryStorage creates a new in-memory storage.
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		restApis: make(map[string]*restApiData),
+		restAPIs: make(map[string]*restAPIData),
 	}
 }
 
-// CreateRestApi creates a new REST API.
-func (s *MemoryStorage) CreateRestApi(_ context.Context, req *CreateRestApiRequest) (*RestApi, error) {
+// CreateRestAPI creates a new REST API.
+func (s *MemoryStorage) CreateRestAPI(_ context.Context, req *CreateRestAPIRequest) (*RestAPI, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -78,15 +78,15 @@ func (s *MemoryStorage) CreateRestApi(_ context.Context, req *CreateRestApiReque
 	rootResourceID := generateID()
 	now := time.Now()
 
-	api := &RestApi{
+	api := &RestAPI{
 		ID:                     id,
 		Name:                   req.Name,
 		Description:            req.Description,
 		CreatedDate:            now,
 		Version:                req.Version,
-		ApiKeySource:           req.ApiKeySource,
+		APIKeySource:           req.APIKeySource,
 		EndpointConfiguration:  req.EndpointConfiguration,
-		DisableExecuteApiEndpt: req.DisableExecuteApiEndpt,
+		DisableExecuteAPIEndpt: req.DisableExecuteAPIEndpt,
 		Tags:                   req.Tags,
 		RootResourceID:         rootResourceID,
 	}
@@ -98,7 +98,7 @@ func (s *MemoryStorage) CreateRestApi(_ context.Context, req *CreateRestApiReque
 		ResourceMethods: make(map[string]Method),
 	}
 
-	s.restApis[id] = &restApiData{
+	s.restAPIs[id] = &restAPIData{
 		api:         api,
 		resources:   map[string]*Resource{rootResourceID: rootResource},
 		deployments: make(map[string]*Deployment),
@@ -108,21 +108,21 @@ func (s *MemoryStorage) CreateRestApi(_ context.Context, req *CreateRestApiReque
 	return api, nil
 }
 
-// GetRestApi returns a REST API by ID.
-func (s *MemoryStorage) GetRestApi(_ context.Context, restApiID string) (*RestApi, error) {
+// GetRestAPI returns a REST API by ID.
+func (s *MemoryStorage) GetRestAPI(_ context.Context, restAPIID string) (*RestAPI, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	return data.api, nil
 }
 
-// GetRestApis returns all REST APIs.
-func (s *MemoryStorage) GetRestApis(_ context.Context, limit int32, _ string) ([]*RestApi, string, error) {
+// GetRestAPIs returns all REST APIs.
+func (s *MemoryStorage) GetRestAPIs(_ context.Context, limit int32, _ string) ([]*RestAPI, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -130,9 +130,9 @@ func (s *MemoryStorage) GetRestApis(_ context.Context, limit int32, _ string) ([
 		limit = 25
 	}
 
-	var apis []*RestApi
+	var apis []*RestAPI
 
-	for _, data := range s.restApis {
+	for _, data := range s.restAPIs {
 		apis = append(apis, data.api)
 
 		if int32(len(apis)) >= limit { //nolint:gosec // slice length bounded by limit parameter
@@ -143,28 +143,28 @@ func (s *MemoryStorage) GetRestApis(_ context.Context, limit int32, _ string) ([
 	return apis, "", nil
 }
 
-// DeleteRestApi deletes a REST API.
-func (s *MemoryStorage) DeleteRestApi(_ context.Context, restApiID string) error {
+// DeleteRestAPI deletes a REST API.
+func (s *MemoryStorage) DeleteRestAPI(_ context.Context, restAPIID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.restApis[restApiID]; !exists {
-		return &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+	if _, exists := s.restAPIs[restAPIID]; !exists {
+		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	delete(s.restApis, restApiID)
+	delete(s.restAPIs, restAPIID)
 
 	return nil
 }
 
 // CreateResource creates a new resource.
-func (s *MemoryStorage) CreateResource(_ context.Context, restApiID, parentID, pathPart string) (*Resource, error) {
+func (s *MemoryStorage) CreateResource(_ context.Context, restAPIID, parentID, pathPart string) (*Resource, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	parent, exists := data.resources[parentID]
@@ -189,13 +189,13 @@ func (s *MemoryStorage) CreateResource(_ context.Context, restApiID, parentID, p
 }
 
 // GetResource returns a resource by ID.
-func (s *MemoryStorage) GetResource(_ context.Context, restApiID, resourceID string) (*Resource, error) {
+func (s *MemoryStorage) GetResource(_ context.Context, restAPIID, resourceID string) (*Resource, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -207,13 +207,13 @@ func (s *MemoryStorage) GetResource(_ context.Context, restApiID, resourceID str
 }
 
 // GetResources returns all resources for a REST API.
-func (s *MemoryStorage) GetResources(_ context.Context, restApiID string, limit int32, _ string) ([]*Resource, string, error) {
+func (s *MemoryStorage) GetResources(_ context.Context, restAPIID string, limit int32, _ string) ([]*Resource, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, "", &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, "", &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	if limit <= 0 {
@@ -234,13 +234,13 @@ func (s *MemoryStorage) GetResources(_ context.Context, restApiID string, limit 
 }
 
 // DeleteResource deletes a resource.
-func (s *MemoryStorage) DeleteResource(_ context.Context, restApiID, resourceID string) error {
+func (s *MemoryStorage) DeleteResource(_ context.Context, restAPIID, resourceID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -259,13 +259,13 @@ func (s *MemoryStorage) DeleteResource(_ context.Context, restApiID, resourceID 
 }
 
 // PutMethod creates or updates a method.
-func (s *MemoryStorage) PutMethod(_ context.Context, restApiID, resourceID, httpMethod string, req *PutMethodRequest) (*Method, error) {
+func (s *MemoryStorage) PutMethod(_ context.Context, restAPIID, resourceID, httpMethod string, req *PutMethodRequest) (*Method, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -276,7 +276,7 @@ func (s *MemoryStorage) PutMethod(_ context.Context, restApiID, resourceID, http
 	method := Method{
 		HTTPMethod:        httpMethod,
 		AuthorizationType: req.AuthorizationType,
-		ApiKeyRequired:    req.ApiKeyRequired,
+		APIKeyRequired:    req.APIKeyRequired,
 		OperationName:     req.OperationName,
 	}
 
@@ -286,13 +286,13 @@ func (s *MemoryStorage) PutMethod(_ context.Context, restApiID, resourceID, http
 }
 
 // GetMethod returns a method.
-func (s *MemoryStorage) GetMethod(_ context.Context, restApiID, resourceID, httpMethod string) (*Method, error) {
+func (s *MemoryStorage) GetMethod(_ context.Context, restAPIID, resourceID, httpMethod string) (*Method, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -309,13 +309,13 @@ func (s *MemoryStorage) GetMethod(_ context.Context, restApiID, resourceID, http
 }
 
 // PutIntegration creates or updates an integration.
-func (s *MemoryStorage) PutIntegration(_ context.Context, restApiID, resourceID, httpMethod string, req *PutIntegrationRequest) (*Integration, error) {
+func (s *MemoryStorage) PutIntegration(_ context.Context, restAPIID, resourceID, httpMethod string, req *PutIntegrationRequest) (*Integration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -350,13 +350,13 @@ func (s *MemoryStorage) PutIntegration(_ context.Context, restApiID, resourceID,
 }
 
 // GetIntegration returns an integration.
-func (s *MemoryStorage) GetIntegration(_ context.Context, restApiID, resourceID, httpMethod string) (*Integration, error) {
+func (s *MemoryStorage) GetIntegration(_ context.Context, restAPIID, resourceID, httpMethod string) (*Integration, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	resource, exists := data.resources[resourceID]
@@ -377,13 +377,13 @@ func (s *MemoryStorage) GetIntegration(_ context.Context, restApiID, resourceID,
 }
 
 // CreateDeployment creates a new deployment.
-func (s *MemoryStorage) CreateDeployment(_ context.Context, restApiID string, req *CreateDeploymentRequest) (*Deployment, error) {
+func (s *MemoryStorage) CreateDeployment(_ context.Context, restAPIID string, req *CreateDeploymentRequest) (*Deployment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	id := generateID()
@@ -412,13 +412,13 @@ func (s *MemoryStorage) CreateDeployment(_ context.Context, restApiID string, re
 }
 
 // GetDeployment returns a deployment.
-func (s *MemoryStorage) GetDeployment(_ context.Context, restApiID, deploymentID string) (*Deployment, error) {
+func (s *MemoryStorage) GetDeployment(_ context.Context, restAPIID, deploymentID string) (*Deployment, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	deployment, exists := data.deployments[deploymentID]
@@ -430,13 +430,13 @@ func (s *MemoryStorage) GetDeployment(_ context.Context, restApiID, deploymentID
 }
 
 // GetDeployments returns all deployments.
-func (s *MemoryStorage) GetDeployments(_ context.Context, restApiID string, limit int32, _ string) ([]*Deployment, string, error) {
+func (s *MemoryStorage) GetDeployments(_ context.Context, restAPIID string, limit int32, _ string) ([]*Deployment, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, "", &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, "", &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	if limit <= 0 {
@@ -457,13 +457,13 @@ func (s *MemoryStorage) GetDeployments(_ context.Context, restApiID string, limi
 }
 
 // DeleteDeployment deletes a deployment.
-func (s *MemoryStorage) DeleteDeployment(_ context.Context, restApiID, deploymentID string) error {
+func (s *MemoryStorage) DeleteDeployment(_ context.Context, restAPIID, deploymentID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	if _, exists := data.deployments[deploymentID]; !exists {
@@ -476,13 +476,13 @@ func (s *MemoryStorage) DeleteDeployment(_ context.Context, restApiID, deploymen
 }
 
 // CreateStage creates a new stage.
-func (s *MemoryStorage) CreateStage(_ context.Context, restApiID string, req *CreateStageRequest) (*Stage, error) {
+func (s *MemoryStorage) CreateStage(_ context.Context, restAPIID string, req *CreateStageRequest) (*Stage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	// Verify deployment exists.
@@ -509,13 +509,13 @@ func (s *MemoryStorage) CreateStage(_ context.Context, restApiID string, req *Cr
 }
 
 // GetStage returns a stage.
-func (s *MemoryStorage) GetStage(_ context.Context, restApiID, stageName string) (*Stage, error) {
+func (s *MemoryStorage) GetStage(_ context.Context, restAPIID, stageName string) (*Stage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	stage, exists := data.stages[stageName]
@@ -527,13 +527,13 @@ func (s *MemoryStorage) GetStage(_ context.Context, restApiID, stageName string)
 }
 
 // GetStages returns all stages.
-func (s *MemoryStorage) GetStages(_ context.Context, restApiID string) ([]*Stage, error) {
+func (s *MemoryStorage) GetStages(_ context.Context, restAPIID string) ([]*Stage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return nil, &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	var stages []*Stage
@@ -546,13 +546,13 @@ func (s *MemoryStorage) GetStages(_ context.Context, restApiID string) ([]*Stage
 }
 
 // DeleteStage deletes a stage.
-func (s *MemoryStorage) DeleteStage(_ context.Context, restApiID, stageName string) error {
+func (s *MemoryStorage) DeleteStage(_ context.Context, restAPIID, stageName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restApis[restApiID]
+	data, exists := s.restAPIs[restAPIID]
 	if !exists {
-		return &ServiceError{Code: errRestApiNotFound, Message: "Invalid REST API identifier specified"}
+		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	if _, exists := data.stages[stageName]; !exists {
