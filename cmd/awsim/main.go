@@ -14,6 +14,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/ec2"
 	_ "github.com/sivchari/awsim/internal/service/ecs"
 	_ "github.com/sivchari/awsim/internal/service/eks"
+	_ "github.com/sivchari/awsim/internal/service/eventbridge"
 	_ "github.com/sivchari/awsim/internal/service/globalaccelerator"
 	_ "github.com/sivchari/awsim/internal/service/iam"
 	_ "github.com/sivchari/awsim/internal/service/kms"
