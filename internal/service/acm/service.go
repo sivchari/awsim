@@ -31,8 +31,16 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers the ACM routes.
-// ACM uses AWS JSON 1.1 protocol with X-Amz-Target header.
-func (s *Service) RegisterRoutes(r service.Router) {
-	// ACM uses POST requests with X-Amz-Target header for all operations.
-	r.HandleFunc("POST", "/", s.handleRequest)
+// Note: ACM uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
+// so no direct routes are registered here.
+func (s *Service) RegisterRoutes(_ service.Router) {
+	// No routes to register - ACM uses JSON protocol dispatcher
 }
+
+// TargetPrefix returns the X-Amz-Target header prefix for ACM.
+func (s *Service) TargetPrefix() string {
+	return "CertificateManager"
+}
+
+// JSONProtocol is a marker method that indicates ACM uses AWS JSON 1.1 protocol.
+func (s *Service) JSONProtocol() {}

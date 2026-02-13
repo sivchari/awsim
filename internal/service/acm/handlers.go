@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// handleRequest routes ACM requests based on the X-Amz-Target header.
-func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
+// DispatchAction routes ACM requests based on the X-Amz-Target header.
+func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
 	if target == "" {
 		writeError(w, errInvalidParameter, "Missing X-Amz-Target header", http.StatusBadRequest)

@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// handleRequest routes Glue requests based on the X-Amz-Target header.
-func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
+// DispatchAction routes Glue requests based on the X-Amz-Target header.
+func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
 	if target == "" {
 		writeError(w, errInvalidInput, "Missing X-Amz-Target header", http.StatusBadRequest)
