@@ -12,6 +12,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/cognito"
 	_ "github.com/sivchari/awsim/internal/service/dynamodb"
 	_ "github.com/sivchari/awsim/internal/service/ec2"
+	_ "github.com/sivchari/awsim/internal/service/ecr"
 	_ "github.com/sivchari/awsim/internal/service/ecs"
 	_ "github.com/sivchari/awsim/internal/service/eks"
 	_ "github.com/sivchari/awsim/internal/service/eventbridge"
