@@ -1,7 +1,53 @@
 // Package xray provides AWS X-Ray service emulation for awsim.
 package xray
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// AWSTimestamp is a time.Time that marshals to/from Unix timestamp (float64).
+// AWS APIs use Unix timestamps in JSON requests and responses.
+type AWSTimestamp struct {
+	time.Time
+}
+
+// MarshalJSON implements json.Marshaler.
+func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return json.Marshal(nil) //nolint:wrapcheck // MarshalJSON interface requirement
+	}
+
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9) //nolint:wrapcheck // MarshalJSON interface requirement
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (t *AWSTimestamp) UnmarshalJSON(data []byte) error {
+	var f float64
+	if err := json.Unmarshal(data, &f); err != nil {
+		return err //nolint:wrapcheck // UnmarshalJSON interface requirement
+	}
+
+	sec := int64(f)
+	nsec := int64((f - float64(sec)) * 1e9)
+	t.Time = time.Unix(sec, nsec)
+
+	return nil
+}
+
+// Ptr returns a pointer to the AWSTimestamp.
+func (t AWSTimestamp) Ptr() *AWSTimestamp {
+	if t.IsZero() {
+		return nil
+	}
+
+	return &t
+}
+
+// ToTime returns the underlying time.Time.
+func (t AWSTimestamp) ToTime() time.Time {
+	return t.Time
+}
 
 // TraceSegment represents a segment in a trace.
 type TraceSegment struct {
@@ -233,13 +279,13 @@ type UnprocessedTraceSegment struct {
 
 // GetTraceSummariesInput is the request for GetTraceSummaries.
 type GetTraceSummariesInput struct {
-	StartTime        *time.Time `json:"StartTime"`
-	EndTime          *time.Time `json:"EndTime"`
-	TimeRangeType    string     `json:"TimeRangeType,omitempty"`
-	Sampling         bool       `json:"Sampling,omitempty"`
-	SamplingStrategy string     `json:"SamplingStrategy,omitempty"`
-	FilterExpression string     `json:"FilterExpression,omitempty"`
-	NextToken        string     `json:"NextToken,omitempty"`
+	StartTime        *AWSTimestamp `json:"StartTime"`
+	EndTime          *AWSTimestamp `json:"EndTime"`
+	TimeRangeType    string        `json:"TimeRangeType,omitempty"`
+	Sampling         bool          `json:"Sampling,omitempty"`
+	SamplingStrategy string        `json:"SamplingStrategy,omitempty"`
+	FilterExpression string        `json:"FilterExpression,omitempty"`
+	NextToken        string        `json:"NextToken,omitempty"`
 }
 
 // GetTraceSummariesOutput is the response for GetTraceSummaries.
@@ -302,17 +348,17 @@ type SegmentResponse struct {
 
 // GetServiceGraphInput is the request for GetServiceGraph.
 type GetServiceGraphInput struct {
-	StartTime *time.Time `json:"StartTime"`
-	EndTime   *time.Time `json:"EndTime"`
-	GroupName string     `json:"GroupName,omitempty"`
-	GroupARN  string     `json:"GroupARN,omitempty"`
-	NextToken string     `json:"NextToken,omitempty"`
+	StartTime *AWSTimestamp `json:"StartTime"`
+	EndTime   *AWSTimestamp `json:"EndTime"`
+	GroupName string        `json:"GroupName,omitempty"`
+	GroupARN  string        `json:"GroupARN,omitempty"`
+	NextToken string        `json:"NextToken,omitempty"`
 }
 
 // GetServiceGraphOutput is the response for GetServiceGraph.
 type GetServiceGraphOutput struct {
-	StartTime                *time.Time    `json:"StartTime,omitempty"`
-	EndTime                  *time.Time    `json:"EndTime,omitempty"`
+	StartTime                *AWSTimestamp `json:"StartTime,omitempty"`
+	EndTime                  *AWSTimestamp `json:"EndTime,omitempty"`
 	Services                 []ServiceNode `json:"Services,omitempty"`
 	ContainsOldGroupVersions bool          `json:"ContainsOldGroupVersions,omitempty"`
 	NextToken                string        `json:"NextToken,omitempty"`

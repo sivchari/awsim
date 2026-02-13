@@ -52,7 +52,7 @@ func (s *Service) GetTraceSummaries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summaries, err := s.storage.GetTraceSummaries(r.Context(), *req.StartTime, *req.EndTime)
+	summaries, err := s.storage.GetTraceSummaries(r.Context(), req.StartTime.ToTime(), req.EndTime.ToTime())
 	if err != nil {
 		handleStorageError(w, err)
 
@@ -154,7 +154,7 @@ func (s *Service) GetServiceGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	services, err := s.storage.GetServiceGraph(r.Context(), *req.StartTime, *req.EndTime, req.GroupName)
+	services, err := s.storage.GetServiceGraph(r.Context(), req.StartTime.ToTime(), req.EndTime.ToTime(), req.GroupName)
 	if err != nil {
 		handleStorageError(w, err)
 
