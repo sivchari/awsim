@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/xray"
 	"github.com/aws/aws-sdk-go-v2/service/xray/types"
 	"github.com/stretchr/testify/assert"
@@ -223,12 +225,20 @@ func TestXRay_DeleteGroup(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func createXRayClient(t *testing.T, ctx context.Context) *xray.Client {
+func createXRayClient(t *testing.T, _ context.Context) *xray.Client {
 	t.Helper()
 
-	cfg := loadAWSConfig(t, ctx)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
 
 	return xray.NewFromConfig(cfg, func(o *xray.Options) {
-		o.BaseEndpoint = aws.String(testEndpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }

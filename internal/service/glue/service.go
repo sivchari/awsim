@@ -31,8 +31,16 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers the Glue routes.
-// Glue uses AWS JSON 1.1 protocol with X-Amz-Target header.
-func (s *Service) RegisterRoutes(r service.Router) {
-	// Glue uses POST requests with X-Amz-Target header for all operations.
-	r.HandleFunc("POST", "/", s.handleRequest)
+// Note: Glue uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
+// so no direct routes are registered here.
+func (s *Service) RegisterRoutes(_ service.Router) {
+	// No routes to register - Glue uses JSON protocol dispatcher
 }
+
+// TargetPrefix returns the X-Amz-Target header prefix for Glue.
+func (s *Service) TargetPrefix() string {
+	return "AWSGlue"
+}
+
+// JSONProtocol is a marker method that indicates Glue uses AWS JSON 1.1 protocol.
+func (s *Service) JSONProtocol() {}
