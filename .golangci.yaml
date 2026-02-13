@@ -109,6 +109,10 @@ linters:
       - path: internal/service/kinesis/types\.go
         linters:
           - tagliatelle
+      # AWS Step Functions API requires PascalCase JSON field names.
+      - path: internal/service/sfn/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
