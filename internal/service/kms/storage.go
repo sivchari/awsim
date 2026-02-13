@@ -395,7 +395,7 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 }
 
 // GenerateDataKey generates a data key.
-func (s *MemoryStorage) GenerateDataKey(_ context.Context, keyID string, keySpec string, numberOfBytes int32, _ map[string]string) ([]byte, []byte, error) {
+func (s *MemoryStorage) GenerateDataKey(_ context.Context, keyID, keySpec string, numberOfBytes int32, _ map[string]string) ([]byte, []byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
