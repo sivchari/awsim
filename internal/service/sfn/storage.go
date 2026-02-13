@@ -164,7 +164,6 @@ func (s *MemoryStorage) StartExecution(_ context.Context, stateMachineArn, name,
 		return nil, &ServiceError{Code: errStateMachineDoesNotExist, Message: "State machine does not exist"}
 	}
 
-	// Generate execution name if not provided.
 	execName := name
 	if execName == "" {
 		execName = uuid.New().String()
@@ -177,55 +176,52 @@ func (s *MemoryStorage) StartExecution(_ context.Context, stateMachineArn, name,
 	}
 
 	now := time.Now()
-	exec := &Execution{
-		ExecutionArn:    executionArn,
-		StateMachineArn: stateMachineArn,
-		Name:            execName,
-		Status:          ExecutionStatusRunning,
-		StartDate:       now,
-		Input:           input,
-		InputDetails:    &CloudWatchEventsExecutionDataDetails{Included: true},
-		TraceHeader:     traceHeader,
-	}
-
-	// Create execution started event.
-	eventID := atomic.AddInt64(&s.eventCounter, 1)
-	startEvent := &HistoryEvent{
-		Timestamp:       now,
-		Type:            HistoryEventTypeExecutionStarted,
-		ID:              eventID,
-		PreviousEventID: 0,
-		ExecutionStartedEventDetails: &ExecutionStartedEventDetails{
-			Input:        input,
-			InputDetails: &CloudWatchEventsExecutionDataDetails{Included: true},
-			RoleArn:      sm.RoleArn,
-		},
-	}
-
-	// Simulate immediate completion for simple pass-through.
-	eventID = atomic.AddInt64(&s.eventCounter, 1)
-	endEvent := &HistoryEvent{
-		Timestamp:       now,
-		Type:            HistoryEventTypeExecutionSucceeded,
-		ID:              eventID,
-		PreviousEventID: eventID - 1,
-		ExecutionSucceededEventDetails: &ExecutionSucceededEventDetails{
-			Output:        input, // Pass-through input as output.
-			OutputDetails: &CloudWatchEventsExecutionDataDetails{Included: true},
-		},
-	}
+	exec := s.createExecution(executionArn, stateMachineArn, execName, input, traceHeader, now)
+	history := s.createExecutionHistory(sm.RoleArn, input, now)
 
 	exec.Status = ExecutionStatusSucceeded
 	exec.StopDate = &now
 	exec.Output = input
 	exec.OutputDetails = &CloudWatchEventsExecutionDataDetails{Included: true}
 
-	s.executions[executionArn] = &executionData{
-		execution: exec,
-		history:   []*HistoryEvent{startEvent, endEvent},
-	}
+	s.executions[executionArn] = &executionData{execution: exec, history: history}
 
 	return exec, nil
+}
+
+// createExecution creates a new execution object.
+func (s *MemoryStorage) createExecution(arn, smArn, name, input, traceHeader string, now time.Time) *Execution {
+	return &Execution{
+		ExecutionArn:    arn,
+		StateMachineArn: smArn,
+		Name:            name,
+		Status:          ExecutionStatusRunning,
+		StartDate:       now,
+		Input:           input,
+		InputDetails:    &CloudWatchEventsExecutionDataDetails{Included: true},
+		TraceHeader:     traceHeader,
+	}
+}
+
+// createExecutionHistory creates execution history events for a pass-through execution.
+func (s *MemoryStorage) createExecutionHistory(roleArn, input string, now time.Time) []*HistoryEvent {
+	startID := atomic.AddInt64(&s.eventCounter, 1)
+	endID := atomic.AddInt64(&s.eventCounter, 1)
+
+	return []*HistoryEvent{
+		{
+			Timestamp: now, Type: HistoryEventTypeExecutionStarted, ID: startID, PreviousEventID: 0,
+			ExecutionStartedEventDetails: &ExecutionStartedEventDetails{
+				Input: input, InputDetails: &CloudWatchEventsExecutionDataDetails{Included: true}, RoleArn: roleArn,
+			},
+		},
+		{
+			Timestamp: now, Type: HistoryEventTypeExecutionSucceeded, ID: endID, PreviousEventID: startID,
+			ExecutionSucceededEventDetails: &ExecutionSucceededEventDetails{
+				Output: input, OutputDetails: &CloudWatchEventsExecutionDataDetails{Included: true},
+			},
+		},
+	}
 }
 
 // StopExecution stops an execution.

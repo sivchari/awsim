@@ -265,6 +265,7 @@ func (s *Service) ListExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]ExecutionListItem, len(executions))
+
 	for i, exec := range executions {
 		item := ExecutionListItem{
 			ExecutionArn:    exec.ExecutionArn,
