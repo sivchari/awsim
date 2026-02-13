@@ -32,7 +32,7 @@ type ConfigurationSet struct {
 
 // DeliveryOptions represents delivery options for a configuration set.
 type DeliveryOptions struct {
-	TlsPolicy       string
+	TLSPolicy       string
 	SendingPoolName string
 }
 
@@ -199,7 +199,7 @@ type Template struct {
 // Body represents the body of an email.
 type Body struct {
 	Text *Content `json:"Text,omitempty"`
-	Html *Content `json:"Html,omitempty"`
+	HTML *Content `json:"Html,omitempty"`
 }
 
 // Content represents text content.
@@ -216,7 +216,7 @@ type MessageTag struct {
 
 // SendEmailResponse is the response for SendEmail.
 type SendEmailResponse struct {
-	MessageId string `json:"MessageId,omitempty"`
+	MessageID string `json:"MessageId,omitempty"`
 }
 
 // ErrorResponse represents an SES error response.
