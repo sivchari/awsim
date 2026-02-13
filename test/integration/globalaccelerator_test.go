@@ -145,7 +145,7 @@ func TestGlobalAccelerator_UpdateAccelerator(t *testing.T) {
 		t.Errorf("name not updated: got %s, want updated-accelerator", *updateOutput.Accelerator.Name)
 	}
 
-	if updateOutput.Accelerator.Enabled {
+	if *updateOutput.Accelerator.Enabled {
 		t.Error("accelerator should be disabled")
 	}
 
