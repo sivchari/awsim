@@ -41,45 +41,18 @@ func NewMemoryStorage() *MemoryStorage {
 	}
 }
 
-// RequestCertificate requests a new certificate.
-func (s *MemoryStorage) RequestCertificate(_ context.Context, req *RequestCertificateInput) (*Certificate, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if req.DomainName == "" {
-		return nil, &Error{
-			Code:    errInvalidParameter,
-			Message: "DomainName is required",
-		}
-	}
-
-	// Generate certificate ARN.
-	certID := uuid.New().String()
-	arn := fmt.Sprintf("arn:aws:acm:us-east-1:000000000000:certificate/%s", certID)
-
-	// Generate serial number.
-	serialBytes := make([]byte, 16)
-	if _, err := rand.Read(serialBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate serial: %w", err)
-	}
-
-	serial := hex.EncodeToString(serialBytes)
-
-	// Determine key algorithm.
-	keyAlgorithm := req.KeyAlgorithm
-	if keyAlgorithm == "" {
-		keyAlgorithm = "RSA_2048"
-	}
-
-	// Create domain validation options.
-	domainValidations := make([]DomainValidation, 0)
-	domains := []string{req.DomainName}
+// buildDomainValidations creates domain validation options for the certificate.
+func buildDomainValidations(req *RequestCertificateInput, certID string) []DomainValidation {
+	domains := make([]string, 0, 1+len(req.SubjectAlternativeNames))
+	domains = append(domains, req.DomainName)
 	domains = append(domains, req.SubjectAlternativeNames...)
 
 	validationMethod := req.ValidationMethod
 	if validationMethod == "" {
 		validationMethod = "DNS"
 	}
+
+	validations := make([]DomainValidation, 0, len(domains))
 
 	for _, domain := range domains {
 		dv := DomainValidation{
@@ -97,7 +70,35 @@ func (s *MemoryStorage) RequestCertificate(_ context.Context, req *RequestCertif
 			}
 		}
 
-		domainValidations = append(domainValidations, dv)
+		validations = append(validations, dv)
+	}
+
+	return validations
+}
+
+// RequestCertificate requests a new certificate.
+func (s *MemoryStorage) RequestCertificate(_ context.Context, req *RequestCertificateInput) (*Certificate, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if req.DomainName == "" {
+		return nil, &Error{
+			Code:    errInvalidParameter,
+			Message: "DomainName is required",
+		}
+	}
+
+	certID := uuid.New().String()
+	arn := fmt.Sprintf("arn:aws:acm:us-east-1:000000000000:certificate/%s", certID)
+
+	serialBytes := make([]byte, 16)
+	if _, err := rand.Read(serialBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate serial: %w", err)
+	}
+
+	keyAlgorithm := req.KeyAlgorithm
+	if keyAlgorithm == "" {
+		keyAlgorithm = "RSA_2048"
 	}
 
 	now := time.Now()
@@ -108,10 +109,10 @@ func (s *MemoryStorage) RequestCertificate(_ context.Context, req *RequestCertif
 		Status:                  "PENDING_VALIDATION",
 		Type:                    "AMAZON_ISSUED",
 		KeyAlgorithm:            keyAlgorithm,
-		Serial:                  serial,
+		Serial:                  hex.EncodeToString(serialBytes),
 		Subject:                 fmt.Sprintf("CN=%s", req.DomainName),
 		CreatedAt:               now,
-		DomainValidationOptions: domainValidations,
+		DomainValidationOptions: buildDomainValidations(req, certID),
 		RenewalEligibility:      "INELIGIBLE",
 		Options:                 req.Options,
 		Tags:                    req.Tags,
