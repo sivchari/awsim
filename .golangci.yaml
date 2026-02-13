@@ -93,6 +93,10 @@ linters:
       - path: internal/service/kms/types\.go
         linters:
           - tagliatelle
+      # AWS Global Accelerator API requires PascalCase JSON field names.
+      - path: internal/service/globalaccelerator/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
