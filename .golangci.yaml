@@ -133,6 +133,10 @@ linters:
       - path: internal/service/glue/types\.go
         linters:
           - tagliatelle
+      # AWS X-Ray API requires PascalCase JSON field names.
+      - path: internal/service/xray/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
