@@ -113,6 +113,10 @@ linters:
       - path: internal/service/sfn/types\.go
         linters:
           - tagliatelle
+      # AWS ECR API requires PascalCase JSON field names.
+      - path: internal/service/ecr/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
