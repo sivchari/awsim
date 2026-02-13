@@ -10,6 +10,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// Default event bus name.
+const defaultEventBusName = "default"
+
 // Error codes.
 const (
 	errEventBusNotFound      = "ResourceNotFoundException"
@@ -66,14 +69,14 @@ func NewMemoryStorage() *MemoryStorage {
 
 	// Create default event bus.
 	now := time.Now()
-	storage.eventBuses["default"] = &EventBus{
-		Name:         "default",
-		Arn:          fmt.Sprintf("arn:aws:events:%s:%s:event-bus/default", storage.region, storage.accountID),
+	storage.eventBuses[defaultEventBusName] = &EventBus{
+		Name:         defaultEventBusName,
+		Arn:          fmt.Sprintf("arn:aws:events:%s:%s:event-bus/%s", storage.region, storage.accountID, defaultEventBusName),
 		CreationTime: now,
 		LastModified: now,
 	}
 
-	storage.rules["default"] = make(map[string]*Rule)
+	storage.rules[defaultEventBusName] = make(map[string]*Rule)
 
 	return storage
 }
@@ -107,7 +110,7 @@ func (s *MemoryStorage) DeleteEventBus(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if name == "default" {
+	if name == defaultEventBusName {
 		return &ServiceError{Code: errInvalidParameter, Message: "Cannot delete the default event bus"}
 	}
 
@@ -134,7 +137,7 @@ func (s *MemoryStorage) DescribeEventBus(_ context.Context, name string) (*Event
 	defer s.mu.RUnlock()
 
 	if name == "" {
-		name = "default"
+		name = defaultEventBusName
 	}
 
 	eventBus, exists := s.eventBuses[name]
@@ -161,7 +164,7 @@ func (s *MemoryStorage) ListEventBuses(_ context.Context, namePrefix string, lim
 			eventBuses = append(eventBuses, eb)
 		}
 
-		if int32(len(eventBuses)) >= limit {
+		if int32(len(eventBuses)) >= limit { //nolint:gosec // slice length bounded by limit parameter
 			break
 		}
 	}
@@ -176,7 +179,7 @@ func (s *MemoryStorage) PutRule(_ context.Context, req *PutRuleRequest) (*Rule, 
 
 	eventBusName := req.EventBusName
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	if _, exists := s.eventBuses[eventBusName]; !exists {
@@ -218,7 +221,7 @@ func (s *MemoryStorage) DeleteRule(_ context.Context, eventBusName, ruleName str
 	defer s.mu.Unlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	rules, exists := s.rules[eventBusName]
@@ -245,7 +248,7 @@ func (s *MemoryStorage) DescribeRule(_ context.Context, eventBusName, ruleName s
 	defer s.mu.RUnlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	rules, exists := s.rules[eventBusName]
@@ -267,7 +270,7 @@ func (s *MemoryStorage) ListRules(_ context.Context, eventBusName, namePrefix st
 	defer s.mu.RUnlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	if limit <= 0 {
@@ -286,7 +289,7 @@ func (s *MemoryStorage) ListRules(_ context.Context, eventBusName, namePrefix st
 			result = append(result, rule)
 		}
 
-		if int32(len(result)) >= limit {
+		if int32(len(result)) >= limit { //nolint:gosec // slice length bounded by limit parameter
 			break
 		}
 	}
@@ -300,7 +303,7 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 	defer s.mu.Unlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	rules, exists := s.rules[eventBusName]
@@ -356,10 +359,11 @@ func (s *MemoryStorage) RemoveTargets(_ context.Context, eventBusName, ruleName 
 	defer s.mu.Unlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	targetKey := eventBusName + ":" + ruleName
+
 	var failedEntries []RemoveTargetsResultEntry
 
 	if s.targets[targetKey] == nil {
@@ -367,6 +371,7 @@ func (s *MemoryStorage) RemoveTargets(_ context.Context, eventBusName, ruleName 
 	}
 
 	existingTargets := s.targets[targetKey][ruleName]
+
 	var newTargets []*Target
 
 	idsToRemove := make(map[string]bool)
@@ -391,7 +396,7 @@ func (s *MemoryStorage) ListTargetsByRule(_ context.Context, eventBusName, ruleN
 	defer s.mu.RUnlock()
 
 	if eventBusName == "" {
-		eventBusName = "default"
+		eventBusName = defaultEventBusName
 	}
 
 	if limit <= 0 {
@@ -406,7 +411,7 @@ func (s *MemoryStorage) ListTargetsByRule(_ context.Context, eventBusName, ruleN
 
 	targets := s.targets[targetKey][ruleName]
 
-	if int32(len(targets)) > limit {
+	if int32(len(targets)) > limit { //nolint:gosec // slice length bounded by limit parameter
 		targets = targets[:limit]
 	}
 

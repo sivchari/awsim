@@ -272,7 +272,7 @@ func (s *Service) PutTargets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &PutTargetsResponse{
-		FailedEntryCount: int32(len(failedEntries)),
+		FailedEntryCount: int32(len(failedEntries)), //nolint:gosec // slice length bounded by API limits
 		FailedEntries:    failedEntries,
 	}
 
@@ -296,7 +296,7 @@ func (s *Service) RemoveTargets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &RemoveTargetsResponse{
-		FailedEntryCount: int32(len(failedEntries)),
+		FailedEntryCount: int32(len(failedEntries)), //nolint:gosec // slice length bounded by API limits
 		FailedEntries:    failedEntries,
 	}
 
