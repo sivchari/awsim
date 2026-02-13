@@ -1,7 +1,48 @@
 // Package acm provides ACM service emulation for awsim.
 package acm
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// AWSTimestamp is a time.Time that marshals to Unix timestamp (float64).
+// AWS APIs use Unix timestamps in JSON responses.
+type AWSTimestamp struct {
+	time.Time
+}
+
+// MarshalJSON implements json.Marshaler.
+func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return json.Marshal(nil)
+	}
+
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+}
+
+// Ptr returns a pointer to the AWSTimestamp.
+func (t AWSTimestamp) Ptr() *AWSTimestamp {
+	if t.IsZero() {
+		return nil
+	}
+
+	return &t
+}
+
+// ToAWSTimestamp converts time.Time to AWSTimestamp.
+func ToAWSTimestamp(t time.Time) AWSTimestamp {
+	return AWSTimestamp{Time: t}
+}
+
+// ToAWSTimestampPtr converts *time.Time to *AWSTimestamp.
+func ToAWSTimestampPtr(t *time.Time) *AWSTimestamp {
+	if t == nil {
+		return nil
+	}
+
+	return &AWSTimestamp{Time: *t}
+}
 
 // Certificate represents an ACM certificate.
 type Certificate struct {
@@ -108,12 +149,12 @@ type CertificateDetail struct {
 	Serial                  string              `json:"Serial,omitempty"`
 	Subject                 string              `json:"Subject,omitempty"`
 	Issuer                  string              `json:"Issuer,omitempty"`
-	CreatedAt               *time.Time          `json:"CreatedAt,omitempty"`
-	IssuedAt                *time.Time          `json:"IssuedAt,omitempty"`
-	ImportedAt              *time.Time          `json:"ImportedAt,omitempty"`
+	CreatedAt               *AWSTimestamp       `json:"CreatedAt,omitempty"`
+	IssuedAt                *AWSTimestamp       `json:"IssuedAt,omitempty"`
+	ImportedAt              *AWSTimestamp       `json:"ImportedAt,omitempty"`
 	Status                  string              `json:"Status,omitempty"`
-	NotBefore               *time.Time          `json:"NotBefore,omitempty"`
-	NotAfter                *time.Time          `json:"NotAfter,omitempty"`
+	NotBefore               *AWSTimestamp       `json:"NotBefore,omitempty"`
+	NotAfter                *AWSTimestamp       `json:"NotAfter,omitempty"`
 	KeyAlgorithm            string              `json:"KeyAlgorithm,omitempty"`
 	SignatureAlgorithm      string              `json:"SignatureAlgorithm,omitempty"`
 	InUseBy                 []string            `json:"InUseBy,omitempty"`
@@ -131,7 +172,7 @@ type RenewalSummary struct {
 	RenewalStatus           string             `json:"RenewalStatus,omitempty"`
 	DomainValidationOptions []DomainValidation `json:"DomainValidationOptions,omitempty"`
 	RenewalStatusReason     string             `json:"RenewalStatusReason,omitempty"`
-	UpdatedAt               *time.Time         `json:"UpdatedAt,omitempty"`
+	UpdatedAt               *AWSTimestamp      `json:"UpdatedAt,omitempty"`
 }
 
 // ListCertificatesInput is the request for ListCertificates.
@@ -151,20 +192,20 @@ type ListCertificatesOutput struct {
 
 // CertificateSummary represents a certificate summary.
 type CertificateSummary struct {
-	CertificateArn          string     `json:"CertificateArn,omitempty"`
-	DomainName              string     `json:"DomainName,omitempty"`
-	SubjectAlternativeNames []string   `json:"SubjectAlternativeNameSummaries,omitempty"`
-	Status                  string     `json:"Status,omitempty"`
-	Type                    string     `json:"Type,omitempty"`
-	KeyAlgorithm            string     `json:"KeyAlgorithm,omitempty"`
-	CreatedAt               *time.Time `json:"CreatedAt,omitempty"`
-	IssuedAt                *time.Time `json:"IssuedAt,omitempty"`
-	ImportedAt              *time.Time `json:"ImportedAt,omitempty"`
-	NotBefore               *time.Time `json:"NotBefore,omitempty"`
-	NotAfter                *time.Time `json:"NotAfter,omitempty"`
-	RenewalEligibility      string     `json:"RenewalEligibility,omitempty"`
-	Exported                bool       `json:"Exported,omitempty"`
-	InUse                   bool       `json:"InUse,omitempty"`
+	CertificateArn          string        `json:"CertificateArn,omitempty"`
+	DomainName              string        `json:"DomainName,omitempty"`
+	SubjectAlternativeNames []string      `json:"SubjectAlternativeNameSummaries,omitempty"`
+	Status                  string        `json:"Status,omitempty"`
+	Type                    string        `json:"Type,omitempty"`
+	KeyAlgorithm            string        `json:"KeyAlgorithm,omitempty"`
+	CreatedAt               *AWSTimestamp `json:"CreatedAt,omitempty"`
+	IssuedAt                *AWSTimestamp `json:"IssuedAt,omitempty"`
+	ImportedAt              *AWSTimestamp `json:"ImportedAt,omitempty"`
+	NotBefore               *AWSTimestamp `json:"NotBefore,omitempty"`
+	NotAfter                *AWSTimestamp `json:"NotAfter,omitempty"`
+	RenewalEligibility      string        `json:"RenewalEligibility,omitempty"`
+	Exported                bool          `json:"Exported,omitempty"`
+	InUse                   bool          `json:"InUse,omitempty"`
 }
 
 // DeleteCertificateInput is the request for DeleteCertificate.
