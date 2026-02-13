@@ -3,10 +3,11 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	"github.com/aws/aws-sdk-go-v2/service/batch/types"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestBatch_CreateComputeEnvironment(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "test-compute-env"
 
@@ -43,7 +44,7 @@ func TestBatch_DescribeComputeEnvironments(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "describe-test-ce"
 
@@ -74,7 +75,7 @@ func TestBatch_CreateJobQueue(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "jq-test-ce"
 	jqName := "test-job-queue"
@@ -118,7 +119,7 @@ func TestBatch_DescribeJobQueues(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "describe-jq-test-ce"
 	jqName := "describe-test-jq"
@@ -168,7 +169,7 @@ func TestBatch_RegisterJobDefinition(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	jdName := "test-job-definition"
 
@@ -193,7 +194,7 @@ func TestBatch_SubmitJob(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "submit-test-ce"
 	jqName := "submit-test-jq"
@@ -259,7 +260,7 @@ func TestBatch_DescribeJobs(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "describe-job-test-ce"
 	jqName := "describe-job-test-jq"
@@ -331,7 +332,7 @@ func TestBatch_TerminateJob(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createBatchClient(t, ctx)
+	client := createBatchClient(t)
 
 	ceName := "terminate-job-test-ce"
 	jqName := "terminate-job-test-jq"
@@ -404,12 +405,20 @@ func TestBatch_TerminateJob(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func createBatchClient(t *testing.T, ctx context.Context) *batch.Client {
+func createBatchClient(t *testing.T) *batch.Client {
 	t.Helper()
 
-	cfg := loadAWSConfig(t, ctx)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
 
 	return batch.NewFromConfig(cfg, func(o *batch.Options) {
-		o.BaseEndpoint = aws.String(testEndpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
