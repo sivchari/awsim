@@ -105,6 +105,10 @@ linters:
       - path: internal/service/eventbridge/types\.go
         linters:
           - tagliatelle
+      # AWS Kinesis API requires PascalCase JSON field names.
+      - path: internal/service/kinesis/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
