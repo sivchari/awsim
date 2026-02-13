@@ -17,6 +17,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/eventbridge"
 	_ "github.com/sivchari/awsim/internal/service/globalaccelerator"
 	_ "github.com/sivchari/awsim/internal/service/iam"
+	_ "github.com/sivchari/awsim/internal/service/kinesis"
 	_ "github.com/sivchari/awsim/internal/service/kms"
 	_ "github.com/sivchari/awsim/internal/service/lambda"
 	_ "github.com/sivchari/awsim/internal/service/s3"
