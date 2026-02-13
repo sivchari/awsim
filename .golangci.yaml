@@ -129,6 +129,10 @@ linters:
       - path: internal/service/acm/types\.go
         linters:
           - tagliatelle
+      # AWS Glue API requires PascalCase JSON field names.
+      - path: internal/service/glue/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
