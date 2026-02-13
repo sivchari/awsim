@@ -8,6 +8,7 @@ import (
 	// Register services via init().
 	_ "github.com/sivchari/awsim/internal/service/acm"
 	_ "github.com/sivchari/awsim/internal/service/apigateway"
+	_ "github.com/sivchari/awsim/internal/service/appsync"
 	_ "github.com/sivchari/awsim/internal/service/athena"
 	_ "github.com/sivchari/awsim/internal/service/batch"
 	_ "github.com/sivchari/awsim/internal/service/cloudfront"
