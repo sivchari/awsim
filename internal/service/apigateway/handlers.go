@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateRestApi handles the CreateRestApi API.
-func (s *Service) CreateRestApi(w http.ResponseWriter, r *http.Request) {
-	var req CreateRestApiRequest
+// CreateRestAPI handles the CreateRestApi API.
+func (s *Service) CreateRestAPI(w http.ResponseWriter, r *http.Request) {
+	var req CreateRestAPIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "BadRequestException", "Invalid request body", http.StatusBadRequest)
 
@@ -24,48 +24,48 @@ func (s *Service) CreateRestApi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	api, err := s.storage.CreateRestApi(r.Context(), &req)
+	api, err := s.storage.CreateRestAPI(r.Context(), &req)
 	if err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	resp := toRestApiResponse(api)
+	resp := toRestAPIResponse(api)
 	writeResponse(w, resp, http.StatusCreated)
 }
 
-// GetRestApi handles the GetRestApi API.
-func (s *Service) GetRestApi(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractPathParam(r.URL.Path, "/apigateway/restapis/")
+// GetRestAPI handles the GetRestApi API.
+func (s *Service) GetRestAPI(w http.ResponseWriter, r *http.Request) {
+	restAPIID := extractPathParam(r.URL.Path, "/apigateway/restapis/")
 
-	api, err := s.storage.GetRestApi(r.Context(), restApiID)
+	api, err := s.storage.GetRestAPI(r.Context(), restAPIID)
 	if err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	resp := toRestApiResponse(api)
+	resp := toRestAPIResponse(api)
 	writeResponse(w, resp, http.StatusOK)
 }
 
-// GetRestApis handles the GetRestApis API.
-func (s *Service) GetRestApis(w http.ResponseWriter, r *http.Request) {
-	apis, nextPosition, err := s.storage.GetRestApis(r.Context(), 25, "")
+// GetRestAPIs handles the GetRestApis API.
+func (s *Service) GetRestAPIs(w http.ResponseWriter, r *http.Request) {
+	apis, nextPosition, err := s.storage.GetRestAPIs(r.Context(), 25, "")
 	if err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	items := make([]CreateRestApiResponse, len(apis))
+	items := make([]CreateRestAPIResponse, len(apis))
 
 	for i, api := range apis {
-		items[i] = *toRestApiResponse(api)
+		items[i] = *toRestAPIResponse(api)
 	}
 
-	resp := &GetRestApisResponse{
+	resp := &GetRestAPIsResponse{
 		Items:    items,
 		Position: nextPosition,
 	}
@@ -73,11 +73,11 @@ func (s *Service) GetRestApis(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, resp, http.StatusOK)
 }
 
-// DeleteRestApi handles the DeleteRestApi API.
-func (s *Service) DeleteRestApi(w http.ResponseWriter, r *http.Request) {
-	restApiID := extractPathParam(r.URL.Path, "/apigateway/restapis/")
+// DeleteRestAPI handles the DeleteRestApi API.
+func (s *Service) DeleteRestAPI(w http.ResponseWriter, r *http.Request) {
+	restAPIID := extractPathParam(r.URL.Path, "/apigateway/restapis/")
 
-	if err := s.storage.DeleteRestApi(r.Context(), restApiID); err != nil {
+	if err := s.storage.DeleteRestAPI(r.Context(), restAPIID); err != nil {
 		handleError(w, err)
 
 		return
@@ -387,19 +387,19 @@ func (s *Service) DeleteStage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// toRestApiResponse converts a RestApi to CreateRestApiResponse.
-func toRestApiResponse(api *RestApi) *CreateRestApiResponse {
-	return &CreateRestApiResponse{
+// toRestAPIResponse converts a RestAPI to CreateRestAPIResponse.
+func toRestAPIResponse(api *RestAPI) *CreateRestAPIResponse {
+	return &CreateRestAPIResponse{
 		ID:                     api.ID,
 		Name:                   api.Name,
 		Description:            api.Description,
 		CreatedDate:            float64(api.CreatedDate.Unix()),
 		Version:                api.Version,
-		ApiKeySource:           api.ApiKeySource,
+		APIKeySource:           api.APIKeySource,
 		EndpointConfiguration:  api.EndpointConfiguration,
-		DisableExecuteApiEndpt: api.DisableExecuteApiEndpt,
+		DisableExecuteAPIEndpt: api.DisableExecuteAPIEndpt,
 		Tags:                   api.Tags,
-		RootResourceId:         api.RootResourceID,
+		RootResourceID:         api.RootResourceID,
 	}
 }
 
@@ -425,7 +425,7 @@ func toMethodOutput(m *Method) *MethodOutput {
 	output := &MethodOutput{
 		HTTPMethod:        m.HTTPMethod,
 		AuthorizationType: m.AuthorizationType,
-		ApiKeyRequired:    m.ApiKeyRequired,
+		APIKeyRequired:    m.APIKeyRequired,
 		OperationName:     m.OperationName,
 	}
 
