@@ -1,0 +1,576 @@
+package cognito
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Error codes.
+const (
+	errUserPoolNotFound       = "ResourceNotFoundException"
+	errUserPoolClientNotFound = "ResourceNotFoundException"
+	errUserNotFound           = "UserNotFoundException"
+	errUsernameExists         = "UsernameExistsException"
+	errNotAuthorized          = "NotAuthorizedException"
+	errInvalidParameter       = "InvalidParameterException"
+
+	defaultRegion = "us-east-1"
+)
+
+// Storage defines the Cognito storage interface.
+type Storage interface {
+	// User Pool operations.
+	CreateUserPool(ctx context.Context, req *CreateUserPoolRequest) (*UserPool, error)
+	GetUserPool(ctx context.Context, userPoolID string) (*UserPool, error)
+	ListUserPools(ctx context.Context, maxResults int32, nextToken string) ([]*UserPool, string, error)
+	DeleteUserPool(ctx context.Context, userPoolID string) error
+
+	// User Pool Client operations.
+	CreateUserPoolClient(ctx context.Context, req *CreateUserPoolClientRequest) (*UserPoolClient, error)
+	GetUserPoolClient(ctx context.Context, userPoolID, clientID string) (*UserPoolClient, error)
+	ListUserPoolClients(ctx context.Context, userPoolID string, maxResults int32, nextToken string) ([]*UserPoolClient, string, error)
+	DeleteUserPoolClient(ctx context.Context, userPoolID, clientID string) error
+
+	// User operations.
+	AdminCreateUser(ctx context.Context, req *AdminCreateUserRequest) (*User, error)
+	AdminGetUser(ctx context.Context, userPoolID, username string) (*User, error)
+	AdminDeleteUser(ctx context.Context, userPoolID, username string) error
+	ListUsers(ctx context.Context, userPoolID string, limit int32, paginationToken string) ([]*User, string, error)
+
+	// Authentication operations.
+	SignUp(ctx context.Context, req *SignUpRequest) (*User, error)
+	ConfirmSignUp(ctx context.Context, clientID, username, code string) error
+	InitiateAuth(ctx context.Context, req *InitiateAuthRequest) (*InitiateAuthResponse, error)
+
+	// Helper operations.
+	GetUserPoolByClientID(ctx context.Context, clientID string) (*UserPool, error)
+	GetUserPoolClientByID(ctx context.Context, clientID string) (*UserPoolClient, error)
+}
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu                sync.RWMutex
+	userPools         map[string]*UserPool
+	userPoolClients   map[string]*UserPoolClient
+	users             map[string]map[string]*User // userPoolID -> username -> User
+	confirmationCodes map[string]string           // username -> code
+}
+
+// NewMemoryStorage creates a new MemoryStorage.
+func NewMemoryStorage() *MemoryStorage {
+	return &MemoryStorage{
+		userPools:         make(map[string]*UserPool),
+		userPoolClients:   make(map[string]*UserPoolClient),
+		users:             make(map[string]map[string]*User),
+		confirmationCodes: make(map[string]string),
+	}
+}
+
+// CreateUserPool creates a new user pool.
+func (s *MemoryStorage) CreateUserPool(_ context.Context, req *CreateUserPoolRequest) (*UserPool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	poolID := fmt.Sprintf("%s_%s", defaultRegion, uuid.New().String()[:9])
+	now := time.Now()
+
+	pool := &UserPool{
+		ID:               poolID,
+		Name:             req.PoolName,
+		Status:           UserPoolStatusEnabled,
+		CreationDate:     now,
+		LastModifiedDate: now,
+		MFAConfiguration: req.MfaConfiguration,
+	}
+
+	if req.Policies != nil && req.Policies.PasswordPolicy != nil {
+		pool.Policies = &UserPoolPolicies{
+			PasswordPolicy: &PasswordPolicy{
+				MinimumLength:                 req.Policies.PasswordPolicy.MinimumLength,
+				RequireUppercase:              req.Policies.PasswordPolicy.RequireUppercase,
+				RequireLowercase:              req.Policies.PasswordPolicy.RequireLowercase,
+				RequireNumbers:                req.Policies.PasswordPolicy.RequireNumbers,
+				RequireSymbols:                req.Policies.PasswordPolicy.RequireSymbols,
+				TemporaryPasswordValidityDays: req.Policies.PasswordPolicy.TemporaryPasswordValidityDays,
+			},
+		}
+	}
+
+	if req.AutoVerifiedAttributes != nil {
+		pool.AutoVerifiedAttrs = req.AutoVerifiedAttributes
+	}
+
+	if req.UsernameAttributes != nil {
+		pool.UsernameAttributes = req.UsernameAttributes
+	}
+
+	s.userPools[poolID] = pool
+	s.users[poolID] = make(map[string]*User)
+
+	return pool, nil
+}
+
+// GetUserPool retrieves a user pool by ID.
+func (s *MemoryStorage) GetUserPool(_ context.Context, userPoolID string) (*UserPool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pool, ok := s.userPools[userPoolID]
+	if !ok {
+		return nil, &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	return pool, nil
+}
+
+// ListUserPools lists all user pools.
+func (s *MemoryStorage) ListUserPools(_ context.Context, maxResults int32, _ string) ([]*UserPool, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if maxResults <= 0 {
+		maxResults = 60
+	}
+
+	pools := make([]*UserPool, 0, len(s.userPools))
+
+	for _, pool := range s.userPools {
+		pools = append(pools, pool)
+
+		if len(pools) >= int(maxResults) {
+			break
+		}
+	}
+
+	return pools, "", nil
+}
+
+// DeleteUserPool deletes a user pool.
+func (s *MemoryStorage) DeleteUserPool(_ context.Context, userPoolID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.userPools[userPoolID]; !ok {
+		return &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	// Delete associated clients.
+	for clientID, client := range s.userPoolClients {
+		if client.UserPoolID == userPoolID {
+			delete(s.userPoolClients, clientID)
+		}
+	}
+
+	// Delete associated users.
+	delete(s.users, userPoolID)
+	delete(s.userPools, userPoolID)
+
+	return nil
+}
+
+// CreateUserPoolClient creates a new user pool client.
+func (s *MemoryStorage) CreateUserPoolClient(_ context.Context, req *CreateUserPoolClientRequest) (*UserPoolClient, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.userPools[req.UserPoolID]; !ok {
+		return nil, &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	clientID := uuid.New().String()[:26]
+	now := time.Now()
+
+	client := &UserPoolClient{
+		ClientID:                        clientID,
+		ClientName:                      req.ClientName,
+		UserPoolID:                      req.UserPoolID,
+		CreationDate:                    now,
+		LastModifiedDate:                now,
+		RefreshTokenValidity:            req.RefreshTokenValidity,
+		AccessTokenValidity:             req.AccessTokenValidity,
+		IDTokenValidity:                 req.IDTokenValidity,
+		ExplicitAuthFlows:               req.ExplicitAuthFlows,
+		SupportedIdentityProviders:      req.SupportedIdentityProviders,
+		CallbackURLs:                    req.CallbackURLs,
+		LogoutURLs:                      req.LogoutURLs,
+		AllowedOAuthFlows:               req.AllowedOAuthFlows,
+		AllowedOAuthScopes:              req.AllowedOAuthScopes,
+		AllowedOAuthFlowsUserPoolClient: req.AllowedOAuthFlowsUserPoolClient,
+	}
+
+	if req.GenerateSecret {
+		client.ClientSecret = generateSecret()
+	}
+
+	// Set defaults.
+	if client.RefreshTokenValidity == 0 {
+		client.RefreshTokenValidity = 30
+	}
+
+	if client.AccessTokenValidity == 0 {
+		client.AccessTokenValidity = 60
+	}
+
+	if client.IDTokenValidity == 0 {
+		client.IDTokenValidity = 60
+	}
+
+	s.userPoolClients[clientID] = client
+
+	return client, nil
+}
+
+// GetUserPoolClient retrieves a user pool client.
+func (s *MemoryStorage) GetUserPoolClient(_ context.Context, userPoolID, clientID string) (*UserPoolClient, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	client, ok := s.userPoolClients[clientID]
+	if !ok || client.UserPoolID != userPoolID {
+		return nil, &ServiceError{Code: errUserPoolClientNotFound, Message: "User pool client not found"}
+	}
+
+	return client, nil
+}
+
+// ListUserPoolClients lists user pool clients.
+func (s *MemoryStorage) ListUserPoolClients(_ context.Context, userPoolID string, maxResults int32, _ string) ([]*UserPoolClient, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if maxResults <= 0 {
+		maxResults = 60
+	}
+
+	clients := make([]*UserPoolClient, 0)
+
+	for _, client := range s.userPoolClients {
+		if client.UserPoolID == userPoolID {
+			clients = append(clients, client)
+
+			if len(clients) >= int(maxResults) {
+				break
+			}
+		}
+	}
+
+	return clients, "", nil
+}
+
+// DeleteUserPoolClient deletes a user pool client.
+func (s *MemoryStorage) DeleteUserPoolClient(_ context.Context, userPoolID, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	client, ok := s.userPoolClients[clientID]
+	if !ok || client.UserPoolID != userPoolID {
+		return &ServiceError{Code: errUserPoolClientNotFound, Message: "User pool client not found"}
+	}
+
+	delete(s.userPoolClients, clientID)
+
+	return nil
+}
+
+// AdminCreateUser creates a new user.
+func (s *MemoryStorage) AdminCreateUser(_ context.Context, req *AdminCreateUserRequest) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.userPools[req.UserPoolID]; !ok {
+		return nil, &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	if _, ok := s.users[req.UserPoolID][req.Username]; ok {
+		return nil, &ServiceError{Code: errUsernameExists, Message: "User already exists"}
+	}
+
+	now := time.Now()
+	user := &User{
+		Username:         req.Username,
+		UserPoolID:       req.UserPoolID,
+		UserCreateDate:   now,
+		UserLastModified: now,
+		Enabled:          true,
+		UserStatus:       UserStatusForceChangePassword,
+		Password:         req.TemporaryPassword,
+	}
+
+	if req.UserAttributes != nil {
+		user.Attributes = make([]UserAttribute, len(req.UserAttributes))
+
+		for i, attr := range req.UserAttributes {
+			user.Attributes[i] = UserAttribute{
+				Name:  attr.Name,
+				Value: attr.Value,
+			}
+		}
+	}
+
+	s.users[req.UserPoolID][req.Username] = user
+
+	return user, nil
+}
+
+// AdminGetUser retrieves a user.
+func (s *MemoryStorage) AdminGetUser(_ context.Context, userPoolID, username string) (*User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	users, ok := s.users[userPoolID]
+	if !ok {
+		return nil, &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	user, ok := users[username]
+	if !ok {
+		return nil, &ServiceError{Code: errUserNotFound, Message: "User not found"}
+	}
+
+	return user, nil
+}
+
+// AdminDeleteUser deletes a user.
+func (s *MemoryStorage) AdminDeleteUser(_ context.Context, userPoolID, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	users, ok := s.users[userPoolID]
+	if !ok {
+		return &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	if _, ok := users[username]; !ok {
+		return &ServiceError{Code: errUserNotFound, Message: "User not found"}
+	}
+
+	delete(users, username)
+
+	return nil
+}
+
+// ListUsers lists users in a user pool.
+func (s *MemoryStorage) ListUsers(_ context.Context, userPoolID string, limit int32, _ string) ([]*User, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 60
+	}
+
+	users, ok := s.users[userPoolID]
+	if !ok {
+		return nil, "", &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	result := make([]*User, 0, len(users))
+
+	for _, user := range users {
+		result = append(result, user)
+
+		if len(result) >= int(limit) {
+			break
+		}
+	}
+
+	return result, "", nil
+}
+
+// SignUp registers a new user.
+func (s *MemoryStorage) SignUp(_ context.Context, req *SignUpRequest) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find user pool by client ID.
+	var userPoolID string
+
+	for _, client := range s.userPoolClients {
+		if client.ClientID == req.ClientID {
+			userPoolID = client.UserPoolID
+
+			break
+		}
+	}
+
+	if userPoolID == "" {
+		return nil, &ServiceError{Code: errInvalidParameter, Message: "Invalid client ID"}
+	}
+
+	if _, ok := s.users[userPoolID][req.Username]; ok {
+		return nil, &ServiceError{Code: errUsernameExists, Message: "User already exists"}
+	}
+
+	now := time.Now()
+	user := &User{
+		Username:         req.Username,
+		UserPoolID:       userPoolID,
+		UserCreateDate:   now,
+		UserLastModified: now,
+		Enabled:          true,
+		UserStatus:       UserStatusUnconfirmed,
+		Password:         req.Password,
+	}
+
+	if req.UserAttributes != nil {
+		user.Attributes = make([]UserAttribute, len(req.UserAttributes))
+
+		for i, attr := range req.UserAttributes {
+			user.Attributes[i] = UserAttribute{
+				Name:  attr.Name,
+				Value: attr.Value,
+			}
+		}
+	}
+
+	s.users[userPoolID][req.Username] = user
+
+	// Generate confirmation code (simulated).
+	s.confirmationCodes[req.Username] = "123456"
+
+	return user, nil
+}
+
+// ConfirmSignUp confirms a user registration.
+func (s *MemoryStorage) ConfirmSignUp(_ context.Context, clientID, username, code string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find user pool by client ID.
+	var userPoolID string
+
+	for _, client := range s.userPoolClients {
+		if client.ClientID == clientID {
+			userPoolID = client.UserPoolID
+
+			break
+		}
+	}
+
+	if userPoolID == "" {
+		return &ServiceError{Code: errInvalidParameter, Message: "Invalid client ID"}
+	}
+
+	user, ok := s.users[userPoolID][username]
+	if !ok {
+		return &ServiceError{Code: errUserNotFound, Message: "User not found"}
+	}
+
+	// In a real implementation, we would verify the code.
+	// For testing, we accept any code or the default "123456".
+	expectedCode := s.confirmationCodes[username]
+	if expectedCode != "" && code != expectedCode && code != "123456" {
+		return &ServiceError{Code: errInvalidParameter, Message: "Invalid confirmation code"}
+	}
+
+	user.UserStatus = UserStatusConfirmed
+	user.UserLastModified = time.Now()
+
+	delete(s.confirmationCodes, username)
+
+	return nil
+}
+
+// InitiateAuth initiates authentication.
+func (s *MemoryStorage) InitiateAuth(_ context.Context, req *InitiateAuthRequest) (*InitiateAuthResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Find user pool by client ID.
+	var userPoolID string
+
+	for _, client := range s.userPoolClients {
+		if client.ClientID == req.ClientID {
+			userPoolID = client.UserPoolID
+
+			break
+		}
+	}
+
+	if userPoolID == "" {
+		return nil, &ServiceError{Code: errInvalidParameter, Message: "Invalid client ID"}
+	}
+
+	username := req.AuthParameters["USERNAME"]
+	password := req.AuthParameters["PASSWORD"]
+
+	user, ok := s.users[userPoolID][username]
+	if !ok {
+		return nil, &ServiceError{Code: errUserNotFound, Message: "User not found"}
+	}
+
+	if user.Password != password {
+		return nil, &ServiceError{Code: errNotAuthorized, Message: "Incorrect username or password"}
+	}
+
+	if user.UserStatus == UserStatusUnconfirmed {
+		return nil, &ServiceError{Code: errNotAuthorized, Message: "User is not confirmed"}
+	}
+
+	// Generate tokens.
+	accessToken := generateToken()
+	idToken := generateToken()
+	refreshToken := generateToken()
+
+	return &InitiateAuthResponse{
+		AuthenticationResult: &AuthenticationResult{
+			AccessToken:  accessToken,
+			ExpiresIn:    3600,
+			TokenType:    "Bearer",
+			RefreshToken: refreshToken,
+			IDToken:      idToken,
+		},
+	}, nil
+}
+
+// GetUserPoolByClientID retrieves a user pool by client ID.
+func (s *MemoryStorage) GetUserPoolByClientID(_ context.Context, clientID string) (*UserPool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	client, ok := s.userPoolClients[clientID]
+	if !ok {
+		return nil, &ServiceError{Code: errUserPoolClientNotFound, Message: "User pool client not found"}
+	}
+
+	pool, ok := s.userPools[client.UserPoolID]
+	if !ok {
+		return nil, &ServiceError{Code: errUserPoolNotFound, Message: "User pool not found"}
+	}
+
+	return pool, nil
+}
+
+// GetUserPoolClientByID retrieves a user pool client by ID.
+func (s *MemoryStorage) GetUserPoolClientByID(_ context.Context, clientID string) (*UserPoolClient, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	client, ok := s.userPoolClients[clientID]
+	if !ok {
+		return nil, &ServiceError{Code: errUserPoolClientNotFound, Message: "User pool client not found"}
+	}
+
+	return client, nil
+}
+
+// generateSecret generates a random client secret.
+func generateSecret() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// generateToken generates a random token.
+func generateToken() string {
+	b := make([]byte, 64)
+	_, _ = rand.Read(b)
+
+	return base64.RawURLEncoding.EncodeToString(b)
+}
