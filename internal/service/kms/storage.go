@@ -31,6 +31,22 @@ const (
 	errInvalidKeyUsage   = "InvalidKeyUsageException"
 )
 
+// determineKeySize returns the key size based on key spec or number of bytes.
+func determineKeySize(keySpec string, numberOfBytes int32) int32 {
+	switch keySpec {
+	case "AES_256":
+		return 32
+	case "AES_128":
+		return 16
+	default:
+		if numberOfBytes > 0 {
+			return numberOfBytes
+		}
+
+		return 32 // Default to AES-256
+	}
+}
+
 // Storage defines the KMS storage interface.
 type Storage interface {
 	// Key operations.
@@ -81,7 +97,7 @@ func (s *MemoryStorage) CreateKey(_ context.Context, req *CreateKeyRequest) (*Ke
 	// Generate random key material (256-bit for AES-256).
 	keyMaterial := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, keyMaterial); err != nil {
-		return nil, &KMSError{Code: errDependencyTimeout, Message: "Failed to generate key material"}
+		return nil, &ServiceError{Code: errDependencyTimeout, Message: "Failed to generate key material"}
 	}
 
 	keyUsage := KeyUsageEncryptDecrypt
@@ -139,7 +155,7 @@ func (s *MemoryStorage) getKeyLocked(keyID string) (*Key, error) {
 	if len(keyID) > 6 && keyID[:6] == "alias/" {
 		alias, ok := s.aliases[keyID]
 		if !ok {
-			return nil, &KMSError{Code: errNotFound, Message: "Alias " + keyID + " is not found."}
+			return nil, &ServiceError{Code: errNotFound, Message: "Alias " + keyID + " is not found."}
 		}
 
 		keyID = alias.TargetKeyID
@@ -154,13 +170,13 @@ func (s *MemoryStorage) getKeyLocked(keyID string) (*Key, error) {
 			}
 		}
 
-		return nil, &KMSError{Code: errNotFound, Message: "Key " + keyID + " is not found."}
+		return nil, &ServiceError{Code: errNotFound, Message: "Key " + keyID + " is not found."}
 	}
 
 	// Look up by key ID.
 	key, ok := s.keys[keyID]
 	if !ok {
-		return nil, &KMSError{Code: errNotFound, Message: "Key " + keyID + " is not found."}
+		return nil, &ServiceError{Code: errNotFound, Message: "Key " + keyID + " is not found."}
 	}
 
 	return key, nil
@@ -176,9 +192,12 @@ func (s *MemoryStorage) ListKeys(_ context.Context, limit int32, _ string) ([]*K
 	}
 
 	keys := make([]*Key, 0, len(s.keys))
+	maxKeys := int(limit)
+
 	for _, key := range s.keys {
 		keys = append(keys, key)
-		if int32(len(keys)) >= limit {
+
+		if len(keys) >= maxKeys {
 			break
 		}
 	}
@@ -197,7 +216,7 @@ func (s *MemoryStorage) EnableKey(_ context.Context, keyID string) error {
 	}
 
 	if key.KeyState == KeyStatePendingDeletion {
-		return &KMSError{
+		return &ServiceError{
 			Code:    errInvalidKeyState,
 			Message: "Key " + keyID + " is pending deletion.",
 		}
@@ -220,7 +239,7 @@ func (s *MemoryStorage) DisableKey(_ context.Context, keyID string) error {
 	}
 
 	if key.KeyState == KeyStatePendingDeletion {
-		return &KMSError{
+		return &ServiceError{
 			Code:    errInvalidKeyState,
 			Message: "Key " + keyID + " is pending deletion.",
 		}
@@ -243,7 +262,7 @@ func (s *MemoryStorage) ScheduleKeyDeletion(_ context.Context, keyID string, pen
 	}
 
 	if key.KeyState == KeyStatePendingDeletion {
-		return nil, &KMSError{
+		return nil, &ServiceError{
 			Code:    errInvalidKeyState,
 			Message: "Key " + keyID + " is pending deletion.",
 		}
@@ -273,14 +292,14 @@ func (s *MemoryStorage) Encrypt(_ context.Context, keyID string, plaintext []byt
 	}
 
 	if key.KeyState != KeyStateEnabled {
-		return nil, &KMSError{
+		return nil, &ServiceError{
 			Code:    errDisabled,
 			Message: "Key " + keyID + " is disabled.",
 		}
 	}
 
 	if key.KeyUsage != KeyUsageEncryptDecrypt {
-		return nil, &KMSError{
+		return nil, &ServiceError{
 			Code:    errInvalidKeyUsage,
 			Message: "Key " + keyID + " is not configured for encryption.",
 		}
@@ -289,17 +308,17 @@ func (s *MemoryStorage) Encrypt(_ context.Context, keyID string, plaintext []byt
 	// Use AES-GCM for encryption.
 	block, err := aes.NewCipher(key.KeyMaterial)
 	if err != nil {
-		return nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	// Prepend key ID (36 bytes UUID) + nonce to ciphertext for decryption lookup.
@@ -319,7 +338,7 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 
 	// Extract key ID from ciphertext (first 36 bytes).
 	if len(ciphertextBlob) < 36 {
-		return nil, "", &KMSError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
+		return nil, "", &ServiceError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
 	}
 
 	embeddedKeyID := string(ciphertextBlob[:36])
@@ -332,7 +351,7 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 		}
 
 		if key.KeyID != embeddedKeyID {
-			return nil, "", &KMSError{Code: errIncorrectKey, Message: "The key ID in the ciphertext does not match the specified key."}
+			return nil, "", &ServiceError{Code: errIncorrectKey, Message: "The key ID in the ciphertext does not match the specified key."}
 		}
 	}
 
@@ -342,7 +361,7 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 	}
 
 	if key.KeyState != KeyStateEnabled {
-		return nil, "", &KMSError{
+		return nil, "", &ServiceError{
 			Code:    errDisabled,
 			Message: "Key " + embeddedKeyID + " is disabled.",
 		}
@@ -351,17 +370,17 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 	// Use AES-GCM for decryption.
 	block, err := aes.NewCipher(key.KeyMaterial)
 	if err != nil {
-		return nil, "", &KMSError{Code: errDependencyTimeout, Message: "Decryption failed"}
+		return nil, "", &ServiceError{Code: errDependencyTimeout, Message: "Decryption failed"}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, "", &KMSError{Code: errDependencyTimeout, Message: "Decryption failed"}
+		return nil, "", &ServiceError{Code: errDependencyTimeout, Message: "Decryption failed"}
 	}
 
 	nonceSize := gcm.NonceSize()
 	if len(ciphertextBlob) < 36+nonceSize {
-		return nil, "", &KMSError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
+		return nil, "", &ServiceError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
 	}
 
 	nonce := ciphertextBlob[36 : 36+nonceSize]
@@ -369,7 +388,7 @@ func (s *MemoryStorage) Decrypt(_ context.Context, ciphertextBlob []byte, _ map[
 
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, "", &KMSError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
+		return nil, "", &ServiceError{Code: errInvalidCiphertext, Message: "Invalid ciphertext"}
 	}
 
 	return plaintext, key.KeyID, nil
@@ -386,54 +405,41 @@ func (s *MemoryStorage) GenerateDataKey(_ context.Context, keyID string, keySpec
 	}
 
 	if key.KeyState != KeyStateEnabled {
-		return nil, nil, &KMSError{
+		return nil, nil, &ServiceError{
 			Code:    errDisabled,
 			Message: "Key " + keyID + " is disabled.",
 		}
 	}
 
 	if key.KeyUsage != KeyUsageEncryptDecrypt {
-		return nil, nil, &KMSError{
+		return nil, nil, &ServiceError{
 			Code:    errInvalidKeyUsage,
 			Message: "Key " + keyID + " is not configured for encryption.",
 		}
 	}
 
-	// Determine key size.
-	var keySize int32
-	switch keySpec {
-	case "AES_256":
-		keySize = 32
-	case "AES_128":
-		keySize = 16
-	default:
-		if numberOfBytes > 0 {
-			keySize = numberOfBytes
-		} else {
-			keySize = 32 // Default to AES-256
-		}
-	}
+	keySize := determineKeySize(keySpec, numberOfBytes)
 
 	// Generate plaintext data key.
 	plaintext := make([]byte, keySize)
 	if _, err := io.ReadFull(rand.Reader, plaintext); err != nil {
-		return nil, nil, &KMSError{Code: errDependencyTimeout, Message: "Failed to generate data key"}
+		return nil, nil, &ServiceError{Code: errDependencyTimeout, Message: "Failed to generate data key"}
 	}
 
 	// Encrypt the data key using the KMS key.
 	block, err := aes.NewCipher(key.KeyMaterial)
 	if err != nil {
-		return nil, nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, nil, &KMSError{Code: errDependencyTimeout, Message: "Encryption failed"}
+		return nil, nil, &ServiceError{Code: errDependencyTimeout, Message: "Encryption failed"}
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
@@ -452,12 +458,12 @@ func (s *MemoryStorage) CreateAlias(_ context.Context, aliasName, targetKeyID st
 
 	// Validate alias name.
 	if len(aliasName) < 7 || aliasName[:6] != "alias/" {
-		return &KMSError{Code: errInvalidAlias, Message: "Alias must begin with 'alias/'"}
+		return &ServiceError{Code: errInvalidAlias, Message: "Alias must begin with 'alias/'"}
 	}
 
 	// Check if alias already exists.
 	if _, ok := s.aliases[aliasName]; ok {
-		return &KMSError{Code: errAlreadyExists, Message: "Alias " + aliasName + " already exists."}
+		return &ServiceError{Code: errAlreadyExists, Message: "Alias " + aliasName + " already exists."}
 	}
 
 	// Verify target key exists.
@@ -486,7 +492,7 @@ func (s *MemoryStorage) DeleteAlias(_ context.Context, aliasName string) error {
 	defer s.mu.Unlock()
 
 	if _, ok := s.aliases[aliasName]; !ok {
-		return &KMSError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
+		return &ServiceError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
 	}
 
 	delete(s.aliases, aliasName)
@@ -504,6 +510,7 @@ func (s *MemoryStorage) ListAliases(_ context.Context, keyID string, limit int32
 	}
 
 	aliases := make([]*Alias, 0)
+	maxAliases := int(limit)
 
 	for _, alias := range s.aliases {
 		if keyID != "" && alias.TargetKeyID != keyID {
@@ -520,7 +527,8 @@ func (s *MemoryStorage) ListAliases(_ context.Context, keyID string, limit int32
 		}
 
 		aliases = append(aliases, alias)
-		if int32(len(aliases)) >= limit {
+
+		if len(aliases) >= maxAliases {
 			break
 		}
 	}
@@ -535,7 +543,7 @@ func (s *MemoryStorage) GetAlias(_ context.Context, aliasName string) (*Alias, e
 
 	alias, ok := s.aliases[aliasName]
 	if !ok {
-		return nil, &KMSError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
+		return nil, &ServiceError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
 	}
 
 	return alias, nil
