@@ -153,6 +153,10 @@ linters:
       - path: internal/service/firehose/types\.go
         linters:
           - tagliatelle
+      # AWS AppSync API requires specific JSON field names.
+      - path: internal/service/appsync/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
