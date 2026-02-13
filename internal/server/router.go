@@ -72,7 +72,7 @@ func extractRoutePrefix(pattern string) string {
 	// S3 Tables uses /buckets, /namespaces, /tables, /get-table paths
 	// CloudFront uses /2020-05-31 versioned paths
 	// /service is for RPC v2 CBOR protocol
-	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses", "/2020-05-31", "/service"}
+	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses", "/2020-05-31", "/service", "/appsync"}
 
 	for _, prefix := range prefixes {
 		if len(pattern) >= len(prefix) && pattern[:len(prefix)] == prefix {
