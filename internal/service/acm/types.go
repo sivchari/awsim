@@ -15,10 +15,10 @@ type AWSTimestamp struct {
 // MarshalJSON implements json.Marshaler.
 func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
 	if t.IsZero() {
-		return json.Marshal(nil)
+		return json.Marshal(nil) //nolint:wrapcheck // MarshalJSON interface requirement
 	}
 
-	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9) //nolint:wrapcheck // MarshalJSON interface requirement
 }
 
 // Ptr returns a pointer to the AWSTimestamp.
