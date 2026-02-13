@@ -104,14 +104,13 @@ func (s *Service) GetDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createTime := db.CreateTime
 	writeJSONResponse(w, GetDatabaseOutput{
 		Database: &DatabaseResponse{
 			Name:            db.Name,
 			Description:     db.Description,
 			LocationURI:     db.LocationURI,
 			Parameters:      db.Parameters,
-			CreateTime:      &createTime,
+			CreateTime:      ToAWSTimestamp(db.CreateTime).Ptr(),
 			CatalogID:       db.CatalogID,
 			CreateTableMode: db.CreateTableMode,
 		},
@@ -137,13 +136,12 @@ func (s *Service) GetDatabases(w http.ResponseWriter, r *http.Request) {
 	dbResponses := make([]*DatabaseResponse, 0, len(databases))
 
 	for _, db := range databases {
-		createTime := db.CreateTime
 		dbResponses = append(dbResponses, &DatabaseResponse{
 			Name:            db.Name,
 			Description:     db.Description,
 			LocationURI:     db.LocationURI,
 			Parameters:      db.Parameters,
-			CreateTime:      &createTime,
+			CreateTime:      ToAWSTimestamp(db.CreateTime).Ptr(),
 			CatalogID:       db.CatalogID,
 			CreateTableMode: db.CreateTableMode,
 		})
@@ -237,18 +235,16 @@ func (s *Service) GetTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createTime := table.CreateTime
-	updateTime := table.UpdateTime
 	writeJSONResponse(w, GetTableOutput{
 		Table: &TableResponse{
 			Name:              table.Name,
 			DatabaseName:      table.DatabaseName,
 			Description:       table.Description,
 			Owner:             table.Owner,
-			CreateTime:        &createTime,
-			UpdateTime:        &updateTime,
-			LastAccessTime:    table.LastAccessTime,
-			LastAnalyzedTime:  table.LastAnalyzedTime,
+			CreateTime:        ToAWSTimestamp(table.CreateTime).Ptr(),
+			UpdateTime:        ToAWSTimestamp(table.UpdateTime).Ptr(),
+			LastAccessTime:    ToAWSTimestampPtr(table.LastAccessTime),
+			LastAnalyzedTime:  ToAWSTimestampPtr(table.LastAnalyzedTime),
 			Retention:         table.Retention,
 			StorageDescriptor: table.StorageDescriptor,
 			PartitionKeys:     table.PartitionKeys,
@@ -286,17 +282,15 @@ func (s *Service) GetTables(w http.ResponseWriter, r *http.Request) {
 	tableResponses := make([]*TableResponse, 0, len(tables))
 
 	for _, table := range tables {
-		createTime := table.CreateTime
-		updateTime := table.UpdateTime
 		tableResponses = append(tableResponses, &TableResponse{
 			Name:              table.Name,
 			DatabaseName:      table.DatabaseName,
 			Description:       table.Description,
 			Owner:             table.Owner,
-			CreateTime:        &createTime,
-			UpdateTime:        &updateTime,
-			LastAccessTime:    table.LastAccessTime,
-			LastAnalyzedTime:  table.LastAnalyzedTime,
+			CreateTime:        ToAWSTimestamp(table.CreateTime).Ptr(),
+			UpdateTime:        ToAWSTimestamp(table.UpdateTime).Ptr(),
+			LastAccessTime:    ToAWSTimestampPtr(table.LastAccessTime),
+			LastAnalyzedTime:  ToAWSTimestampPtr(table.LastAnalyzedTime),
 			Retention:         table.Retention,
 			StorageDescriptor: table.StorageDescriptor,
 			PartitionKeys:     table.PartitionKeys,

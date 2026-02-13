@@ -91,7 +91,6 @@ func (s *Service) DescribeCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdAt := cert.CreatedAt
 	detail := &CertificateDetail{
 		CertificateArn:          cert.CertificateArn,
 		DomainName:              cert.DomainName,
@@ -100,12 +99,12 @@ func (s *Service) DescribeCertificate(w http.ResponseWriter, r *http.Request) {
 		Serial:                  cert.Serial,
 		Subject:                 cert.Subject,
 		Issuer:                  cert.Issuer,
-		CreatedAt:               &createdAt,
-		IssuedAt:                cert.IssuedAt,
-		ImportedAt:              cert.ImportedAt,
+		CreatedAt:               ToAWSTimestamp(cert.CreatedAt).Ptr(),
+		IssuedAt:                ToAWSTimestampPtr(cert.IssuedAt),
+		ImportedAt:              ToAWSTimestampPtr(cert.ImportedAt),
 		Status:                  cert.Status,
-		NotBefore:               cert.NotBefore,
-		NotAfter:                cert.NotAfter,
+		NotBefore:               ToAWSTimestampPtr(cert.NotBefore),
+		NotAfter:                ToAWSTimestampPtr(cert.NotAfter),
 		KeyAlgorithm:            cert.KeyAlgorithm,
 		SignatureAlgorithm:      cert.SignatureAlgorithm,
 		InUseBy:                 cert.InUseBy,
@@ -141,7 +140,6 @@ func (s *Service) ListCertificates(w http.ResponseWriter, r *http.Request) {
 	summaries := make([]CertificateSummary, 0, len(certs))
 
 	for _, cert := range certs {
-		createdAt := cert.CreatedAt
 		summary := CertificateSummary{
 			CertificateArn:          cert.CertificateArn,
 			DomainName:              cert.DomainName,
@@ -149,11 +147,11 @@ func (s *Service) ListCertificates(w http.ResponseWriter, r *http.Request) {
 			Status:                  cert.Status,
 			Type:                    cert.Type,
 			KeyAlgorithm:            cert.KeyAlgorithm,
-			CreatedAt:               &createdAt,
-			IssuedAt:                cert.IssuedAt,
-			ImportedAt:              cert.ImportedAt,
-			NotBefore:               cert.NotBefore,
-			NotAfter:                cert.NotAfter,
+			CreatedAt:               ToAWSTimestamp(cert.CreatedAt).Ptr(),
+			IssuedAt:                ToAWSTimestampPtr(cert.IssuedAt),
+			ImportedAt:              ToAWSTimestampPtr(cert.ImportedAt),
+			NotBefore:               ToAWSTimestampPtr(cert.NotBefore),
+			NotAfter:                ToAWSTimestampPtr(cert.NotAfter),
 			RenewalEligibility:      cert.RenewalEligibility,
 			InUse:                   len(cert.InUseBy) > 0,
 		}

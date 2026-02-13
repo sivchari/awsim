@@ -1,7 +1,48 @@
 // Package glue provides AWS Glue service emulation for awsim.
 package glue
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// AWSTimestamp is a time.Time that marshals to Unix timestamp (float64).
+// AWS APIs use Unix timestamps in JSON responses.
+type AWSTimestamp struct {
+	time.Time
+}
+
+// MarshalJSON implements json.Marshaler.
+func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return json.Marshal(nil)
+	}
+
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+}
+
+// Ptr returns a pointer to the AWSTimestamp.
+func (t AWSTimestamp) Ptr() *AWSTimestamp {
+	if t.IsZero() {
+		return nil
+	}
+
+	return &t
+}
+
+// ToAWSTimestamp converts time.Time to AWSTimestamp.
+func ToAWSTimestamp(t time.Time) AWSTimestamp {
+	return AWSTimestamp{Time: t}
+}
+
+// ToAWSTimestampPtr converts *time.Time to *AWSTimestamp.
+func ToAWSTimestampPtr(t *time.Time) *AWSTimestamp {
+	if t == nil {
+		return nil
+	}
+
+	return &AWSTimestamp{Time: *t}
+}
 
 // Database represents a Glue database.
 type Database struct {
@@ -178,7 +219,7 @@ type DatabaseResponse struct {
 	Description     string            `json:"Description,omitempty"`
 	LocationURI     string            `json:"LocationUri,omitempty"`
 	Parameters      map[string]string `json:"Parameters,omitempty"`
-	CreateTime      *time.Time        `json:"CreateTime,omitempty"`
+	CreateTime      *AWSTimestamp     `json:"CreateTime,omitempty"`
 	CatalogID       string            `json:"CatalogId,omitempty"`
 	CreateTableMode string            `json:"CreateTableDefaultPermissions,omitempty"`
 }
@@ -227,10 +268,10 @@ type TableResponse struct {
 	DatabaseName      string             `json:"DatabaseName,omitempty"`
 	Description       string             `json:"Description,omitempty"`
 	Owner             string             `json:"Owner,omitempty"`
-	CreateTime        *time.Time         `json:"CreateTime,omitempty"`
-	UpdateTime        *time.Time         `json:"UpdateTime,omitempty"`
-	LastAccessTime    *time.Time         `json:"LastAccessTime,omitempty"`
-	LastAnalyzedTime  *time.Time         `json:"LastAnalyzedTime,omitempty"`
+	CreateTime        *AWSTimestamp      `json:"CreateTime,omitempty"`
+	UpdateTime        *AWSTimestamp      `json:"UpdateTime,omitempty"`
+	LastAccessTime    *AWSTimestamp      `json:"LastAccessTime,omitempty"`
+	LastAnalyzedTime  *AWSTimestamp      `json:"LastAnalyzedTime,omitempty"`
 	Retention         int32              `json:"Retention,omitempty"`
 	StorageDescriptor *StorageDescriptor `json:"StorageDescriptor,omitempty"`
 	PartitionKeys     []Column           `json:"PartitionKeys,omitempty"`
