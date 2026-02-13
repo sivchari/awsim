@@ -121,6 +121,10 @@ linters:
       - path: internal/service/apigateway/types\.go
         linters:
           - tagliatelle
+      # AWS SES v2 API requires PascalCase JSON field names.
+      - path: internal/service/sesv2/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

@@ -128,7 +128,7 @@ func (s *MemoryStorage) ListEmailIdentities(_ context.Context, _ string, pageSiz
 	}
 
 	// Simple pagination (no actual cursor).
-	if int32(len(identities)) > pageSize {
+	if len(identities) > int(pageSize) {
 		identities = identities[:pageSize]
 	}
 
@@ -220,7 +220,7 @@ func (s *MemoryStorage) ListConfigurationSets(_ context.Context, _ string, pageS
 		names = append(names, name)
 	}
 
-	if int32(len(names)) > pageSize {
+	if len(names) > int(pageSize) {
 		names = names[:pageSize]
 	}
 
@@ -270,21 +270,8 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	// Generate message ID.
 	messageID := uuid.New().String()
 
-	// Extract subject and body.
-	var subject, body string
-	if req.Content.Simple != nil {
-		if req.Content.Simple.Subject != nil {
-			subject = req.Content.Simple.Subject.Data
-		}
-
-		if req.Content.Simple.Body != nil {
-			if req.Content.Simple.Body.Text != nil {
-				body = req.Content.Simple.Body.Text.Data
-			} else if req.Content.Simple.Body.Html != nil {
-				body = req.Content.Simple.Body.Html.Data
-			}
-		}
-	}
+	// Extract subject and body from simple email content.
+	subject, body := extractSimpleEmailContent(req.Content.Simple)
 
 	// Store the sent email.
 	sentEmail := &SentEmail{
@@ -308,4 +295,29 @@ func (s *MemoryStorage) GetSentEmails(_ context.Context) ([]*SentEmail, error) {
 	defer s.mu.RUnlock()
 
 	return s.sentEmails, nil
+}
+
+// extractSimpleEmailContent extracts subject and body from a SimpleEmail.
+func extractSimpleEmailContent(simple *SimpleEmail) (subject, body string) {
+	if simple == nil {
+		return "", ""
+	}
+
+	if simple.Subject != nil {
+		subject = simple.Subject.Data
+	}
+
+	if simple.Body == nil {
+		return subject, ""
+	}
+
+	if simple.Body.Text != nil {
+		return subject, simple.Body.Text.Data
+	}
+
+	if simple.Body.HTML != nil {
+		return subject, simple.Body.HTML.Data
+	}
+
+	return subject, ""
 }

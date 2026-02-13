@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -39,7 +40,7 @@ func (s *Service) CreateEmailIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, CreateEmailIdentityResponse{
+	writeJSONResponse(w, CreateEmailIdentityResponse{
 		IdentityType:             identity.IdentityType,
 		VerifiedForSendingStatus: identity.VerifiedForSendingStatus,
 		DkimAttributes:           identity.DkimAttributes,
@@ -74,7 +75,7 @@ func (s *Service) GetEmailIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, GetEmailIdentityResponse{
+	writeJSONResponse(w, GetEmailIdentityResponse{
 		IdentityType:             identity.IdentityType,
 		FeedbackForwardingStatus: true,
 		VerifiedForSendingStatus: identity.VerifiedForSendingStatus,
@@ -85,11 +86,7 @@ func (s *Service) GetEmailIdentity(w http.ResponseWriter, r *http.Request) {
 // ListEmailIdentities handles the ListEmailIdentities operation.
 func (s *Service) ListEmailIdentities(w http.ResponseWriter, r *http.Request) {
 	nextToken := r.URL.Query().Get("NextToken")
-
-	var pageSize int32 = 100
-	if ps := r.URL.Query().Get("PageSize"); ps != "" {
-		fmt.Sscanf(ps, "%d", &pageSize)
-	}
+	pageSize := parsePageSize(r.URL.Query().Get("PageSize"))
 
 	identities, nextTokenOut, err := s.storage.ListEmailIdentities(r.Context(), nextToken, pageSize)
 	if err != nil {
@@ -107,7 +104,7 @@ func (s *Service) ListEmailIdentities(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSONResponse(w, http.StatusOK, ListEmailIdentitiesResponse{
+	writeJSONResponse(w, ListEmailIdentitiesResponse{
 		EmailIdentities: summaries,
 		NextToken:       nextTokenOut,
 	})
@@ -202,7 +199,7 @@ func (s *Service) GetConfigurationSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, GetConfigurationSetResponse{
+	writeJSONResponse(w, GetConfigurationSetResponse{
 		ConfigurationSetName: configSet.Name,
 		DeliveryOptions:      configSet.DeliveryOptions,
 		ReputationOptions:    configSet.ReputationOptions,
@@ -215,11 +212,7 @@ func (s *Service) GetConfigurationSet(w http.ResponseWriter, r *http.Request) {
 // ListConfigurationSets handles the ListConfigurationSets operation.
 func (s *Service) ListConfigurationSets(w http.ResponseWriter, r *http.Request) {
 	nextToken := r.URL.Query().Get("NextToken")
-
-	var pageSize int32 = 100
-	if ps := r.URL.Query().Get("PageSize"); ps != "" {
-		fmt.Sscanf(ps, "%d", &pageSize)
-	}
+	pageSize := parsePageSize(r.URL.Query().Get("PageSize"))
 
 	names, nextTokenOut, err := s.storage.ListConfigurationSets(r.Context(), nextToken, pageSize)
 	if err != nil {
@@ -228,7 +221,7 @@ func (s *Service) ListConfigurationSets(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, ListConfigurationSetsResponse{
+	writeJSONResponse(w, ListConfigurationSetsResponse{
 		ConfigurationSets: names,
 		NextToken:         nextTokenOut,
 	})
@@ -287,8 +280,8 @@ func (s *Service) SendEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, SendEmailResponse{
-		MessageId: messageID,
+	writeJSONResponse(w, SendEmailResponse{
+		MessageID: messageID,
 	})
 }
 
@@ -312,11 +305,11 @@ func readJSONRequest(r *http.Request, v any) error {
 	return nil
 }
 
-// writeJSONResponse writes a JSON response.
-func writeJSONResponse(w http.ResponseWriter, status int, v any) {
+// writeJSONResponse writes a JSON response with HTTP 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 
 	if v != nil {
 		_ = json.NewEncoder(w).Encode(v)
@@ -347,4 +340,23 @@ func extractPathParam(path, prefix string) string {
 	}
 
 	return param
+}
+
+// parsePageSize parses the page size from a string, returning 100 as default.
+func parsePageSize(s string) int32 {
+	const (
+		defaultPageSize = 100
+		maxPageSize     = 1000
+	)
+
+	if s == "" {
+		return defaultPageSize
+	}
+
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil || n <= 0 || n > maxPageSize {
+		return defaultPageSize
+	}
+
+	return int32(n)
 }
