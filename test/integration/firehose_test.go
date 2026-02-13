@@ -3,10 +3,11 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/firehose"
 	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestFirehose_CreateDeliveryStream(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName := "test-delivery-stream"
 
@@ -41,7 +42,7 @@ func TestFirehose_DescribeDeliveryStream(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName := "describe-test-stream"
 
@@ -72,7 +73,7 @@ func TestFirehose_ListDeliveryStreams(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName1 := "list-test-stream-1"
 	streamName2 := "list-test-stream-2"
@@ -114,7 +115,7 @@ func TestFirehose_PutRecord(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName := "put-record-test-stream"
 
@@ -147,7 +148,7 @@ func TestFirehose_PutRecordBatch(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName := "put-record-batch-test-stream"
 
@@ -187,7 +188,7 @@ func TestFirehose_UpdateDestination(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := createFirehoseClient(t, ctx)
+	client := createFirehoseClient(t)
 
 	streamName := "update-dest-test-stream"
 
@@ -227,12 +228,20 @@ func TestFirehose_UpdateDestination(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func createFirehoseClient(t *testing.T, ctx context.Context) *firehose.Client {
+func createFirehoseClient(t *testing.T) *firehose.Client {
 	t.Helper()
 
-	cfg := loadAWSConfig(t, ctx)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
 
 	return firehose.NewFromConfig(cfg, func(o *firehose.Options) {
-		o.BaseEndpoint = aws.String(testEndpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
