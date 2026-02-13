@@ -125,6 +125,10 @@ linters:
       - path: internal/service/sesv2/types\.go
         linters:
           - tagliatelle
+      # AWS ACM API requires PascalCase JSON field names.
+      - path: internal/service/acm/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
