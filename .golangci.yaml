@@ -137,6 +137,10 @@ linters:
       - path: internal/service/xray/types\.go
         linters:
           - tagliatelle
+      # AWS X-Ray segment document uses snake_case field names.
+      - path: internal/service/xray/storage\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

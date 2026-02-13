@@ -61,27 +61,27 @@ func (s *Service) GetTraceSummaries(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]TraceSummaryResponse, 0, len(summaries))
 
-	for _, summary := range summaries {
+	for i := range summaries {
 		responses = append(responses, TraceSummaryResponse{
-			ID:                summary.ID,
-			Duration:          summary.Duration,
-			ResponseTime:      summary.ResponseTime,
-			HasFault:          summary.HasFault,
-			HasError:          summary.HasError,
-			HasThrottle:       summary.HasThrottle,
-			IsPartial:         summary.IsPartial,
-			HTTP:              summary.HTTP,
-			Annotations:       summary.Annotations,
-			Users:             summary.Users,
-			ServiceIDs:        summary.ServiceIDs,
-			EntryPoint:        summary.EntryPoint,
-			FaultRootCauses:   summary.FaultRootCauses,
-			ErrorRootCauses:   summary.ErrorRootCauses,
-			AvailabilityZones: summary.AvailabilityZones,
-			InstanceIDs:       summary.InstanceIDs,
-			ResourceARNs:      summary.ResourceARNs,
-			MatchedEventTime:  summary.MatchedEventTime,
-			Revision:          summary.Revision,
+			ID:                summaries[i].ID,
+			Duration:          summaries[i].Duration,
+			ResponseTime:      summaries[i].ResponseTime,
+			HasFault:          summaries[i].HasFault,
+			HasError:          summaries[i].HasError,
+			HasThrottle:       summaries[i].HasThrottle,
+			IsPartial:         summaries[i].IsPartial,
+			HTTP:              summaries[i].HTTP,
+			Annotations:       summaries[i].Annotations,
+			Users:             summaries[i].Users,
+			ServiceIDs:        summaries[i].ServiceIDs,
+			EntryPoint:        summaries[i].EntryPoint,
+			FaultRootCauses:   summaries[i].FaultRootCauses,
+			ErrorRootCauses:   summaries[i].ErrorRootCauses,
+			AvailabilityZones: summaries[i].AvailabilityZones,
+			InstanceIDs:       summaries[i].InstanceIDs,
+			ResourceARNs:      summaries[i].ResourceARNs,
+			MatchedEventTime:  summaries[i].MatchedEventTime,
+			Revision:          summaries[i].Revision,
 		})
 	}
 

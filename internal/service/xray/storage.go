@@ -154,6 +154,7 @@ func (s *MemoryStorage) GetTraceSummaries(_ context.Context, _, _ time.Time) ([]
 					HTTPMethod: segDoc.HTTP.Request.Method,
 					HTTPURL:    segDoc.HTTP.Request.URL,
 					ClientIP:   segDoc.HTTP.Request.ClientIP,
+					//nolint:gosec // G115: HTTP status codes are always in range 100-599, safe for int32.
 					HTTPStatus: int32(segDoc.HTTP.Response.Status),
 				}
 			}
@@ -207,6 +208,7 @@ func (s *MemoryStorage) GetServiceGraph(_ context.Context, _, _ time.Time, _ str
 
 			if _, exists := serviceMap[serviceName]; !exists {
 				serviceMap[serviceName] = &ServiceNode{
+					//nolint:gosec // G115: Service count is bounded by trace data, won't exceed int32 range.
 					ReferenceID: int32(len(serviceMap) + 1),
 					Name:        serviceName,
 					Type:        segDoc.Origin,
