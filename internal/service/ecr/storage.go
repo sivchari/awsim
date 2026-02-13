@@ -134,7 +134,7 @@ func (s *MemoryStorage) DescribeRepositories(_ context.Context, names []string, 
 		return repos[i].RepositoryName < repos[j].RepositoryName
 	})
 
-	if int32(len(repos)) > maxResults {
+	if int32(len(repos)) > maxResults { //nolint:gosec // slice length bounded by maxResults parameter
 		repos = repos[:maxResults]
 	}
 
@@ -164,7 +164,7 @@ func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, max
 		})
 	}
 
-	if int32(len(imageIDs)) > maxResults {
+	if int32(len(imageIDs)) > maxResults { //nolint:gosec // slice length bounded by maxResults parameter
 		imageIDs = imageIDs[:maxResults]
 	}
 
@@ -210,6 +210,7 @@ func (s *MemoryStorage) BatchGetImage(_ context.Context, repositoryName string, 
 	}
 
 	var images []*Image
+
 	var failures []ImageFailure
 
 	for _, id := range imageIDs {
@@ -248,6 +249,7 @@ func (s *MemoryStorage) BatchDeleteImage(_ context.Context, repositoryName strin
 	}
 
 	var deleted []ImageIdentifier
+
 	var failures []ImageFailure
 
 	for _, id := range imageIDs {
@@ -257,6 +259,7 @@ func (s *MemoryStorage) BatchDeleteImage(_ context.Context, repositoryName strin
 			if (id.ImageDigest != "" && img.ImageDigest == id.ImageDigest) ||
 				(id.ImageTag != "" && img.ImageID.ImageTag == id.ImageTag) {
 				delete(rd.images, digest)
+
 				deleted = append(deleted, ImageIdentifier{
 					ImageDigest: img.ImageDigest,
 					ImageTag:    img.ImageID.ImageTag,
