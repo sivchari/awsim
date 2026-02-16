@@ -31,16 +31,23 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers the Batch routes.
-// Note: Batch uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
-// so no direct routes are registered here.
-func (s *Service) RegisterRoutes(_ service.Router) {
-	// No routes to register - Batch uses JSON protocol dispatcher
-}
+// Batch uses REST JSON protocol with paths like /v1/createcomputeenvironment.
+func (s *Service) RegisterRoutes(r service.Router) {
+	// Compute Environment operations
+	r.Handle("POST", "/v1/createcomputeenvironment", s.CreateComputeEnvironment)
+	r.Handle("POST", "/v1/deletecomputeenvironment", s.DeleteComputeEnvironment)
+	r.Handle("POST", "/v1/describecomputeenvironments", s.DescribeComputeEnvironments)
 
-// TargetPrefix returns the X-Amz-Target header prefix for Batch.
-func (s *Service) TargetPrefix() string {
-	return "AWSBatch_V20160810"
-}
+	// Job Queue operations
+	r.Handle("POST", "/v1/createjobqueue", s.CreateJobQueue)
+	r.Handle("POST", "/v1/deletejobqueue", s.DeleteJobQueue)
+	r.Handle("POST", "/v1/describejobqueues", s.DescribeJobQueues)
 
-// JSONProtocol is a marker method that indicates Batch uses AWS JSON 1.1 protocol.
-func (s *Service) JSONProtocol() {}
+	// Job Definition operations
+	r.Handle("POST", "/v1/registerjobdefinition", s.RegisterJobDefinition)
+
+	// Job operations
+	r.Handle("POST", "/v1/submitjob", s.SubmitJob)
+	r.Handle("POST", "/v1/describejobs", s.DescribeJobs)
+	r.Handle("POST", "/v1/terminatejob", s.TerminateJob)
+}

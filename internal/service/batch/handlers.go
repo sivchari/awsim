@@ -11,55 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// target action constants.
-const (
-	targetCreateComputeEnvironment    = "AWSBatch_V20160810.CreateComputeEnvironment"
-	targetDeleteComputeEnvironment    = "AWSBatch_V20160810.DeleteComputeEnvironment"
-	targetDescribeComputeEnvironments = "AWSBatch_V20160810.DescribeComputeEnvironments"
-	targetCreateJobQueue              = "AWSBatch_V20160810.CreateJobQueue"
-	targetDeleteJobQueue              = "AWSBatch_V20160810.DeleteJobQueue"
-	targetDescribeJobQueues           = "AWSBatch_V20160810.DescribeJobQueues"
-	targetRegisterJobDefinition       = "AWSBatch_V20160810.RegisterJobDefinition"
-	targetSubmitJob                   = "AWSBatch_V20160810.SubmitJob"
-	targetDescribeJobs                = "AWSBatch_V20160810.DescribeJobs"
-	targetTerminateJob                = "AWSBatch_V20160810.TerminateJob"
-)
-
-// DispatchAction handles all Batch operations based on X-Amz-Target header.
-func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
-	target := r.Header.Get("X-Amz-Target")
-	if target == "" {
-		writeError(w, errInvalidRequest, "Missing X-Amz-Target header", http.StatusBadRequest)
-
-		return
-	}
-
-	switch target {
-	case targetCreateComputeEnvironment:
-		s.CreateComputeEnvironment(w, r)
-	case targetDeleteComputeEnvironment:
-		s.DeleteComputeEnvironment(w, r)
-	case targetDescribeComputeEnvironments:
-		s.DescribeComputeEnvironments(w, r)
-	case targetCreateJobQueue:
-		s.CreateJobQueue(w, r)
-	case targetDeleteJobQueue:
-		s.DeleteJobQueue(w, r)
-	case targetDescribeJobQueues:
-		s.DescribeJobQueues(w, r)
-	case targetRegisterJobDefinition:
-		s.RegisterJobDefinition(w, r)
-	case targetSubmitJob:
-		s.SubmitJob(w, r)
-	case targetDescribeJobs:
-		s.DescribeJobs(w, r)
-	case targetTerminateJob:
-		s.TerminateJob(w, r)
-	default:
-		writeError(w, errInvalidRequest, fmt.Sprintf("Unknown target: %s", target), http.StatusBadRequest)
-	}
-}
-
 // CreateComputeEnvironment handles the CreateComputeEnvironment operation.
 func (s *Service) CreateComputeEnvironment(w http.ResponseWriter, r *http.Request) {
 	var req CreateComputeEnvironmentInput
