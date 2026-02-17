@@ -11,6 +11,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/athena"
 	_ "github.com/sivchari/awsim/internal/service/batch"
 	_ "github.com/sivchari/awsim/internal/service/cloudfront"
+	_ "github.com/sivchari/awsim/internal/service/cloudwatch"
 	_ "github.com/sivchari/awsim/internal/service/cloudwatchlogs"
 	_ "github.com/sivchari/awsim/internal/service/codeconnections"
 	_ "github.com/sivchari/awsim/internal/service/cognito"
