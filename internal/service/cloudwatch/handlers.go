@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/awsim/internal/server"
 )
 
 // Error codes for CloudWatch.
@@ -302,4 +304,228 @@ func writeCloudWatchError(w http.ResponseWriter, code, message string, status in
 		Type:    code,
 		Message: message,
 	})
+}
+
+// CBOR Protocol Handlers for RPC v2 CBOR
+
+// PutMetricDataCBOR handles the PutMetricData action with CBOR protocol.
+func (s *Service) PutMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
+	var req PutMetricDataRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Namespace == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter Namespace is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.MetricData) == 0 {
+		server.WriteCBORError(w, errMissingParameter, "The parameter MetricData is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.PutMetricData(r.Context(), req.Namespace, req.MetricData); err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	// PutMetricData returns an empty response on success.
+	server.WriteCBORResponse(w, struct{}{})
+}
+
+// GetMetricDataCBOR handles the GetMetricData action with CBOR protocol.
+func (s *Service) GetMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
+	var req GetMetricDataRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.MetricDataQueries) == 0 {
+		server.WriteCBORError(w, errMissingParameter, "The parameter MetricDataQueries is required", http.StatusBadRequest)
+
+		return
+	}
+
+	result, err := s.storage.GetMetricData(r.Context(), &req)
+	if err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	server.WriteCBORResponse(w, GetMetricDataResponse{
+		MetricDataResults: result.MetricDataResults,
+		NextToken:         result.NextToken,
+	})
+}
+
+// GetMetricStatisticsCBOR handles the GetMetricStatistics action with CBOR protocol.
+func (s *Service) GetMetricStatisticsCBOR(w http.ResponseWriter, r *http.Request) {
+	var req GetMetricStatisticsRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Namespace == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter Namespace is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.MetricName == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter MetricName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	result, err := s.storage.GetMetricStatistics(r.Context(), &req)
+	if err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	server.WriteCBORResponse(w, GetMetricStatisticsResponse{
+		Label:      result.Label,
+		Datapoints: result.Datapoints,
+	})
+}
+
+// ListMetricsCBOR handles the ListMetrics action with CBOR protocol.
+func (s *Service) ListMetricsCBOR(w http.ResponseWriter, r *http.Request) {
+	var req ListMetricsRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	result, err := s.storage.ListMetrics(r.Context(), &req)
+	if err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	server.WriteCBORResponse(w, ListMetricsResponse{
+		Metrics:   result.Metrics,
+		NextToken: result.NextToken,
+	})
+}
+
+// PutMetricAlarmCBOR handles the PutMetricAlarm action with CBOR protocol.
+func (s *Service) PutMetricAlarmCBOR(w http.ResponseWriter, r *http.Request) {
+	var req PutMetricAlarmRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.AlarmName == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter AlarmName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.MetricName == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter MetricName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Namespace == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter Namespace is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.ComparisonOperator == "" {
+		server.WriteCBORError(w, errMissingParameter, "The parameter ComparisonOperator is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.PutMetricAlarm(r.Context(), &req); err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	// PutMetricAlarm returns an empty response on success.
+	server.WriteCBORResponse(w, struct{}{})
+}
+
+// DeleteAlarmsCBOR handles the DeleteAlarms action with CBOR protocol.
+func (s *Service) DeleteAlarmsCBOR(w http.ResponseWriter, r *http.Request) {
+	var req DeleteAlarmsRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.AlarmNames) == 0 {
+		server.WriteCBORError(w, errMissingParameter, "The parameter AlarmNames is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.DeleteAlarms(r.Context(), req.AlarmNames); err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	// DeleteAlarms returns an empty response on success.
+	server.WriteCBORResponse(w, struct{}{})
+}
+
+// DescribeAlarmsCBOR handles the DescribeAlarms action with CBOR protocol.
+func (s *Service) DescribeAlarmsCBOR(w http.ResponseWriter, r *http.Request) {
+	var req DescribeAlarmsRequest
+	if err := server.DecodeCBORRequest(r, &req); err != nil {
+		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	result, err := s.storage.DescribeAlarms(r.Context(), &req)
+	if err != nil {
+		handleCloudWatchCBORError(w, err)
+
+		return
+	}
+
+	server.WriteCBORResponse(w, DescribeAlarmsResponse{
+		MetricAlarms: result.MetricAlarms,
+		NextToken:    result.NextToken,
+	})
+}
+
+// handleCloudWatchCBORError handles CloudWatch errors for CBOR protocol.
+func handleCloudWatchCBORError(w http.ResponseWriter, err error) {
+	var cwErr *Error
+	if errors.As(err, &cwErr) {
+		status := http.StatusBadRequest
+		if cwErr.Code == errResourceNotFound {
+			status = http.StatusNotFound
+		}
+
+		server.WriteCBORError(w, cwErr.Code, cwErr.Message, status)
+
+		return
+	}
+
+	server.WriteCBORError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
 }

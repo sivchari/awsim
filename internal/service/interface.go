@@ -68,3 +68,19 @@ type QueryProtocolService interface {
 	// QueryProtocol is a marker method to distinguish from JSONProtocolService.
 	QueryProtocol()
 }
+
+// CBORProtocolService is an optional interface for services using Smithy RPC v2 CBOR protocol.
+// Services implementing this interface will have their handlers dispatched via
+// URL-based routing: /service/{serviceName}/operation/{operationName}.
+type CBORProtocolService interface {
+	// ServiceName returns the Smithy service name used in the URL path.
+	// e.g., "GraniteServiceVersion20100801" for CloudWatch
+	ServiceName() string
+
+	// DispatchCBORAction handles the RPC v2 CBOR protocol request.
+	// The operation name is extracted from the URL path.
+	DispatchCBORAction(w http.ResponseWriter, r *http.Request, operation string)
+
+	// CBORProtocol is a marker method for CBOR protocol services.
+	CBORProtocol()
+}

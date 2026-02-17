@@ -38,6 +38,7 @@ type Server struct {
 	registry        *service.Registry
 	jsonDispatcher  *JSONProtocolDispatcher
 	queryDispatcher *QueryProtocolDispatcher
+	cborDispatcher  *CBORProtocolDispatcher
 	logger          *slog.Logger
 	server          *http.Server
 }
@@ -53,6 +54,7 @@ func New(config Config) *Server {
 	router := NewRouter(logger)
 	jsonDispatcher := NewJSONProtocolDispatcher()
 	queryDispatcher := NewQueryProtocolDispatcher()
+	cborDispatcher := NewCBORProtocolDispatcher()
 
 	srv := &Server{
 		config:          config,
@@ -60,6 +62,7 @@ func New(config Config) *Server {
 		registry:        registry,
 		jsonDispatcher:  jsonDispatcher,
 		queryDispatcher: queryDispatcher,
+		cborDispatcher:  cborDispatcher,
 		logger:          logger,
 	}
 
@@ -75,6 +78,13 @@ func New(config Config) *Server {
 	if hasJSONServices || hasQueryServices {
 		router.HandleFunc("POST", "/", srv.unifiedDispatcher)
 		logger.Debug("registered unified protocol dispatcher for POST /")
+	}
+
+	// Register CBOR protocol dispatcher for /service/{serviceName}/operation/{operationName}
+	hasCBORServices := len(cborDispatcher.handlers) > 0
+	if hasCBORServices {
+		router.HandleFunc("POST", "/service/{serviceName}/operation/{operationName}", srv.cborDispatcher.ServeHTTP)
+		logger.Debug("registered CBOR protocol dispatcher for POST /service/*/operation/*")
 	}
 
 	return srv
@@ -126,6 +136,12 @@ func (s *Server) RegisterService(svc service.Service) {
 		}
 
 		s.logger.Debug("registered Query protocol service", "name", svc.Name(), "prefix", querySvc.TargetPrefix())
+	}
+
+	// Check if service implements CBOR protocol.
+	if cborSvc, ok := svc.(service.CBORProtocolService); ok {
+		s.cborDispatcher.Register(cborSvc.ServiceName(), cborSvc.DispatchCBORAction)
+		s.logger.Debug("registered CBOR protocol service", "name", svc.Name(), "serviceName", cborSvc.ServiceName())
 	}
 
 	s.logger.Info("registered service", "name", svc.Name())
