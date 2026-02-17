@@ -314,7 +314,7 @@ func buildDistributionConfigXML(config *DistributionConfig) *DistributionConfigX
 		Enabled:           config.Enabled,
 		PriceClass:        config.PriceClass,
 		DefaultRootObject: config.DefaultRootObject,
-		HttpVersion:       config.HttpVersion,
+		HTTPVersion:       config.HTTPVersion,
 		IsIPV6Enabled:     config.IsIPV6Enabled,
 	}
 
@@ -455,7 +455,7 @@ func buildDistributionListXML(dists []*Distribution, marker string, maxItems int
 				Enabled:          d.DistributionConfig.Enabled,
 				Comment:          d.DistributionConfig.Comment,
 				PriceClass:       d.DistributionConfig.PriceClass,
-				HttpVersion:      d.DistributionConfig.HttpVersion,
+				HTTPVersion:      d.DistributionConfig.HTTPVersion,
 				IsIPV6Enabled:    d.DistributionConfig.IsIPV6Enabled,
 				CacheBehaviors:   &CacheBehaviorsXML{Quantity: 0},
 			}
