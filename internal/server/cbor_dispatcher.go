@@ -21,20 +21,25 @@ func init() {
 	decOpts := cbor.DecOptions{
 		TimeTag: cbor.DecTagOptional,
 	}
-	var err error
-	cborDecMode, err = decOpts.DecMode()
+
+	decMode, err := decOpts.DecMode()
 	if err != nil {
 		panic(fmt.Errorf("failed to create CBOR decode mode: %w", err))
 	}
+
+	cborDecMode = decMode
 
 	// Configure encode mode to output time as Unix epoch (Tag 1)
 	encOpts := cbor.EncOptions{
 		Time: cbor.TimeUnix,
 	}
-	cborEncMode, err = encOpts.EncMode()
+
+	encMode, err := encOpts.EncMode()
 	if err != nil {
 		panic(fmt.Errorf("failed to create CBOR encode mode: %w", err))
 	}
+
+	cborEncMode = encMode
 }
 
 // CBORServiceHandler handles RPC v2 CBOR protocol requests for a specific service.
