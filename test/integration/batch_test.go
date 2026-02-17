@@ -187,7 +187,7 @@ func TestBatch_RegisterJobDefinition(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, jdName, *result.JobDefinitionName)
 	assert.NotEmpty(t, *result.JobDefinitionArn)
-	assert.Equal(t, int32(1), result.Revision)
+	assert.Equal(t, int32(1), *result.Revision)
 }
 
 func TestBatch_SubmitJob(t *testing.T) {
