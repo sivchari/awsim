@@ -70,7 +70,8 @@ func (r *Router) Handle(method, pattern string, handler http.HandlerFunc) {
 func extractRoutePrefix(pattern string) string {
 	// Known service prefixes that need isolation from wildcard routes
 	// S3 Tables uses /buckets, /namespaces, /tables, /get-table paths
-	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses"}
+	// CloudFront uses /2020-05-31 versioned paths
+	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses", "/2020-05-31"}
 
 	for _, prefix := range prefixes {
 		if len(pattern) >= len(prefix) && pattern[:len(prefix)] == prefix {

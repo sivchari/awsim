@@ -130,6 +130,7 @@ func (s *MemoryStorage) ListDistributions(_ context.Context, marker string, maxI
 
 	// Apply marker-based pagination.
 	startIdx := 0
+
 	if marker != "" {
 		for i, d := range dists {
 			if d.ID == marker {
@@ -255,6 +256,7 @@ func (s *MemoryStorage) CreateInvalidation(_ context.Context, distributionID str
 	if s.invalidations[distributionID] == nil {
 		s.invalidations[distributionID] = make(map[string]*Invalidation)
 	}
+
 	s.invalidations[distributionID][id] = inv
 
 	return inv, nil
@@ -324,6 +326,7 @@ func (s *MemoryStorage) ListInvalidations(_ context.Context, distributionID, mar
 
 	// Apply marker-based pagination.
 	startIdx := 0
+
 	if marker != "" {
 		for i, inv := range invs {
 			if inv.ID == marker {
@@ -454,53 +457,77 @@ func convertDefaultCacheBehaviorFromXML(behavior *DefaultCacheBehaviorXML) *Defa
 		CachePolicyID:        behavior.CachePolicyID,
 	}
 
-	if behavior.AllowedMethods != nil {
-		result.AllowedMethods = &AllowedMethods{
-			Quantity: behavior.AllowedMethods.Quantity,
-			Items:    behavior.AllowedMethods.Items,
-		}
-		if behavior.AllowedMethods.CachedMethods != nil {
-			result.CachedMethods = &CachedMethods{
-				Quantity: behavior.AllowedMethods.CachedMethods.Quantity,
-				Items:    behavior.AllowedMethods.CachedMethods.Items,
-			}
-		}
-	}
-
-	if behavior.ForwardedValues != nil {
-		result.ForwardedValues = &ForwardedValues{
-			QueryString: behavior.ForwardedValues.QueryString,
-		}
-		if behavior.ForwardedValues.Cookies != nil {
-			result.ForwardedValues.Cookies = &CookiePreference{
-				Forward: behavior.ForwardedValues.Cookies.Forward,
-			}
-		}
-		if behavior.ForwardedValues.Headers != nil {
-			result.ForwardedValues.Headers = &Headers{
-				Quantity: behavior.ForwardedValues.Headers.Quantity,
-				Items:    behavior.ForwardedValues.Headers.Items,
-			}
-		}
-	}
-
-	if behavior.TrustedSigners != nil {
-		result.TrustedSigners = &TrustedSigners{
-			Enabled:  behavior.TrustedSigners.Enabled,
-			Quantity: behavior.TrustedSigners.Quantity,
-			Items:    behavior.TrustedSigners.Items,
-		}
-	}
-
-	if behavior.TrustedKeyGroups != nil {
-		result.TrustedKeyGroups = &TrustedKeyGroups{
-			Enabled:  behavior.TrustedKeyGroups.Enabled,
-			Quantity: behavior.TrustedKeyGroups.Quantity,
-			Items:    behavior.TrustedKeyGroups.Items,
-		}
-	}
+	convertAllowedMethodsFromXML(behavior.AllowedMethods, result)
+	convertForwardedValuesFromXML(behavior.ForwardedValues, result)
+	convertTrustedSignersFromXML(behavior.TrustedSigners, result)
+	convertTrustedKeyGroupsFromXML(behavior.TrustedKeyGroups, result)
 
 	return result
+}
+
+func convertAllowedMethodsFromXML(methods *AllowedMethodsXML, result *DefaultCacheBehavior) {
+	if methods == nil {
+		return
+	}
+
+	result.AllowedMethods = &AllowedMethods{
+		Quantity: methods.Quantity,
+		Items:    methods.Items,
+	}
+
+	if methods.CachedMethods != nil {
+		result.CachedMethods = &CachedMethods{
+			Quantity: methods.CachedMethods.Quantity,
+			Items:    methods.CachedMethods.Items,
+		}
+	}
+}
+
+func convertForwardedValuesFromXML(fv *ForwardedValuesXML, result *DefaultCacheBehavior) {
+	if fv == nil {
+		return
+	}
+
+	result.ForwardedValues = &ForwardedValues{
+		QueryString: fv.QueryString,
+	}
+
+	if fv.Cookies != nil {
+		result.ForwardedValues.Cookies = &CookiePreference{
+			Forward: fv.Cookies.Forward,
+		}
+	}
+
+	if fv.Headers != nil {
+		result.ForwardedValues.Headers = &Headers{
+			Quantity: fv.Headers.Quantity,
+			Items:    fv.Headers.Items,
+		}
+	}
+}
+
+func convertTrustedSignersFromXML(ts *TrustedSignersXML, result *DefaultCacheBehavior) {
+	if ts == nil {
+		return
+	}
+
+	result.TrustedSigners = &TrustedSigners{
+		Enabled:  ts.Enabled,
+		Quantity: ts.Quantity,
+		Items:    ts.Items,
+	}
+}
+
+func convertTrustedKeyGroupsFromXML(tkg *TrustedKeyGroupsXML, result *DefaultCacheBehavior) {
+	if tkg == nil {
+		return
+	}
+
+	result.TrustedKeyGroups = &TrustedKeyGroups{
+		Enabled:  tkg.Enabled,
+		Quantity: tkg.Quantity,
+		Items:    tkg.Items,
+	}
 }
 
 func convertAliasesFromXML(aliases *AliasesXML) *Aliases {
