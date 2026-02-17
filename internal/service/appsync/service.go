@@ -31,21 +31,21 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers the AppSync routes.
-// AppSync uses REST API protocol.
-// Note: Routes use /appsync prefix to avoid conflicts with S3 wildcard routes.
+// AppSync uses REST API protocol with /v1 prefix.
+// Note: Routes use /appsync prefix for internal routing to avoid S3 conflicts.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// GraphQL API operations.
-	r.HandleFunc("POST", "/appsync/apis", s.CreateGraphqlAPI)
-	r.HandleFunc("DELETE", "/appsync/apis/{apiId}", s.DeleteGraphqlAPI)
-	r.HandleFunc("GET", "/appsync/apis/{apiId}", s.GetGraphqlAPI)
-	r.HandleFunc("GET", "/appsync/apis", s.ListGraphqlAPIs)
+	r.HandleFunc("POST", "/appsync/v1/apis", s.CreateGraphqlAPI)
+	r.HandleFunc("DELETE", "/appsync/v1/apis/{apiId}", s.DeleteGraphqlAPI)
+	r.HandleFunc("GET", "/appsync/v1/apis/{apiId}", s.GetGraphqlAPI)
+	r.HandleFunc("GET", "/appsync/v1/apis", s.ListGraphqlAPIs)
 
 	// Data source operations.
-	r.HandleFunc("POST", "/appsync/apis/{apiId}/datasources", s.CreateDataSource)
+	r.HandleFunc("POST", "/appsync/v1/apis/{apiId}/datasources", s.CreateDataSource)
 
 	// Resolver operations.
-	r.HandleFunc("POST", "/appsync/apis/{apiId}/types/{typeName}/resolvers", s.CreateResolver)
+	r.HandleFunc("POST", "/appsync/v1/apis/{apiId}/types/{typeName}/resolvers", s.CreateResolver)
 
 	// Schema operations.
-	r.HandleFunc("POST", "/appsync/apis/{apiId}/schemacreation", s.StartSchemaCreation)
+	r.HandleFunc("POST", "/appsync/v1/apis/{apiId}/schemacreation", s.StartSchemaCreation)
 }

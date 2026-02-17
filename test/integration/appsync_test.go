@@ -268,6 +268,6 @@ func createAppSyncClient(t *testing.T) *appsync.Client {
 	}
 
 	return appsync.NewFromConfig(cfg, func(o *appsync.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566")
+		o.BaseEndpoint = aws.String("http://localhost:4566/appsync")
 	})
 }
