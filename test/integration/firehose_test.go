@@ -170,7 +170,7 @@ func TestFirehose_PutRecordBatch(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, int32(0), result.FailedPutCount)
+	assert.Equal(t, int32(0), *result.FailedPutCount)
 	assert.Len(t, result.RequestResponses, 3)
 
 	for _, resp := range result.RequestResponses {
