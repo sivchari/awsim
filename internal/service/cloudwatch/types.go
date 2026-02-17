@@ -1,40 +1,38 @@
 // Package cloudwatch provides CloudWatch metrics service emulation for awsim.
 package cloudwatch
 
-import "encoding/xml"
-
 // Metric represents a CloudWatch metric.
 type Metric struct {
-	Namespace  string
-	MetricName string
-	Dimensions []Dimension
+	Namespace  string      `json:"Namespace"`
+	MetricName string      `json:"MetricName"`
+	Dimensions []Dimension `json:"Dimensions,omitempty"`
 }
 
 // Dimension represents a CloudWatch dimension.
 type Dimension struct {
-	Name  string
-	Value string
+	Name  string `json:"Name"`
+	Value string `json:"Value"`
 }
 
 // MetricDatum represents a single metric data point.
 type MetricDatum struct {
-	MetricName        string
-	Dimensions        []Dimension
-	Timestamp         string
-	Value             *float64
-	StatisticValues   *StatisticSet
-	Values            []float64
-	Counts            []float64
-	Unit              string
-	StorageResolution *int32
+	MetricName        string        `json:"MetricName"`
+	Dimensions        []Dimension   `json:"Dimensions,omitempty"`
+	Timestamp         string        `json:"Timestamp,omitempty"`
+	Value             *float64      `json:"Value,omitempty"`
+	StatisticValues   *StatisticSet `json:"StatisticValues,omitempty"`
+	Values            []float64     `json:"Values,omitempty"`
+	Counts            []float64     `json:"Counts,omitempty"`
+	Unit              string        `json:"Unit,omitempty"`
+	StorageResolution *int32        `json:"StorageResolution,omitempty"`
 }
 
 // StatisticSet represents a set of statistics.
 type StatisticSet struct {
-	SampleCount float64
-	Sum         float64
-	Minimum     float64
-	Maximum     float64
+	SampleCount float64 `json:"SampleCount"`
+	Sum         float64 `json:"Sum"`
+	Minimum     float64 `json:"Minimum"`
+	Maximum     float64 `json:"Maximum"`
 }
 
 // MetricDatapoint represents a metric data point in storage.
@@ -160,198 +158,78 @@ type DescribeAlarmsRequest struct {
 	NextToken       string   `json:"NextToken,omitempty"`
 }
 
-// XML Response types for CloudWatch Query protocol.
+// JSON Response types for CloudWatch JSON protocol.
 
-// ResponseMetadata contains common response metadata.
-type ResponseMetadata struct {
-	RequestID string `xml:"RequestId"`
+// GetMetricDataResponse is the response for GetMetricData.
+type GetMetricDataResponse struct {
+	MetricDataResults []MetricDataResult `json:"MetricDataResults"`
+	NextToken         string             `json:"NextToken,omitempty"`
 }
 
-// XMLPutMetricDataResponse is the response for PutMetricData.
-type XMLPutMetricDataResponse struct {
-	XMLName          xml.Name         `xml:"PutMetricDataResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+// MetricDataResult represents a single metric data result.
+type MetricDataResult struct {
+	ID         string    `json:"Id"`
+	Label      string    `json:"Label"`
+	Timestamps []string  `json:"Timestamps"`
+	Values     []float64 `json:"Values"`
+	StatusCode string    `json:"StatusCode"`
 }
 
-// XMLGetMetricDataResponse is the response for GetMetricData.
-type XMLGetMetricDataResponse struct {
-	XMLName             xml.Name               `xml:"GetMetricDataResponse"`
-	Xmlns               string                 `xml:"xmlns,attr"`
-	GetMetricDataResult XMLGetMetricDataResult `xml:"GetMetricDataResult"`
-	ResponseMetadata    ResponseMetadata       `xml:"ResponseMetadata"`
+// GetMetricStatisticsResponse is the response for GetMetricStatistics.
+type GetMetricStatisticsResponse struct {
+	Label      string      `json:"Label"`
+	Datapoints []Datapoint `json:"Datapoints"`
 }
 
-// XMLGetMetricDataResult contains the GetMetricData result.
-type XMLGetMetricDataResult struct {
-	MetricDataResults XMLMetricDataResults `xml:"MetricDataResults"`
-	NextToken         string               `xml:"NextToken,omitempty"`
+// Datapoint represents a single datapoint.
+type Datapoint struct {
+	Timestamp   string   `json:"Timestamp"`
+	SampleCount *float64 `json:"SampleCount,omitempty"`
+	Average     *float64 `json:"Average,omitempty"`
+	Sum         *float64 `json:"Sum,omitempty"`
+	Minimum     *float64 `json:"Minimum,omitempty"`
+	Maximum     *float64 `json:"Maximum,omitempty"`
+	Unit        string   `json:"Unit,omitempty"`
 }
 
-// XMLMetricDataResults contains metric data results.
-type XMLMetricDataResults struct {
-	Member []XMLMetricDataResult `xml:"member"`
+// ListMetricsResponse is the response for ListMetrics.
+type ListMetricsResponse struct {
+	Metrics   []Metric `json:"Metrics"`
+	NextToken string   `json:"NextToken,omitempty"`
 }
 
-// XMLMetricDataResult represents a single metric data result.
-type XMLMetricDataResult struct {
-	ID         string        `xml:"Id"`
-	Label      string        `xml:"Label"`
-	Timestamps XMLTimestamps `xml:"Timestamps"`
-	Values     XMLValues     `xml:"Values"`
-	StatusCode string        `xml:"StatusCode"`
+// DescribeAlarmsResponse is the response for DescribeAlarms.
+type DescribeAlarmsResponse struct {
+	MetricAlarms []MetricAlarm `json:"MetricAlarms"`
+	NextToken    string        `json:"NextToken,omitempty"`
 }
 
-// XMLTimestamps contains timestamp members.
-type XMLTimestamps struct {
-	Member []string `xml:"member"`
+// MetricAlarm represents a single metric alarm in JSON response.
+type MetricAlarm struct {
+	AlarmName                          string      `json:"AlarmName"`
+	AlarmArn                           string      `json:"AlarmArn"`
+	AlarmDescription                   string      `json:"AlarmDescription,omitempty"`
+	MetricName                         string      `json:"MetricName"`
+	Namespace                          string      `json:"Namespace"`
+	Statistic                          string      `json:"Statistic,omitempty"`
+	Dimensions                         []Dimension `json:"Dimensions,omitempty"`
+	Period                             int32       `json:"Period"`
+	EvaluationPeriods                  int32       `json:"EvaluationPeriods"`
+	Threshold                          float64     `json:"Threshold"`
+	ComparisonOperator                 string      `json:"ComparisonOperator"`
+	ActionsEnabled                     bool        `json:"ActionsEnabled"`
+	AlarmActions                       []string    `json:"AlarmActions,omitempty"`
+	OKActions                          []string    `json:"OKActions,omitempty"`
+	StateValue                         string      `json:"StateValue"`
+	StateReason                        string      `json:"StateReason"`
+	StateUpdatedTimestamp              string      `json:"StateUpdatedTimestamp"`
+	AlarmConfigurationUpdatedTimestamp string      `json:"AlarmConfigurationUpdatedTimestamp"`
 }
 
-// XMLValues contains value members.
-type XMLValues struct {
-	Member []float64 `xml:"member"`
-}
-
-// XMLGetMetricStatisticsResponse is the response for GetMetricStatistics.
-type XMLGetMetricStatisticsResponse struct {
-	XMLName                   xml.Name                     `xml:"GetMetricStatisticsResponse"`
-	Xmlns                     string                       `xml:"xmlns,attr"`
-	GetMetricStatisticsResult XMLGetMetricStatisticsResult `xml:"GetMetricStatisticsResult"`
-	ResponseMetadata          ResponseMetadata             `xml:"ResponseMetadata"`
-}
-
-// XMLGetMetricStatisticsResult contains the GetMetricStatistics result.
-type XMLGetMetricStatisticsResult struct {
-	Label      string        `xml:"Label"`
-	Datapoints XMLDatapoints `xml:"Datapoints"`
-}
-
-// XMLDatapoints contains datapoint members.
-type XMLDatapoints struct {
-	Member []XMLDatapoint `xml:"member"`
-}
-
-// XMLDatapoint represents a single datapoint.
-type XMLDatapoint struct {
-	Timestamp   string  `xml:"Timestamp"`
-	SampleCount float64 `xml:"SampleCount,omitempty"`
-	Average     float64 `xml:"Average,omitempty"`
-	Sum         float64 `xml:"Sum,omitempty"`
-	Minimum     float64 `xml:"Minimum,omitempty"`
-	Maximum     float64 `xml:"Maximum,omitempty"`
-	Unit        string  `xml:"Unit,omitempty"`
-}
-
-// XMLListMetricsResponse is the response for ListMetrics.
-type XMLListMetricsResponse struct {
-	XMLName           xml.Name             `xml:"ListMetricsResponse"`
-	Xmlns             string               `xml:"xmlns,attr"`
-	ListMetricsResult XMLListMetricsResult `xml:"ListMetricsResult"`
-	ResponseMetadata  ResponseMetadata     `xml:"ResponseMetadata"`
-}
-
-// XMLListMetricsResult contains the ListMetrics result.
-type XMLListMetricsResult struct {
-	Metrics   XMLMetrics `xml:"Metrics"`
-	NextToken string     `xml:"NextToken,omitempty"`
-}
-
-// XMLMetrics contains metric members.
-type XMLMetrics struct {
-	Member []XMLMetric `xml:"member"`
-}
-
-// XMLMetric represents a single metric.
-type XMLMetric struct {
-	Namespace  string        `xml:"Namespace"`
-	MetricName string        `xml:"MetricName"`
-	Dimensions XMLDimensions `xml:"Dimensions"`
-}
-
-// XMLDimensions contains dimension members.
-type XMLDimensions struct {
-	Member []XMLDimension `xml:"member"`
-}
-
-// XMLDimension represents a single dimension.
-type XMLDimension struct {
-	Name  string `xml:"Name"`
-	Value string `xml:"Value"`
-}
-
-// XMLPutMetricAlarmResponse is the response for PutMetricAlarm.
-type XMLPutMetricAlarmResponse struct {
-	XMLName          xml.Name         `xml:"PutMetricAlarmResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
-}
-
-// XMLDeleteAlarmsResponse is the response for DeleteAlarms.
-type XMLDeleteAlarmsResponse struct {
-	XMLName          xml.Name         `xml:"DeleteAlarmsResponse"`
-	Xmlns            string           `xml:"xmlns,attr"`
-	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
-}
-
-// XMLDescribeAlarmsResponse is the response for DescribeAlarms.
-type XMLDescribeAlarmsResponse struct {
-	XMLName              xml.Name                `xml:"DescribeAlarmsResponse"`
-	Xmlns                string                  `xml:"xmlns,attr"`
-	DescribeAlarmsResult XMLDescribeAlarmsResult `xml:"DescribeAlarmsResult"`
-	ResponseMetadata     ResponseMetadata        `xml:"ResponseMetadata"`
-}
-
-// XMLDescribeAlarmsResult contains the DescribeAlarms result.
-type XMLDescribeAlarmsResult struct {
-	MetricAlarms XMLMetricAlarms `xml:"MetricAlarms"`
-	NextToken    string          `xml:"NextToken,omitempty"`
-}
-
-// XMLMetricAlarms contains metric alarm members.
-type XMLMetricAlarms struct {
-	Member []XMLMetricAlarm `xml:"member"`
-}
-
-// XMLMetricAlarm represents a single metric alarm.
-type XMLMetricAlarm struct {
-	AlarmName                          string        `xml:"AlarmName"`
-	AlarmArn                           string        `xml:"AlarmArn"`
-	AlarmDescription                   string        `xml:"AlarmDescription,omitempty"`
-	MetricName                         string        `xml:"MetricName"`
-	Namespace                          string        `xml:"Namespace"`
-	Statistic                          string        `xml:"Statistic,omitempty"`
-	Dimensions                         XMLDimensions `xml:"Dimensions"`
-	Period                             int32         `xml:"Period"`
-	EvaluationPeriods                  int32         `xml:"EvaluationPeriods"`
-	Threshold                          float64       `xml:"Threshold"`
-	ComparisonOperator                 string        `xml:"ComparisonOperator"`
-	ActionsEnabled                     bool          `xml:"ActionsEnabled"`
-	AlarmActions                       XMLActions    `xml:"AlarmActions"`
-	OKActions                          XMLActions    `xml:"OKActions"`
-	StateValue                         string        `xml:"StateValue"`
-	StateReason                        string        `xml:"StateReason"`
-	StateUpdatedTimestamp              string        `xml:"StateUpdatedTimestamp"`
-	AlarmConfigurationUpdatedTimestamp string        `xml:"AlarmConfigurationUpdatedTimestamp"`
-}
-
-// XMLActions contains action members.
-type XMLActions struct {
-	Member []string `xml:"member"`
-}
-
-// XMLErrorResponse represents a CloudWatch error response.
-type XMLErrorResponse struct {
-	XMLName   xml.Name       `xml:"ErrorResponse"`
-	Xmlns     string         `xml:"xmlns,attr"`
-	Error     XMLErrorDetail `xml:"Error"`
-	RequestID string         `xml:"RequestId"`
-}
-
-// XMLErrorDetail contains error details.
-type XMLErrorDetail struct {
-	Type    string `xml:"Type"`
-	Code    string `xml:"Code"`
-	Message string `xml:"Message"`
+// ErrorResponse represents a CloudWatch error response in JSON format.
+type ErrorResponse struct {
+	Type    string `json:"__type"`
+	Message string `json:"message"`
 }
 
 // Error represents a CloudWatch error.
@@ -363,4 +241,28 @@ type Error struct {
 // Error implements the error interface.
 func (e *Error) Error() string {
 	return e.Message
+}
+
+// GetMetricDataResult is the result for GetMetricData storage operation.
+type GetMetricDataResult struct {
+	MetricDataResults []MetricDataResult
+	NextToken         string
+}
+
+// GetMetricStatisticsResult is the result for GetMetricStatistics storage operation.
+type GetMetricStatisticsResult struct {
+	Label      string
+	Datapoints []Datapoint
+}
+
+// ListMetricsResult is the result for ListMetrics storage operation.
+type ListMetricsResult struct {
+	Metrics   []Metric
+	NextToken string
+}
+
+// DescribeAlarmsResult is the result for DescribeAlarms storage operation.
+type DescribeAlarmsResult struct {
+	MetricAlarms []MetricAlarm
+	NextToken    string
 }

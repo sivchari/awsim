@@ -2,7 +2,6 @@ package cloudwatch
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
-const cloudwatchXMLNS = "http://monitoring.amazonaws.com/doc/2010-08-01/"
 
 // Error codes for CloudWatch.
 const (
@@ -50,12 +47,8 @@ func (s *Service) PutMetricData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLPutMetricDataResponse{
-		Xmlns: cloudwatchXMLNS,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
-	})
+	// PutMetricData returns an empty response on success.
+	writeJSONResponse(w, struct{}{})
 }
 
 // GetMetricData handles the GetMetricData action.
@@ -80,12 +73,9 @@ func (s *Service) GetMetricData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLGetMetricDataResponse{
-		Xmlns:               cloudwatchXMLNS,
-		GetMetricDataResult: *result,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
+	writeJSONResponse(w, GetMetricDataResponse{
+		MetricDataResults: result.MetricDataResults,
+		NextToken:         result.NextToken,
 	})
 }
 
@@ -117,12 +107,9 @@ func (s *Service) GetMetricStatistics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLGetMetricStatisticsResponse{
-		Xmlns:                     cloudwatchXMLNS,
-		GetMetricStatisticsResult: *result,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
+	writeJSONResponse(w, GetMetricStatisticsResponse{
+		Label:      result.Label,
+		Datapoints: result.Datapoints,
 	})
 }
 
@@ -142,12 +129,9 @@ func (s *Service) ListMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLListMetricsResponse{
-		Xmlns:             cloudwatchXMLNS,
-		ListMetricsResult: *result,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
+	writeJSONResponse(w, ListMetricsResponse{
+		Metrics:   result.Metrics,
+		NextToken: result.NextToken,
 	})
 }
 
@@ -190,12 +174,8 @@ func (s *Service) PutMetricAlarm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLPutMetricAlarmResponse{
-		Xmlns: cloudwatchXMLNS,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
-	})
+	// PutMetricAlarm returns an empty response on success.
+	writeJSONResponse(w, struct{}{})
 }
 
 // DeleteAlarms handles the DeleteAlarms action.
@@ -219,12 +199,8 @@ func (s *Service) DeleteAlarms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLDeleteAlarmsResponse{
-		Xmlns: cloudwatchXMLNS,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
-	})
+	// DeleteAlarms returns an empty response on success.
+	writeJSONResponse(w, struct{}{})
 }
 
 // DescribeAlarms handles the DescribeAlarms action.
@@ -243,12 +219,9 @@ func (s *Service) DescribeAlarms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeXMLResponse(w, XMLDescribeAlarmsResponse{
-		Xmlns:                cloudwatchXMLNS,
-		DescribeAlarmsResult: *result,
-		ResponseMetadata: ResponseMetadata{
-			RequestID: uuid.New().String(),
-		},
+	writeJSONResponse(w, DescribeAlarmsResponse{
+		MetricAlarms: result.MetricAlarms,
+		NextToken:    result.NextToken,
 	})
 }
 
@@ -312,30 +285,21 @@ func readJSONRequest(r *http.Request, v any) error {
 	return nil
 }
 
-// writeXMLResponse writes an XML response with HTTP 200 OK.
-func writeXMLResponse(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+// writeJSONResponse writes a JSON response with HTTP 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(xml.Header))
-	_ = xml.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
-// writeCloudWatchError writes a CloudWatch error response in XML format.
+// writeCloudWatchError writes a CloudWatch error response in JSON format.
 func writeCloudWatchError(w http.ResponseWriter, code, message string, status int) {
-	requestID := uuid.New().String()
-
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
-	w.Header().Set("x-amzn-RequestId", requestID)
+	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+	w.Header().Set("x-amzn-RequestId", uuid.New().String())
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(xml.Header))
-	_ = xml.NewEncoder(w).Encode(XMLErrorResponse{
-		Xmlns: cloudwatchXMLNS,
-		Error: XMLErrorDetail{
-			Type:    "Sender",
-			Code:    code,
-			Message: message,
-		},
-		RequestID: requestID,
+	_ = json.NewEncoder(w).Encode(ErrorResponse{
+		Type:    code,
+		Message: message,
 	})
 }

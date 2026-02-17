@@ -13,12 +13,12 @@ import (
 // Storage defines the CloudWatch storage interface.
 type Storage interface {
 	PutMetricData(ctx context.Context, namespace string, metricData []MetricDatum) error
-	GetMetricData(ctx context.Context, req *GetMetricDataRequest) (*XMLGetMetricDataResult, error)
-	GetMetricStatistics(ctx context.Context, req *GetMetricStatisticsRequest) (*XMLGetMetricStatisticsResult, error)
-	ListMetrics(ctx context.Context, req *ListMetricsRequest) (*XMLListMetricsResult, error)
+	GetMetricData(ctx context.Context, req *GetMetricDataRequest) (*GetMetricDataResult, error)
+	GetMetricStatistics(ctx context.Context, req *GetMetricStatisticsRequest) (*GetMetricStatisticsResult, error)
+	ListMetrics(ctx context.Context, req *ListMetricsRequest) (*ListMetricsResult, error)
 	PutMetricAlarm(ctx context.Context, req *PutMetricAlarmRequest) error
 	DeleteAlarms(ctx context.Context, alarmNames []string) error
-	DescribeAlarms(ctx context.Context, req *DescribeAlarmsRequest) (*XMLDescribeAlarmsResult, error)
+	DescribeAlarms(ctx context.Context, req *DescribeAlarmsRequest) (*DescribeAlarmsResult, error)
 }
 
 // metricKey uniquely identifies a metric.
@@ -111,11 +111,11 @@ func (s *MemoryStorage) appendDatapoints(metric *storedMetric, datum *MetricDatu
 }
 
 // GetMetricData retrieves metric data.
-func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataRequest) (*XMLGetMetricDataResult, error) {
+func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataRequest) (*GetMetricDataResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	results := make([]XMLMetricDataResult, 0, len(req.MetricDataQueries))
+	results := make([]MetricDataResult, 0, len(req.MetricDataQueries))
 
 	for _, query := range req.MetricDataQueries {
 		if query.MetricStat == nil {
@@ -130,7 +130,7 @@ func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataReque
 
 		metric, exists := s.metrics[key]
 		if !exists {
-			results = append(results, XMLMetricDataResult{
+			results = append(results, MetricDataResult{
 				ID:         query.ID,
 				Label:      query.Label,
 				StatusCode: "Complete",
@@ -139,7 +139,7 @@ func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataReque
 			continue
 		}
 
-		// Filter datapoints by time range
+		// Filter datapoints by time range.
 		timestamps := make([]string, 0)
 		values := make([]float64, 0)
 
@@ -155,28 +155,22 @@ func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataReque
 			label = query.MetricStat.Metric.MetricName
 		}
 
-		results = append(results, XMLMetricDataResult{
-			ID:    query.ID,
-			Label: label,
-			Timestamps: XMLTimestamps{
-				Member: timestamps,
-			},
-			Values: XMLValues{
-				Member: values,
-			},
+		results = append(results, MetricDataResult{
+			ID:         query.ID,
+			Label:      label,
+			Timestamps: timestamps,
+			Values:     values,
 			StatusCode: "Complete",
 		})
 	}
 
-	return &XMLGetMetricDataResult{
-		MetricDataResults: XMLMetricDataResults{
-			Member: results,
-		},
+	return &GetMetricDataResult{
+		MetricDataResults: results,
 	}, nil
 }
 
 // GetMetricStatistics retrieves statistics for a metric.
-func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricStatisticsRequest) (*XMLGetMetricStatisticsResult, error) {
+func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricStatisticsRequest) (*GetMetricStatisticsResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -184,13 +178,13 @@ func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricSta
 
 	metric, exists := s.metrics[key]
 	if !exists {
-		return &XMLGetMetricStatisticsResult{
+		return &GetMetricStatisticsResult{
 			Label:      req.MetricName,
-			Datapoints: XMLDatapoints{Member: []XMLDatapoint{}},
+			Datapoints: []Datapoint{},
 		}, nil
 	}
 
-	// Collect datapoints in time range
+	// Collect datapoints in time range.
 	var filteredPoints []MetricDatapoint
 
 	for _, dp := range metric.datapoints {
@@ -200,55 +194,52 @@ func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricSta
 	}
 
 	if len(filteredPoints) == 0 {
-		return &XMLGetMetricStatisticsResult{
+		return &GetMetricStatisticsResult{
 			Label:      req.MetricName,
-			Datapoints: XMLDatapoints{Member: []XMLDatapoint{}},
+			Datapoints: []Datapoint{},
 		}, nil
 	}
 
-	// Calculate statistics
+	// Calculate statistics.
 	datapoints := s.calculateStatistics(filteredPoints, req.Statistics, req.Period)
 
-	return &XMLGetMetricStatisticsResult{
-		Label: req.MetricName,
-		Datapoints: XMLDatapoints{
-			Member: datapoints,
-		},
+	return &GetMetricStatisticsResult{
+		Label:      req.MetricName,
+		Datapoints: datapoints,
 	}, nil
 }
 
 // ListMetrics lists available metrics.
-func (s *MemoryStorage) ListMetrics(_ context.Context, req *ListMetricsRequest) (*XMLListMetricsResult, error) {
+func (s *MemoryStorage) ListMetrics(_ context.Context, req *ListMetricsRequest) (*ListMetricsResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	metrics := make([]XMLMetric, 0)
+	metrics := make([]Metric, 0)
 
 	for _, m := range s.metrics {
-		// Filter by namespace
+		// Filter by namespace.
 		if req.Namespace != "" && m.namespace != req.Namespace {
 			continue
 		}
 
-		// Filter by metric name
+		// Filter by metric name.
 		if req.MetricName != "" && m.metricName != req.MetricName {
 			continue
 		}
 
-		// Filter by dimensions
+		// Filter by dimensions.
 		if !s.matchesDimensionFilters(m.dimensions, req.Dimensions) {
 			continue
 		}
 
-		dims := convertDimensionsToXML(m.dimensions)
-		metrics = append(metrics, XMLMetric{
+		metrics = append(metrics, Metric{
 			Namespace:  m.namespace,
 			MetricName: m.metricName,
-			Dimensions: XMLDimensions{Member: dims},
+			Dimensions: m.dimensions,
 		})
 	}
 
-	// Sort metrics for consistent output
+	// Sort metrics for consistent output.
 	sort.Slice(metrics, func(i, j int) bool {
 		if metrics[i].Namespace != metrics[j].Namespace {
 			return metrics[i].Namespace < metrics[j].Namespace
@@ -257,8 +248,8 @@ func (s *MemoryStorage) ListMetrics(_ context.Context, req *ListMetricsRequest) 
 		return metrics[i].MetricName < metrics[j].MetricName
 	})
 
-	return &XMLListMetricsResult{
-		Metrics: XMLMetrics{Member: metrics},
+	return &ListMetricsResult{
+		Metrics: metrics,
 	}, nil
 }
 
@@ -323,26 +314,26 @@ func (s *MemoryStorage) DeleteAlarms(_ context.Context, alarmNames []string) err
 }
 
 // DescribeAlarms returns information about alarms.
-func (s *MemoryStorage) DescribeAlarms(_ context.Context, req *DescribeAlarmsRequest) (*XMLDescribeAlarmsResult, error) {
+func (s *MemoryStorage) DescribeAlarms(_ context.Context, req *DescribeAlarmsRequest) (*DescribeAlarmsResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	alarms := make([]XMLMetricAlarm, 0)
+	alarms := make([]MetricAlarm, 0)
 
 	for _, alarm := range s.alarms {
 		if !s.alarmMatchesFilter(alarm, req) {
 			continue
 		}
 
-		alarms = append(alarms, convertAlarmToXML(alarm))
+		alarms = append(alarms, convertAlarmToJSON(alarm))
 	}
 
-	// Sort alarms by name
+	// Sort alarms by name.
 	sort.Slice(alarms, func(i, j int) bool {
 		return alarms[i].AlarmName < alarms[j].AlarmName
 	})
 
-	// Apply MaxRecords limit
+	// Apply MaxRecords limit.
 	maxRecords := 50
 	if req.MaxRecords != nil && *req.MaxRecords > 0 {
 		maxRecords = int(*req.MaxRecords)
@@ -352,8 +343,8 @@ func (s *MemoryStorage) DescribeAlarms(_ context.Context, req *DescribeAlarmsReq
 		alarms = alarms[:maxRecords]
 	}
 
-	return &XMLDescribeAlarmsResult{
-		MetricAlarms: XMLMetricAlarms{Member: alarms},
+	return &DescribeAlarmsResult{
+		MetricAlarms: alarms,
 	}, nil
 }
 
@@ -374,25 +365,23 @@ func (s *MemoryStorage) alarmMatchesFilter(alarm *Alarm, req *DescribeAlarmsRequ
 	return true
 }
 
-// convertAlarmToXML converts an Alarm to XMLMetricAlarm.
-func convertAlarmToXML(alarm *Alarm) XMLMetricAlarm {
-	dims := convertDimensionsToXML(alarm.Dimensions)
-
-	return XMLMetricAlarm{
+// convertAlarmToJSON converts an Alarm to MetricAlarm JSON response.
+func convertAlarmToJSON(alarm *Alarm) MetricAlarm {
+	return MetricAlarm{
 		AlarmName:                          alarm.AlarmName,
 		AlarmArn:                           alarm.AlarmARN,
 		AlarmDescription:                   alarm.AlarmDescription,
 		MetricName:                         alarm.MetricName,
 		Namespace:                          alarm.Namespace,
 		Statistic:                          alarm.Statistic,
-		Dimensions:                         XMLDimensions{Member: dims},
+		Dimensions:                         alarm.Dimensions,
 		Period:                             alarm.Period,
 		EvaluationPeriods:                  alarm.EvaluationPeriods,
 		Threshold:                          alarm.Threshold,
 		ComparisonOperator:                 alarm.ComparisonOperator,
 		ActionsEnabled:                     alarm.ActionsEnabled,
-		AlarmActions:                       XMLActions{Member: alarm.AlarmActions},
-		OKActions:                          XMLActions{Member: alarm.OKActions},
+		AlarmActions:                       alarm.AlarmActions,
+		OKActions:                          alarm.OKActions,
 		StateValue:                         alarm.StateValue,
 		StateReason:                        alarm.StateReason,
 		StateUpdatedTimestamp:              alarm.StateUpdatedAt,
@@ -402,7 +391,7 @@ func convertAlarmToXML(alarm *Alarm) XMLMetricAlarm {
 
 // makeMetricKey creates a unique key for a metric.
 func (s *MemoryStorage) makeMetricKey(namespace, metricName string, dimensions []Dimension) metricKey {
-	// Sort dimensions for consistent key generation
+	// Sort dimensions for consistent key generation.
 	sorted := make([]Dimension, len(dimensions))
 	copy(sorted, dimensions)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -472,12 +461,12 @@ func (s *MemoryStorage) matchesDimensionFilters(dimensions []Dimension, filters 
 }
 
 // calculateStatistics calculates statistics for datapoints.
-func (s *MemoryStorage) calculateStatistics(points []MetricDatapoint, statistics []string, _ int32) []XMLDatapoint {
+func (s *MemoryStorage) calculateStatistics(points []MetricDatapoint, statistics []string, _ int32) []Datapoint {
 	if len(points) == 0 {
 		return nil
 	}
 
-	// Group by period (simplified: use first timestamp)
+	// Group by period (simplified: use first timestamp).
 	timestamp := points[0].Timestamp
 	unit := points[0].Unit
 	count := float64(len(points))
@@ -499,46 +488,37 @@ func (s *MemoryStorage) calculateStatistics(points []MetricDatapoint, statistics
 		}
 	}
 
-	dp := XMLDatapoint{
+	average := sum / count
+
+	dp := Datapoint{
 		Timestamp: timestamp,
 		Unit:      unit,
 	}
 
-	// Include requested statistics
+	// Include requested statistics.
 	for _, stat := range statistics {
 		switch stat {
 		case "SampleCount":
-			dp.SampleCount = count
+			dp.SampleCount = &count
 		case "Average":
-			dp.Average = sum / count
+			dp.Average = &average
 		case "Sum":
-			dp.Sum = sum
+			dp.Sum = &sum
 		case "Minimum":
-			dp.Minimum = minVal
+			dp.Minimum = &minVal
 		case "Maximum":
-			dp.Maximum = maxVal
+			dp.Maximum = &maxVal
 		}
 	}
 
-	// If no specific statistics requested, include all
+	// If no specific statistics requested, include all.
 	if len(statistics) == 0 {
-		dp.SampleCount = count
-		dp.Average = sum / count
-		dp.Sum = sum
-		dp.Minimum = minVal
-		dp.Maximum = maxVal
+		dp.SampleCount = &count
+		dp.Average = &average
+		dp.Sum = &sum
+		dp.Minimum = &minVal
+		dp.Maximum = &maxVal
 	}
 
-	return []XMLDatapoint{dp}
-}
-
-// convertDimensionsToXML converts Dimension slice to XMLDimension slice.
-func convertDimensionsToXML(dimensions []Dimension) []XMLDimension {
-	result := make([]XMLDimension, 0, len(dimensions))
-
-	for _, d := range dimensions {
-		result = append(result, XMLDimension(d))
-	}
-
-	return result
+	return []Datapoint{dp}
 }
