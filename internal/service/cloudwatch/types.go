@@ -264,8 +264,8 @@ func (e *Error) Error() string {
 // GetMetricDataCBORRequest is the CBOR request for GetMetricData.
 type GetMetricDataCBORRequest struct {
 	MetricDataQueries []MetricDataQuery `cbor:"MetricDataQueries"`
-	StartTime         CBORTime          `cbor:"StartTime"`
-	EndTime           CBORTime          `cbor:"EndTime"`
+	StartTime         time.Time         `cbor:"StartTime"`
+	EndTime           time.Time         `cbor:"EndTime"`
 	NextToken         string            `cbor:"NextToken,omitempty"`
 	MaxDatapoints     *int32            `cbor:"MaxDatapoints,omitempty"`
 }
@@ -275,8 +275,8 @@ type GetMetricStatisticsCBORRequest struct {
 	Namespace  string      `cbor:"Namespace"`
 	MetricName string      `cbor:"MetricName"`
 	Dimensions []Dimension `cbor:"Dimensions,omitempty"`
-	StartTime  CBORTime    `cbor:"StartTime"`
-	EndTime    CBORTime    `cbor:"EndTime"`
+	StartTime  time.Time   `cbor:"StartTime"`
+	EndTime    time.Time   `cbor:"EndTime"`
 	Period     int32       `cbor:"Period"`
 	Statistics []string    `cbor:"Statistics,omitempty"`
 	Unit       string      `cbor:"Unit,omitempty"`
@@ -292,11 +292,11 @@ type GetMetricDataCBORResponse struct {
 
 // MetricDataCBORResult represents a single metric data result for CBOR.
 type MetricDataCBORResult struct {
-	ID         string     `cbor:"Id"`
-	Label      string     `cbor:"Label"`
-	Timestamps []CBORTime `cbor:"Timestamps"`
-	Values     []float64  `cbor:"Values"`
-	StatusCode string     `cbor:"StatusCode"`
+	ID         string      `cbor:"Id"`
+	Label      string      `cbor:"Label"`
+	Timestamps []time.Time `cbor:"Timestamps"`
+	Values     []float64   `cbor:"Values"`
+	StatusCode string      `cbor:"StatusCode"`
 }
 
 // GetMetricStatisticsCBORResponse is the CBOR response for GetMetricStatistics.
@@ -307,13 +307,13 @@ type GetMetricStatisticsCBORResponse struct {
 
 // CBORDatapoint represents a single datapoint for CBOR.
 type CBORDatapoint struct {
-	Timestamp   CBORTime `cbor:"Timestamp"`
-	SampleCount *float64 `cbor:"SampleCount,omitempty"`
-	Average     *float64 `cbor:"Average,omitempty"`
-	Sum         *float64 `cbor:"Sum,omitempty"`
-	Minimum     *float64 `cbor:"Minimum,omitempty"`
-	Maximum     *float64 `cbor:"Maximum,omitempty"`
-	Unit        string   `cbor:"Unit,omitempty"`
+	Timestamp   time.Time `cbor:"Timestamp"`
+	SampleCount *float64  `cbor:"SampleCount,omitempty"`
+	Average     *float64  `cbor:"Average,omitempty"`
+	Sum         *float64  `cbor:"Sum,omitempty"`
+	Minimum     *float64  `cbor:"Minimum,omitempty"`
+	Maximum     *float64  `cbor:"Maximum,omitempty"`
+	Unit        string    `cbor:"Unit,omitempty"`
 }
 
 // DescribeAlarmsCBORResponse is the CBOR response for DescribeAlarms.
@@ -340,8 +340,8 @@ type MetricAlarmCBOR struct {
 	OKActions                          []string    `cbor:"OKActions,omitempty"`
 	StateValue                         string      `cbor:"StateValue"`
 	StateReason                        string      `cbor:"StateReason"`
-	StateUpdatedTimestamp              CBORTime    `cbor:"StateUpdatedTimestamp"`
-	AlarmConfigurationUpdatedTimestamp CBORTime    `cbor:"AlarmConfigurationUpdatedTimestamp"`
+	StateUpdatedTimestamp              time.Time   `cbor:"StateUpdatedTimestamp"`
+	AlarmConfigurationUpdatedTimestamp time.Time   `cbor:"AlarmConfigurationUpdatedTimestamp"`
 }
 
 // GetMetricDataResult is the result for GetMetricData storage operation.

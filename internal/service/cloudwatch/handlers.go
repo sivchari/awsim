@@ -358,8 +358,8 @@ func (s *Service) GetMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
 	// Convert CBOR request to storage request
 	storageReq := &GetMetricDataRequest{
 		MetricDataQueries: req.MetricDataQueries,
-		StartTime:         req.StartTime.ToRFC3339(),
-		EndTime:           req.EndTime.ToRFC3339(),
+		StartTime:         req.StartTime.Format(time.RFC3339),
+		EndTime:           req.EndTime.Format(time.RFC3339),
 		NextToken:         req.NextToken,
 		MaxDatapoints:     req.MaxDatapoints,
 	}
@@ -376,11 +376,11 @@ func (s *Service) GetMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
 
 	for i := range result.MetricDataResults {
 		r := result.MetricDataResults[i]
-		timestamps := make([]CBORTime, len(r.Timestamps))
+		timestamps := make([]time.Time, len(r.Timestamps))
 
 		for j := range r.Timestamps {
 			t, _ := parseTimestamp(r.Timestamps[j])
-			timestamps[j] = CBORTime{Time: t}
+			timestamps[j] = t
 		}
 
 		cborResults[i] = MetricDataCBORResult{
@@ -424,8 +424,8 @@ func (s *Service) GetMetricStatisticsCBOR(w http.ResponseWriter, r *http.Request
 		Namespace:  req.Namespace,
 		MetricName: req.MetricName,
 		Dimensions: req.Dimensions,
-		StartTime:  req.StartTime.ToRFC3339(),
-		EndTime:    req.EndTime.ToRFC3339(),
+		StartTime:  req.StartTime.Format(time.RFC3339),
+		EndTime:    req.EndTime.Format(time.RFC3339),
 		Period:     req.Period,
 		Statistics: req.Statistics,
 		Unit:       req.Unit,
@@ -445,7 +445,7 @@ func (s *Service) GetMetricStatisticsCBOR(w http.ResponseWriter, r *http.Request
 		dp := result.Datapoints[i]
 		t, _ := parseTimestamp(dp.Timestamp)
 		cborDatapoints[i] = CBORDatapoint{
-			Timestamp:   CBORTime{Time: t},
+			Timestamp:   t,
 			SampleCount: dp.SampleCount,
 			Average:     dp.Average,
 			Sum:         dp.Sum,
@@ -591,8 +591,8 @@ func (s *Service) DescribeAlarmsCBOR(w http.ResponseWriter, r *http.Request) {
 			OKActions:                          alarm.OKActions,
 			StateValue:                         alarm.StateValue,
 			StateReason:                        alarm.StateReason,
-			StateUpdatedTimestamp:              CBORTime{Time: stateUpdated},
-			AlarmConfigurationUpdatedTimestamp: CBORTime{Time: configUpdated},
+			StateUpdatedTimestamp:              stateUpdated,
+			AlarmConfigurationUpdatedTimestamp: configUpdated,
 		}
 	}
 
