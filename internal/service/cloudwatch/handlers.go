@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -341,7 +342,7 @@ func (s *Service) PutMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
 
 // GetMetricDataCBOR handles the GetMetricData action with CBOR protocol.
 func (s *Service) GetMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
-	var req GetMetricDataRequest
+	var req GetMetricDataCBORRequest
 	if err := server.DecodeCBORRequest(r, &req); err != nil {
 		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
@@ -354,22 +355,52 @@ func (s *Service) GetMetricDataCBOR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.storage.GetMetricData(r.Context(), &req)
+	// Convert CBOR request to storage request
+	storageReq := &GetMetricDataRequest{
+		MetricDataQueries: req.MetricDataQueries,
+		StartTime:         req.StartTime.ToRFC3339(),
+		EndTime:           req.EndTime.ToRFC3339(),
+		NextToken:         req.NextToken,
+		MaxDatapoints:     req.MaxDatapoints,
+	}
+
+	result, err := s.storage.GetMetricData(r.Context(), storageReq)
 	if err != nil {
 		handleCloudWatchCBORError(w, err)
 
 		return
 	}
 
-	server.WriteCBORResponse(w, GetMetricDataResponse{
-		MetricDataResults: result.MetricDataResults,
+	// Convert result to CBOR response
+	cborResults := make([]MetricDataCBORResult, len(result.MetricDataResults))
+
+	for i := range result.MetricDataResults {
+		r := result.MetricDataResults[i]
+		timestamps := make([]CBORTime, len(r.Timestamps))
+
+		for j := range r.Timestamps {
+			t, _ := parseTimestamp(r.Timestamps[j])
+			timestamps[j] = CBORTime{Time: t}
+		}
+
+		cborResults[i] = MetricDataCBORResult{
+			ID:         r.ID,
+			Label:      r.Label,
+			Timestamps: timestamps,
+			Values:     r.Values,
+			StatusCode: r.StatusCode,
+		}
+	}
+
+	server.WriteCBORResponse(w, GetMetricDataCBORResponse{
+		MetricDataResults: cborResults,
 		NextToken:         result.NextToken,
 	})
 }
 
 // GetMetricStatisticsCBOR handles the GetMetricStatistics action with CBOR protocol.
 func (s *Service) GetMetricStatisticsCBOR(w http.ResponseWriter, r *http.Request) {
-	var req GetMetricStatisticsRequest
+	var req GetMetricStatisticsCBORRequest
 	if err := server.DecodeCBORRequest(r, &req); err != nil {
 		server.WriteCBORError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
 
@@ -388,16 +419,45 @@ func (s *Service) GetMetricStatisticsCBOR(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	result, err := s.storage.GetMetricStatistics(r.Context(), &req)
+	// Convert CBOR request to storage request
+	storageReq := &GetMetricStatisticsRequest{
+		Namespace:  req.Namespace,
+		MetricName: req.MetricName,
+		Dimensions: req.Dimensions,
+		StartTime:  req.StartTime.ToRFC3339(),
+		EndTime:    req.EndTime.ToRFC3339(),
+		Period:     req.Period,
+		Statistics: req.Statistics,
+		Unit:       req.Unit,
+	}
+
+	result, err := s.storage.GetMetricStatistics(r.Context(), storageReq)
 	if err != nil {
 		handleCloudWatchCBORError(w, err)
 
 		return
 	}
 
-	server.WriteCBORResponse(w, GetMetricStatisticsResponse{
+	// Convert result to CBOR response
+	cborDatapoints := make([]CBORDatapoint, len(result.Datapoints))
+
+	for i := range result.Datapoints {
+		dp := result.Datapoints[i]
+		t, _ := parseTimestamp(dp.Timestamp)
+		cborDatapoints[i] = CBORDatapoint{
+			Timestamp:   CBORTime{Time: t},
+			SampleCount: dp.SampleCount,
+			Average:     dp.Average,
+			Sum:         dp.Sum,
+			Minimum:     dp.Minimum,
+			Maximum:     dp.Maximum,
+			Unit:        dp.Unit,
+		}
+	}
+
+	server.WriteCBORResponse(w, GetMetricStatisticsCBORResponse{
 		Label:      result.Label,
-		Datapoints: result.Datapoints,
+		Datapoints: cborDatapoints,
 	})
 }
 
@@ -507,8 +567,37 @@ func (s *Service) DescribeAlarmsCBOR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server.WriteCBORResponse(w, DescribeAlarmsResponse{
-		MetricAlarms: result.MetricAlarms,
+	// Convert result to CBOR response
+	cborAlarms := make([]MetricAlarmCBOR, len(result.MetricAlarms))
+
+	for i := range result.MetricAlarms {
+		alarm := &result.MetricAlarms[i]
+		stateUpdated, _ := parseTimestamp(alarm.StateUpdatedTimestamp)
+		configUpdated, _ := parseTimestamp(alarm.AlarmConfigurationUpdatedTimestamp)
+		cborAlarms[i] = MetricAlarmCBOR{
+			AlarmName:                          alarm.AlarmName,
+			AlarmArn:                           alarm.AlarmArn,
+			AlarmDescription:                   alarm.AlarmDescription,
+			MetricName:                         alarm.MetricName,
+			Namespace:                          alarm.Namespace,
+			Statistic:                          alarm.Statistic,
+			Dimensions:                         alarm.Dimensions,
+			Period:                             alarm.Period,
+			EvaluationPeriods:                  alarm.EvaluationPeriods,
+			Threshold:                          alarm.Threshold,
+			ComparisonOperator:                 alarm.ComparisonOperator,
+			ActionsEnabled:                     alarm.ActionsEnabled,
+			AlarmActions:                       alarm.AlarmActions,
+			OKActions:                          alarm.OKActions,
+			StateValue:                         alarm.StateValue,
+			StateReason:                        alarm.StateReason,
+			StateUpdatedTimestamp:              CBORTime{Time: stateUpdated},
+			AlarmConfigurationUpdatedTimestamp: CBORTime{Time: configUpdated},
+		}
+	}
+
+	server.WriteCBORResponse(w, DescribeAlarmsCBORResponse{
+		MetricAlarms: cborAlarms,
 		NextToken:    result.NextToken,
 	})
 }
@@ -528,4 +617,28 @@ func handleCloudWatchCBORError(w http.ResponseWriter, err error) {
 	}
 
 	server.WriteCBORError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
+}
+
+// parseTimestamp parses a timestamp string in various formats.
+func parseTimestamp(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+
+	// Try RFC3339 first
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+
+	// Try RFC3339Nano
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, nil
+	}
+
+	// Try ISO8601 without timezone
+	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
+		return t, nil
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse timestamp: %s", s)
 }

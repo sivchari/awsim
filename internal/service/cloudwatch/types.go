@@ -1,6 +1,21 @@
 // Package cloudwatch provides CloudWatch metrics service emulation for awsim.
 package cloudwatch
 
+import (
+	"time"
+)
+
+// CBORTime wraps time.Time for CBOR serialization.
+// CBOR uses Tag 1 for timestamps (epoch time).
+type CBORTime struct {
+	time.Time
+}
+
+// ToRFC3339 returns the time as an RFC3339 string.
+func (t CBORTime) ToRFC3339() string {
+	return t.Format(time.RFC3339)
+}
+
 // Metric represents a CloudWatch metric.
 type Metric struct {
 	Namespace  string      `json:"Namespace"`
@@ -241,6 +256,92 @@ type Error struct {
 // Error implements the error interface.
 func (e *Error) Error() string {
 	return e.Message
+}
+
+// CBOR Request types for RPC v2 CBOR protocol.
+// These types use time.Time for timestamps which are sent as CBOR Tag (ID: 1).
+
+// GetMetricDataCBORRequest is the CBOR request for GetMetricData.
+type GetMetricDataCBORRequest struct {
+	MetricDataQueries []MetricDataQuery `cbor:"MetricDataQueries"`
+	StartTime         CBORTime          `cbor:"StartTime"`
+	EndTime           CBORTime          `cbor:"EndTime"`
+	NextToken         string            `cbor:"NextToken,omitempty"`
+	MaxDatapoints     *int32            `cbor:"MaxDatapoints,omitempty"`
+}
+
+// GetMetricStatisticsCBORRequest is the CBOR request for GetMetricStatistics.
+type GetMetricStatisticsCBORRequest struct {
+	Namespace  string      `cbor:"Namespace"`
+	MetricName string      `cbor:"MetricName"`
+	Dimensions []Dimension `cbor:"Dimensions,omitempty"`
+	StartTime  CBORTime    `cbor:"StartTime"`
+	EndTime    CBORTime    `cbor:"EndTime"`
+	Period     int32       `cbor:"Period"`
+	Statistics []string    `cbor:"Statistics,omitempty"`
+	Unit       string      `cbor:"Unit,omitempty"`
+}
+
+// CBOR Response types for RPC v2 CBOR protocol.
+
+// GetMetricDataCBORResponse is the CBOR response for GetMetricData.
+type GetMetricDataCBORResponse struct {
+	MetricDataResults []MetricDataCBORResult `cbor:"MetricDataResults"`
+	NextToken         string                 `cbor:"NextToken,omitempty"`
+}
+
+// MetricDataCBORResult represents a single metric data result for CBOR.
+type MetricDataCBORResult struct {
+	ID         string     `cbor:"Id"`
+	Label      string     `cbor:"Label"`
+	Timestamps []CBORTime `cbor:"Timestamps"`
+	Values     []float64  `cbor:"Values"`
+	StatusCode string     `cbor:"StatusCode"`
+}
+
+// GetMetricStatisticsCBORResponse is the CBOR response for GetMetricStatistics.
+type GetMetricStatisticsCBORResponse struct {
+	Label      string          `cbor:"Label"`
+	Datapoints []CBORDatapoint `cbor:"Datapoints"`
+}
+
+// CBORDatapoint represents a single datapoint for CBOR.
+type CBORDatapoint struct {
+	Timestamp   CBORTime `cbor:"Timestamp"`
+	SampleCount *float64 `cbor:"SampleCount,omitempty"`
+	Average     *float64 `cbor:"Average,omitempty"`
+	Sum         *float64 `cbor:"Sum,omitempty"`
+	Minimum     *float64 `cbor:"Minimum,omitempty"`
+	Maximum     *float64 `cbor:"Maximum,omitempty"`
+	Unit        string   `cbor:"Unit,omitempty"`
+}
+
+// DescribeAlarmsCBORResponse is the CBOR response for DescribeAlarms.
+type DescribeAlarmsCBORResponse struct {
+	MetricAlarms []MetricAlarmCBOR `cbor:"MetricAlarms"`
+	NextToken    string            `cbor:"NextToken,omitempty"`
+}
+
+// MetricAlarmCBOR represents a single metric alarm for CBOR response.
+type MetricAlarmCBOR struct {
+	AlarmName                          string      `cbor:"AlarmName"`
+	AlarmArn                           string      `cbor:"AlarmArn"`
+	AlarmDescription                   string      `cbor:"AlarmDescription,omitempty"`
+	MetricName                         string      `cbor:"MetricName"`
+	Namespace                          string      `cbor:"Namespace"`
+	Statistic                          string      `cbor:"Statistic,omitempty"`
+	Dimensions                         []Dimension `cbor:"Dimensions,omitempty"`
+	Period                             int32       `cbor:"Period"`
+	EvaluationPeriods                  int32       `cbor:"EvaluationPeriods"`
+	Threshold                          float64     `cbor:"Threshold"`
+	ComparisonOperator                 string      `cbor:"ComparisonOperator"`
+	ActionsEnabled                     bool        `cbor:"ActionsEnabled"`
+	AlarmActions                       []string    `cbor:"AlarmActions,omitempty"`
+	OKActions                          []string    `cbor:"OKActions,omitempty"`
+	StateValue                         string      `cbor:"StateValue"`
+	StateReason                        string      `cbor:"StateReason"`
+	StateUpdatedTimestamp              CBORTime    `cbor:"StateUpdatedTimestamp"`
+	AlarmConfigurationUpdatedTimestamp CBORTime    `cbor:"AlarmConfigurationUpdatedTimestamp"`
 }
 
 // GetMetricDataResult is the result for GetMetricData storage operation.
