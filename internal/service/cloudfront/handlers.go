@@ -342,15 +342,15 @@ func buildOriginsXML(origins *Origins) *OriginsXML {
 
 	result.Items = &OriginList{}
 
-	for _, o := range origins.Items {
-		origin := buildOriginXML(o)
+	for i := range origins.Items {
+		origin := buildOriginXML(&origins.Items[i])
 		result.Items.Origin = append(result.Items.Origin, origin)
 	}
 
 	return result
 }
 
-func buildOriginXML(o Origin) OriginXML {
+func buildOriginXML(o *Origin) OriginXML {
 	origin := OriginXML{
 		ID:                    o.ID,
 		DomainName:            o.DomainName,
