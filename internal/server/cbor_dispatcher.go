@@ -10,6 +10,33 @@ import (
 	"github.com/google/uuid"
 )
 
+// cborDecMode is the CBOR decode mode configured to handle time tags.
+var cborDecMode cbor.DecMode
+
+// cborEncMode is the CBOR encode mode configured to output time tags.
+var cborEncMode cbor.EncMode
+
+func init() {
+	// Configure decode mode to accept time tags (Tag 1)
+	decOpts := cbor.DecOptions{
+		TimeTag: cbor.DecTagOptional,
+	}
+	var err error
+	cborDecMode, err = decOpts.DecMode()
+	if err != nil {
+		panic(fmt.Errorf("failed to create CBOR decode mode: %w", err))
+	}
+
+	// Configure encode mode to output time as Unix epoch (Tag 1)
+	encOpts := cbor.EncOptions{
+		Time: cbor.TimeUnix,
+	}
+	cborEncMode, err = encOpts.EncMode()
+	if err != nil {
+		panic(fmt.Errorf("failed to create CBOR encode mode: %w", err))
+	}
+}
+
 // CBORServiceHandler handles RPC v2 CBOR protocol requests for a specific service.
 type CBORServiceHandler func(w http.ResponseWriter, r *http.Request, operation string)
 
@@ -76,6 +103,7 @@ func (d *CBORProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reques
 }
 
 // DecodeCBORRequest decodes a CBOR request body into the given value.
+// It uses a custom DecMode that handles CBOR time tags (Tag 1).
 func DecodeCBORRequest(r *http.Request, v any) error {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -86,7 +114,7 @@ func DecodeCBORRequest(r *http.Request, v any) error {
 		return nil
 	}
 
-	if err := cbor.Unmarshal(body, v); err != nil {
+	if err := cborDecMode.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("failed to unmarshal CBOR: %w", err)
 	}
 
@@ -94,13 +122,14 @@ func DecodeCBORRequest(r *http.Request, v any) error {
 }
 
 // WriteCBORResponse writes a CBOR response with the smithy-protocol header.
+// It uses a custom EncMode that outputs time values as CBOR time tags (Tag 1).
 func WriteCBORResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/cbor")
 	w.Header().Set("smithy-protocol", "rpc-v2-cbor")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
 	w.WriteHeader(http.StatusOK)
 
-	encoded, err := cbor.Marshal(v)
+	encoded, err := cborEncMode.Marshal(v)
 	if err != nil {
 		// Fall back to empty response on encode error
 		return
