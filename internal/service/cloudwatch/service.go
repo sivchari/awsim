@@ -32,9 +32,9 @@ func (s *Service) Prefix() string {
 }
 
 // RegisterRoutes registers routes with the router.
-// CloudWatch uses Query protocol, so routes are registered via DispatchAction.
+// CloudWatch uses JSON protocol, so routes are registered via DispatchAction.
 func (s *Service) RegisterRoutes(_ service.Router) {
-	// CloudWatch uses Query protocol, routing is handled by DispatchAction.
+	// CloudWatch uses JSON protocol, routing is handled by DispatchAction.
 }
 
 // TargetPrefix returns the X-Amz-Target header prefix for CloudWatch.
@@ -42,18 +42,5 @@ func (s *Service) TargetPrefix() string {
 	return "GraniteServiceVersion20100801"
 }
 
-// Actions returns the list of action names this service handles.
-func (s *Service) Actions() []string {
-	return []string{
-		"PutMetricData",
-		"GetMetricData",
-		"GetMetricStatistics",
-		"ListMetrics",
-		"PutMetricAlarm",
-		"DeleteAlarms",
-		"DescribeAlarms",
-	}
-}
-
-// QueryProtocol is a marker method that indicates CloudWatch uses AWS Query protocol.
-func (s *Service) QueryProtocol() {}
+// JSONProtocol is a marker method that indicates CloudWatch uses AWS JSON 1.0 protocol.
+func (s *Service) JSONProtocol() {}
