@@ -70,8 +70,8 @@ func (s *Service) GetDistribution(w http.ResponseWriter, r *http.Request) {
 func (s *Service) ListDistributions(w http.ResponseWriter, r *http.Request) {
 	marker := r.URL.Query().Get("Marker")
 	maxItemsStr := r.URL.Query().Get("MaxItems")
-
 	maxItems := 100
+
 	if maxItemsStr != "" {
 		if v, err := strconv.Atoi(maxItemsStr); err == nil && v > 0 {
 			maxItems = v
@@ -254,6 +254,7 @@ func writeCloudFrontError(w http.ResponseWriter, code, message string, status in
 		},
 		RequestID: uuid.New().String(),
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("x-amzn-RequestId", resp.RequestID)
 	w.WriteHeader(status)
@@ -318,120 +319,185 @@ func buildDistributionConfigXML(config *DistributionConfig) *DistributionConfigX
 		IsIPV6Enabled:     config.IsIPV6Enabled,
 	}
 
-	if config.Origins != nil {
-		result.Origins = &OriginsXML{
-			Quantity: config.Origins.Quantity,
-		}
-		if len(config.Origins.Items) > 0 {
-			result.Origins.Items = &OriginList{}
-			for _, o := range config.Origins.Items {
-				origin := OriginXML{
-					ID:                    o.ID,
-					DomainName:            o.DomainName,
-					OriginPath:            o.OriginPath,
-					ConnectionAttempts:    o.ConnectionAttempts,
-					ConnectionTimeout:     o.ConnectionTimeout,
-					OriginAccessControlID: o.OriginAccessControlID,
-				}
-				if o.S3OriginConfig != nil {
-					origin.S3OriginConfig = &S3OriginConfigXML{
-						OriginAccessIdentity: o.S3OriginConfig.OriginAccessIdentity,
-					}
-				}
-				if o.CustomOriginConfig != nil {
-					origin.CustomOriginConfig = &CustomOriginConfigXML{
-						HTTPPort:               o.CustomOriginConfig.HTTPPort,
-						HTTPSPort:              o.CustomOriginConfig.HTTPSPort,
-						OriginProtocolPolicy:   o.CustomOriginConfig.OriginProtocolPolicy,
-						OriginReadTimeout:      o.CustomOriginConfig.OriginReadTimeout,
-						OriginKeepaliveTimeout: o.CustomOriginConfig.OriginKeepaliveTimeout,
-					}
-					if o.CustomOriginConfig.OriginSSLProtocols != nil {
-						origin.CustomOriginConfig.OriginSSLProtocols = &OriginSSLProtocolsXML{
-							Quantity: o.CustomOriginConfig.OriginSSLProtocols.Quantity,
-							Items:    o.CustomOriginConfig.OriginSSLProtocols.Items,
-						}
-					}
-				}
-				result.Origins.Items.Origin = append(result.Origins.Items.Origin, origin)
-			}
+	result.Origins = buildOriginsXML(config.Origins)
+	result.DefaultCacheBehavior = buildDefaultCacheBehaviorXML(config.DefaultCacheBehavior)
+	result.Aliases = buildAliasesConfigXML(config.Aliases)
+	result.ViewerCertificate = buildViewerCertificateConfigXML(config.ViewerCertificate)
+
+	return result
+}
+
+func buildOriginsXML(origins *Origins) *OriginsXML {
+	if origins == nil {
+		return nil
+	}
+
+	result := &OriginsXML{
+		Quantity: origins.Quantity,
+	}
+
+	if len(origins.Items) == 0 {
+		return result
+	}
+
+	result.Items = &OriginList{}
+
+	for _, o := range origins.Items {
+		origin := buildOriginXML(o)
+		result.Items.Origin = append(result.Items.Origin, origin)
+	}
+
+	return result
+}
+
+func buildOriginXML(o Origin) OriginXML {
+	origin := OriginXML{
+		ID:                    o.ID,
+		DomainName:            o.DomainName,
+		OriginPath:            o.OriginPath,
+		ConnectionAttempts:    o.ConnectionAttempts,
+		ConnectionTimeout:     o.ConnectionTimeout,
+		OriginAccessControlID: o.OriginAccessControlID,
+	}
+
+	if o.S3OriginConfig != nil {
+		origin.S3OriginConfig = &S3OriginConfigXML{
+			OriginAccessIdentity: o.S3OriginConfig.OriginAccessIdentity,
 		}
 	}
 
-	if config.DefaultCacheBehavior != nil {
-		result.DefaultCacheBehavior = &DefaultCacheBehaviorXML{
-			TargetOriginID:       config.DefaultCacheBehavior.TargetOriginID,
-			ViewerProtocolPolicy: config.DefaultCacheBehavior.ViewerProtocolPolicy,
-			MinTTL:               config.DefaultCacheBehavior.MinTTL,
-			DefaultTTL:           config.DefaultCacheBehavior.DefaultTTL,
-			MaxTTL:               config.DefaultCacheBehavior.MaxTTL,
-			Compress:             config.DefaultCacheBehavior.Compress,
-			CachePolicyID:        config.DefaultCacheBehavior.CachePolicyID,
-		}
-
-		if config.DefaultCacheBehavior.AllowedMethods != nil {
-			result.DefaultCacheBehavior.AllowedMethods = &AllowedMethodsXML{
-				Quantity: config.DefaultCacheBehavior.AllowedMethods.Quantity,
-				Items:    config.DefaultCacheBehavior.AllowedMethods.Items,
-			}
-		}
-
-		if config.DefaultCacheBehavior.ForwardedValues != nil {
-			result.DefaultCacheBehavior.ForwardedValues = &ForwardedValuesXML{
-				QueryString: config.DefaultCacheBehavior.ForwardedValues.QueryString,
-			}
-			if config.DefaultCacheBehavior.ForwardedValues.Cookies != nil {
-				result.DefaultCacheBehavior.ForwardedValues.Cookies = &CookiesXML{
-					Forward: config.DefaultCacheBehavior.ForwardedValues.Cookies.Forward,
-				}
-			}
-			if config.DefaultCacheBehavior.ForwardedValues.Headers != nil {
-				result.DefaultCacheBehavior.ForwardedValues.Headers = &HeadersXML{
-					Quantity: config.DefaultCacheBehavior.ForwardedValues.Headers.Quantity,
-					Items:    config.DefaultCacheBehavior.ForwardedValues.Headers.Items,
-				}
-			}
-		}
-
-		if config.DefaultCacheBehavior.TrustedSigners != nil {
-			result.DefaultCacheBehavior.TrustedSigners = &TrustedSignersXML{
-				Enabled:  config.DefaultCacheBehavior.TrustedSigners.Enabled,
-				Quantity: config.DefaultCacheBehavior.TrustedSigners.Quantity,
-				Items:    config.DefaultCacheBehavior.TrustedSigners.Items,
-			}
-		}
-
-		if config.DefaultCacheBehavior.TrustedKeyGroups != nil {
-			result.DefaultCacheBehavior.TrustedKeyGroups = &TrustedKeyGroupsXML{
-				Enabled:  config.DefaultCacheBehavior.TrustedKeyGroups.Enabled,
-				Quantity: config.DefaultCacheBehavior.TrustedKeyGroups.Quantity,
-				Items:    config.DefaultCacheBehavior.TrustedKeyGroups.Items,
-			}
-		}
+	if o.CustomOriginConfig != nil {
+		origin.CustomOriginConfig = buildCustomOriginConfigXML(o.CustomOriginConfig)
 	}
 
-	if config.Aliases != nil {
-		result.Aliases = &AliasesXML{
-			Quantity: config.Aliases.Quantity,
-		}
-		if len(config.Aliases.Items) > 0 {
-			result.Aliases.Items = &ItemsXML{
-				Items: config.Aliases.Items,
-			}
-		}
+	return origin
+}
+
+func buildCustomOriginConfigXML(coc *CustomOriginConfig) *CustomOriginConfigXML {
+	result := &CustomOriginConfigXML{
+		HTTPPort:               coc.HTTPPort,
+		HTTPSPort:              coc.HTTPSPort,
+		OriginProtocolPolicy:   coc.OriginProtocolPolicy,
+		OriginReadTimeout:      coc.OriginReadTimeout,
+		OriginKeepaliveTimeout: coc.OriginKeepaliveTimeout,
 	}
 
-	if config.ViewerCertificate != nil {
-		result.ViewerCertificate = &ViewerCertificateXML{
-			CloudFrontDefaultCertificate: config.ViewerCertificate.CloudFrontDefaultCertificate,
-			IAMCertificateID:             config.ViewerCertificate.IAMCertificateID,
-			ACMCertificateArn:            config.ViewerCertificate.ACMCertificateArn,
-			SSLSupportMethod:             config.ViewerCertificate.SSLSupportMethod,
-			MinimumProtocolVersion:       config.ViewerCertificate.MinimumProtocolVersion,
+	if coc.OriginSSLProtocols != nil {
+		result.OriginSSLProtocols = &OriginSSLProtocolsXML{
+			Quantity: coc.OriginSSLProtocols.Quantity,
+			Items:    coc.OriginSSLProtocols.Items,
 		}
 	}
 
 	return result
+}
+
+func buildDefaultCacheBehaviorXML(dcb *DefaultCacheBehavior) *DefaultCacheBehaviorXML {
+	if dcb == nil {
+		return nil
+	}
+
+	result := &DefaultCacheBehaviorXML{
+		TargetOriginID:       dcb.TargetOriginID,
+		ViewerProtocolPolicy: dcb.ViewerProtocolPolicy,
+		MinTTL:               dcb.MinTTL,
+		DefaultTTL:           dcb.DefaultTTL,
+		MaxTTL:               dcb.MaxTTL,
+		Compress:             dcb.Compress,
+		CachePolicyID:        dcb.CachePolicyID,
+	}
+
+	if dcb.AllowedMethods != nil {
+		result.AllowedMethods = &AllowedMethodsXML{
+			Quantity: dcb.AllowedMethods.Quantity,
+			Items:    dcb.AllowedMethods.Items,
+		}
+	}
+
+	buildForwardedValuesXML(dcb.ForwardedValues, result)
+	buildTrustedSignersXML(dcb.TrustedSigners, result)
+	buildTrustedKeyGroupsXML(dcb.TrustedKeyGroups, result)
+
+	return result
+}
+
+func buildForwardedValuesXML(fv *ForwardedValues, result *DefaultCacheBehaviorXML) {
+	if fv == nil {
+		return
+	}
+
+	result.ForwardedValues = &ForwardedValuesXML{
+		QueryString: fv.QueryString,
+	}
+
+	if fv.Cookies != nil {
+		result.ForwardedValues.Cookies = &CookiesXML{
+			Forward: fv.Cookies.Forward,
+		}
+	}
+
+	if fv.Headers != nil {
+		result.ForwardedValues.Headers = &HeadersXML{
+			Quantity: fv.Headers.Quantity,
+			Items:    fv.Headers.Items,
+		}
+	}
+}
+
+func buildTrustedSignersXML(ts *TrustedSigners, result *DefaultCacheBehaviorXML) {
+	if ts == nil {
+		return
+	}
+
+	result.TrustedSigners = &TrustedSignersXML{
+		Enabled:  ts.Enabled,
+		Quantity: ts.Quantity,
+		Items:    ts.Items,
+	}
+}
+
+func buildTrustedKeyGroupsXML(tkg *TrustedKeyGroups, result *DefaultCacheBehaviorXML) {
+	if tkg == nil {
+		return
+	}
+
+	result.TrustedKeyGroups = &TrustedKeyGroupsXML{
+		Enabled:  tkg.Enabled,
+		Quantity: tkg.Quantity,
+		Items:    tkg.Items,
+	}
+}
+
+func buildAliasesConfigXML(aliases *Aliases) *AliasesXML {
+	if aliases == nil {
+		return nil
+	}
+
+	result := &AliasesXML{
+		Quantity: aliases.Quantity,
+	}
+
+	if len(aliases.Items) > 0 {
+		result.Items = &ItemsXML{
+			Items: aliases.Items,
+		}
+	}
+
+	return result
+}
+
+func buildViewerCertificateConfigXML(vc *ViewerCertificate) *ViewerCertificateXML {
+	if vc == nil {
+		return nil
+	}
+
+	return &ViewerCertificateXML{
+		CloudFrontDefaultCertificate: vc.CloudFrontDefaultCertificate,
+		IAMCertificateID:             vc.IAMCertificateID,
+		ACMCertificateArn:            vc.ACMCertificateArn,
+		SSLSupportMethod:             vc.SSLSupportMethod,
+		MinimumProtocolVersion:       vc.MinimumProtocolVersion,
+	}
 }
 
 func buildDistributionListXML(dists []*Distribution, marker string, maxItems int, nextMarker string) *DistributionListXML {
@@ -445,65 +511,9 @@ func buildDistributionListXML(dists []*Distribution, marker string, maxItems int
 
 	if len(dists) > 0 {
 		result.Items = &DistributionSummaryList{}
+
 		for _, d := range dists {
-			summary := DistributionSummaryXML{
-				ID:               d.ID,
-				ARN:              d.ARN,
-				Status:           d.Status,
-				LastModifiedTime: d.LastModifiedTime.Format(time.RFC3339),
-				DomainName:       d.DomainName,
-				Enabled:          d.DistributionConfig.Enabled,
-				Comment:          d.DistributionConfig.Comment,
-				PriceClass:       d.DistributionConfig.PriceClass,
-				HTTPVersion:      d.DistributionConfig.HTTPVersion,
-				IsIPV6Enabled:    d.DistributionConfig.IsIPV6Enabled,
-				CacheBehaviors:   &CacheBehaviorsXML{Quantity: 0},
-			}
-
-			if d.DistributionConfig.Aliases != nil {
-				summary.Aliases = &AliasesXML{
-					Quantity: d.DistributionConfig.Aliases.Quantity,
-				}
-			} else {
-				summary.Aliases = &AliasesXML{Quantity: 0}
-			}
-
-			if d.DistributionConfig.Origins != nil {
-				summary.Origins = &OriginsXML{
-					Quantity: d.DistributionConfig.Origins.Quantity,
-				}
-				if len(d.DistributionConfig.Origins.Items) > 0 {
-					summary.Origins.Items = &OriginList{}
-					for _, o := range d.DistributionConfig.Origins.Items {
-						origin := OriginXML{
-							ID:         o.ID,
-							DomainName: o.DomainName,
-							OriginPath: o.OriginPath,
-						}
-						if o.S3OriginConfig != nil {
-							origin.S3OriginConfig = &S3OriginConfigXML{
-								OriginAccessIdentity: o.S3OriginConfig.OriginAccessIdentity,
-							}
-						}
-						summary.Origins.Items.Origin = append(summary.Origins.Items.Origin, origin)
-					}
-				}
-			}
-
-			if d.DistributionConfig.DefaultCacheBehavior != nil {
-				summary.DefaultCacheBehavior = &DefaultCacheBehaviorXML{
-					TargetOriginID:       d.DistributionConfig.DefaultCacheBehavior.TargetOriginID,
-					ViewerProtocolPolicy: d.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy,
-				}
-			}
-
-			if d.DistributionConfig.ViewerCertificate != nil {
-				summary.ViewerCertificate = &ViewerCertificateXML{
-					CloudFrontDefaultCertificate: d.DistributionConfig.ViewerCertificate.CloudFrontDefaultCertificate,
-					MinimumProtocolVersion:       d.DistributionConfig.ViewerCertificate.MinimumProtocolVersion,
-				}
-			}
-
+			summary := buildDistributionSummaryXML(d)
 			result.Items.DistributionSummary = append(result.Items.DistributionSummary, summary)
 		}
 	}
@@ -513,6 +523,95 @@ func buildDistributionListXML(dists []*Distribution, marker string, maxItems int
 	}
 
 	return result
+}
+
+func buildDistributionSummaryXML(d *Distribution) DistributionSummaryXML {
+	summary := DistributionSummaryXML{
+		ID:               d.ID,
+		ARN:              d.ARN,
+		Status:           d.Status,
+		LastModifiedTime: d.LastModifiedTime.Format(time.RFC3339),
+		DomainName:       d.DomainName,
+		Enabled:          d.DistributionConfig.Enabled,
+		Comment:          d.DistributionConfig.Comment,
+		PriceClass:       d.DistributionConfig.PriceClass,
+		HTTPVersion:      d.DistributionConfig.HTTPVersion,
+		IsIPV6Enabled:    d.DistributionConfig.IsIPV6Enabled,
+		CacheBehaviors:   &CacheBehaviorsXML{Quantity: 0},
+	}
+
+	summary.Aliases = buildSummaryAliasesXML(d.DistributionConfig.Aliases)
+	summary.Origins = buildSummaryOriginsXML(d.DistributionConfig.Origins)
+	summary.DefaultCacheBehavior = buildSummaryDefaultCacheBehaviorXML(d.DistributionConfig.DefaultCacheBehavior)
+	summary.ViewerCertificate = buildSummaryViewerCertificateXML(d.DistributionConfig.ViewerCertificate)
+
+	return summary
+}
+
+func buildSummaryAliasesXML(aliases *Aliases) *AliasesXML {
+	if aliases != nil {
+		return &AliasesXML{
+			Quantity: aliases.Quantity,
+		}
+	}
+
+	return &AliasesXML{Quantity: 0}
+}
+
+func buildSummaryOriginsXML(origins *Origins) *OriginsXML {
+	if origins == nil {
+		return nil
+	}
+
+	result := &OriginsXML{
+		Quantity: origins.Quantity,
+	}
+
+	if len(origins.Items) == 0 {
+		return result
+	}
+
+	result.Items = &OriginList{}
+
+	for _, o := range origins.Items {
+		origin := OriginXML{
+			ID:         o.ID,
+			DomainName: o.DomainName,
+			OriginPath: o.OriginPath,
+		}
+
+		if o.S3OriginConfig != nil {
+			origin.S3OriginConfig = &S3OriginConfigXML{
+				OriginAccessIdentity: o.S3OriginConfig.OriginAccessIdentity,
+			}
+		}
+
+		result.Items.Origin = append(result.Items.Origin, origin)
+	}
+
+	return result
+}
+
+func buildSummaryDefaultCacheBehaviorXML(dcb *DefaultCacheBehavior) *DefaultCacheBehaviorXML {
+	if dcb == nil {
+		return nil
+	}
+
+	return &DefaultCacheBehaviorXML{
+		TargetOriginID:       dcb.TargetOriginID,
+		ViewerProtocolPolicy: dcb.ViewerProtocolPolicy,
+	}
+}
+
+func buildSummaryViewerCertificateXML(vc *ViewerCertificate) *ViewerCertificateXML {
+	if vc == nil {
+		return nil
+	}
+
+	return &ViewerCertificateXML{
+		CloudFrontDefaultCertificate: vc.CloudFrontDefaultCertificate,
+		MinimumProtocolVersion:       vc.MinimumProtocolVersion,
+	}
 }
 
 func buildInvalidationXML(inv *Invalidation) *InvalidationXML {
