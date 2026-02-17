@@ -157,6 +157,10 @@ linters:
       - path: internal/service/appsync/types\.go
         linters:
           - tagliatelle
+      # AWS RDS API requires PascalCase JSON field names.
+      - path: internal/service/rds/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
