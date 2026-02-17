@@ -31,7 +31,7 @@ type DistributionConfig struct {
 	DefaultRootObject    string
 	CacheBehaviors       *CacheBehaviors
 	ViewerCertificate    *ViewerCertificate
-	HttpVersion          string
+	HTTPVersion          string
 	IsIPV6Enabled        bool
 }
 
@@ -276,7 +276,7 @@ type DistributionConfigXML struct {
 	Enabled              bool                     `xml:"Enabled"`
 	PriceClass           string                   `xml:"PriceClass,omitempty"`
 	ViewerCertificate    *ViewerCertificateXML    `xml:"ViewerCertificate,omitempty"`
-	HttpVersion          string                   `xml:"HttpVersion,omitempty"`
+	HTTPVersion          string                   `xml:"HttpVersion,omitempty"`
 	IsIPV6Enabled        bool                     `xml:"IsIPV6Enabled,omitempty"`
 }
 
@@ -441,7 +441,7 @@ type DistributionSummaryXML struct {
 	PriceClass           string                   `xml:"PriceClass"`
 	Enabled              bool                     `xml:"Enabled"`
 	ViewerCertificate    *ViewerCertificateXML    `xml:"ViewerCertificate"`
-	HttpVersion          string                   `xml:"HttpVersion"`
+	HTTPVersion          string                   `xml:"HttpVersion"`
 	IsIPV6Enabled        bool                     `xml:"IsIPV6Enabled"`
 }
 
@@ -472,7 +472,7 @@ type CreateDistributionRequest struct {
 	Enabled              bool                     `xml:"Enabled"`
 	PriceClass           string                   `xml:"PriceClass,omitempty"`
 	ViewerCertificate    *ViewerCertificateXML    `xml:"ViewerCertificate,omitempty"`
-	HttpVersion          string                   `xml:"HttpVersion,omitempty"`
+	HTTPVersion          string                   `xml:"HttpVersion,omitempty"`
 	IsIPV6Enabled        bool                     `xml:"IsIPV6Enabled,omitempty"`
 }
 

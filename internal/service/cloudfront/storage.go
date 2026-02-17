@@ -79,7 +79,7 @@ func (s *MemoryStorage) CreateDistribution(_ context.Context, config *CreateDist
 			Enabled:              config.Enabled,
 			PriceClass:           defaultString(config.PriceClass, "PriceClass_All"),
 			DefaultRootObject:    config.DefaultRootObject,
-			HttpVersion:          defaultString(config.HttpVersion, "http2"),
+			HTTPVersion:          defaultString(config.HTTPVersion, "http2"),
 			IsIPV6Enabled:        config.IsIPV6Enabled,
 			Origins:              convertOriginsFromXML(config.Origins),
 			DefaultCacheBehavior: convertDefaultCacheBehaviorFromXML(config.DefaultCacheBehavior),
@@ -120,7 +120,7 @@ func (s *MemoryStorage) ListDistributions(_ context.Context, marker string, maxI
 		maxItems = 100
 	}
 
-	var dists []*Distribution
+	dists := make([]*Distribution, 0, len(s.distributions))
 	for _, d := range s.distributions {
 		dists = append(dists, d)
 	}
@@ -134,6 +134,7 @@ func (s *MemoryStorage) ListDistributions(_ context.Context, marker string, maxI
 		for i, d := range dists {
 			if d.ID == marker {
 				startIdx = i + 1
+
 				break
 			}
 		}
@@ -185,7 +186,7 @@ func (s *MemoryStorage) UpdateDistribution(_ context.Context, id string, config 
 		Enabled:              config.Enabled,
 		PriceClass:           defaultString(config.PriceClass, "PriceClass_All"),
 		DefaultRootObject:    config.DefaultRootObject,
-		HttpVersion:          defaultString(config.HttpVersion, "http2"),
+		HTTPVersion:          defaultString(config.HTTPVersion, "http2"),
 		IsIPV6Enabled:        config.IsIPV6Enabled,
 		Origins:              convertOriginsFromXML(config.Origins),
 		DefaultCacheBehavior: convertDefaultCacheBehaviorFromXML(config.DefaultCacheBehavior),
@@ -197,7 +198,7 @@ func (s *MemoryStorage) UpdateDistribution(_ context.Context, id string, config 
 }
 
 // DeleteDistribution deletes a distribution.
-func (s *MemoryStorage) DeleteDistribution(_ context.Context, id string, etag string) error {
+func (s *MemoryStorage) DeleteDistribution(_ context.Context, id, etag string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -327,6 +328,7 @@ func (s *MemoryStorage) ListInvalidations(_ context.Context, distributionID, mar
 		for i, inv := range invs {
 			if inv.ID == marker {
 				startIdx = i + 1
+
 				break
 			}
 		}
@@ -364,6 +366,7 @@ func defaultString(s, def string) string {
 	if s == "" {
 		return def
 	}
+
 	return s
 }
 
