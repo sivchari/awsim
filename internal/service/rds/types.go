@@ -130,7 +130,7 @@ type CreateDBInstanceInput struct {
 	MultiAZ                    bool     `json:"MultiAZ,omitempty"`
 	AvailabilityZone           string   `json:"AvailabilityZone,omitempty"`
 	DBSubnetGroupName          string   `json:"DBSubnetGroupName,omitempty"`
-	VpcSecurityGroupIds        []string `json:"VpcSecurityGroupIds,omitempty"`
+	VpcSecurityGroupIDs        []string `json:"VpcSecurityGroupIDs,omitempty"`
 	BackupRetentionPeriod      int32    `json:"BackupRetentionPeriod,omitempty"`
 	PreferredBackupWindow      string   `json:"PreferredBackupWindow,omitempty"`
 	PreferredMaintenanceWindow string   `json:"PreferredMaintenanceWindow,omitempty"`
@@ -186,7 +186,7 @@ type ModifyDBInstanceInput struct {
 	PubliclyAccessible         *bool    `json:"PubliclyAccessible,omitempty"`
 	DeletionProtection         *bool    `json:"DeletionProtection,omitempty"`
 	ApplyImmediately           bool     `json:"ApplyImmediately,omitempty"`
-	VpcSecurityGroupIds        []string `json:"VpcSecurityGroupIds,omitempty"`
+	VpcSecurityGroupIDs        []string `json:"VpcSecurityGroupIDs,omitempty"`
 }
 
 // ModifyDBInstanceOutput represents the output for ModifyDBInstance.
@@ -226,7 +226,7 @@ type CreateDBClusterInput struct {
 	Port                int32    `json:"Port,omitempty"`
 	AllocatedStorage    int32    `json:"AllocatedStorage,omitempty"`
 	AvailabilityZones   []string `json:"AvailabilityZones,omitempty"`
-	VpcSecurityGroupIds []string `json:"VpcSecurityGroupIds,omitempty"`
+	VpcSecurityGroupIDs []string `json:"VpcSecurityGroupIDs,omitempty"`
 	StorageEncrypted    bool     `json:"StorageEncrypted,omitempty"`
 	DeletionProtection  bool     `json:"DeletionProtection,omitempty"`
 	Tags                []Tag    `json:"Tags,omitempty"`
