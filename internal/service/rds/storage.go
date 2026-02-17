@@ -58,7 +58,28 @@ func (m *MemoryStorage) CreateDBInstance(_ context.Context, input *CreateDBInsta
 		}
 	}
 
-	now := time.Now()
+	instance := m.buildDBInstance(input)
+	m.instances[input.DBInstanceIdentifier] = instance
+
+	return instance, nil
+}
+
+func (m *MemoryStorage) buildDBInstance(input *CreateDBInstanceInput) *DBInstance {
+	storageType := input.StorageType
+	if storageType == "" {
+		storageType = "gp2"
+	}
+
+	allocatedStorage := input.AllocatedStorage
+	if allocatedStorage == 0 {
+		allocatedStorage = 20
+	}
+
+	availabilityZone := input.AvailabilityZone
+	if availabilityZone == "" {
+		availabilityZone = defaultRegion + "a"
+	}
+
 	instance := &DBInstance{
 		DBInstanceIdentifier:       input.DBInstanceIdentifier,
 		DBInstanceClass:            input.DBInstanceClass,
@@ -67,12 +88,12 @@ func (m *MemoryStorage) CreateDBInstance(_ context.Context, input *CreateDBInsta
 		DBInstanceStatus:           DBInstanceStatusAvailable,
 		MasterUsername:             input.MasterUsername,
 		DBName:                     input.DBName,
-		AllocatedStorage:           input.AllocatedStorage,
-		InstanceCreateTime:         now,
+		AllocatedStorage:           allocatedStorage,
+		InstanceCreateTime:         time.Now(),
 		DBInstanceArn:              m.dbInstanceArn(input.DBInstanceIdentifier),
-		StorageType:                input.StorageType,
+		StorageType:                storageType,
 		MultiAZ:                    input.MultiAZ,
-		AvailabilityZone:           input.AvailabilityZone,
+		AvailabilityZone:           availabilityZone,
 		BackupRetentionPeriod:      input.BackupRetentionPeriod,
 		PreferredBackupWindow:      input.PreferredBackupWindow,
 		PreferredMaintenanceWindow: input.PreferredMaintenanceWindow,
@@ -80,36 +101,14 @@ func (m *MemoryStorage) CreateDBInstance(_ context.Context, input *CreateDBInsta
 		StorageEncrypted:           input.StorageEncrypted,
 		DeletionProtection:         input.DeletionProtection,
 		Tags:                       input.Tags,
+		VpcSecurityGroups:          buildVpcSecurityGroups(input.VpcSecurityGroupIDs),
 		Endpoint: &Endpoint{
 			Address: fmt.Sprintf("%s.%s.%s.rds.amazonaws.com", input.DBInstanceIdentifier, generateID(), defaultRegion),
 			Port:    m.getDefaultPort(input.Engine),
 		},
 	}
 
-	if input.StorageType == "" {
-		instance.StorageType = "gp2"
-	}
-
-	if input.AllocatedStorage == 0 {
-		instance.AllocatedStorage = 20
-	}
-
-	if input.AvailabilityZone == "" {
-		instance.AvailabilityZone = defaultRegion + "a"
-	}
-
-	if len(input.VpcSecurityGroupIds) > 0 {
-		for _, sgID := range input.VpcSecurityGroupIds {
-			instance.VpcSecurityGroups = append(instance.VpcSecurityGroups, VpcSecurityGroupMembership{
-				VpcSecurityGroupID: sgID,
-				Status:             "active",
-			})
-		}
-	}
-
-	m.instances[input.DBInstanceIdentifier] = instance
-
-	return instance, nil
+	return instance
 }
 
 // DeleteDBInstance deletes a DB instance.
@@ -126,6 +125,7 @@ func (m *MemoryStorage) DeleteDBInstance(_ context.Context, identifier string, _
 	}
 
 	instance.DBInstanceStatus = DBInstanceStatusDeleting
+
 	delete(m.instances, identifier)
 
 	return instance, nil
@@ -169,6 +169,12 @@ func (m *MemoryStorage) ModifyDBInstance(_ context.Context, input *ModifyDBInsta
 		}
 	}
 
+	applyDBInstanceModifications(instance, input)
+
+	return instance, nil
+}
+
+func applyDBInstanceModifications(instance *DBInstance, input *ModifyDBInstanceInput) {
 	if input.DBInstanceClass != "" {
 		instance.DBInstanceClass = input.DBInstanceClass
 	}
@@ -209,17 +215,9 @@ func (m *MemoryStorage) ModifyDBInstance(_ context.Context, input *ModifyDBInsta
 		instance.DeletionProtection = *input.DeletionProtection
 	}
 
-	if len(input.VpcSecurityGroupIds) > 0 {
-		instance.VpcSecurityGroups = make([]VpcSecurityGroupMembership, 0, len(input.VpcSecurityGroupIds))
-		for _, sgID := range input.VpcSecurityGroupIds {
-			instance.VpcSecurityGroups = append(instance.VpcSecurityGroups, VpcSecurityGroupMembership{
-				VpcSecurityGroupID: sgID,
-				Status:             "active",
-			})
-		}
+	if len(input.VpcSecurityGroupIDs) > 0 {
+		instance.VpcSecurityGroups = buildVpcSecurityGroups(input.VpcSecurityGroupIDs)
 	}
-
-	return instance, nil
 }
 
 // StartDBInstance starts a stopped DB instance.
@@ -285,6 +283,7 @@ func (m *MemoryStorage) CreateDBCluster(_ context.Context, input *CreateDBCluste
 	}
 
 	now := time.Now()
+
 	port := input.Port
 	if port == 0 {
 		port = m.getDefaultPort(input.Engine)
@@ -313,8 +312,8 @@ func (m *MemoryStorage) CreateDBCluster(_ context.Context, input *CreateDBCluste
 		cluster.AvailabilityZones = []string{defaultRegion + "a", defaultRegion + "b", defaultRegion + "c"}
 	}
 
-	if len(input.VpcSecurityGroupIds) > 0 {
-		for _, sgID := range input.VpcSecurityGroupIds {
+	if len(input.VpcSecurityGroupIDs) > 0 {
+		for _, sgID := range input.VpcSecurityGroupIDs {
 			cluster.VpcSecurityGroups = append(cluster.VpcSecurityGroups, VpcSecurityGroupMembership{
 				VpcSecurityGroupID: sgID,
 				Status:             "active",
@@ -341,6 +340,7 @@ func (m *MemoryStorage) DeleteDBCluster(_ context.Context, identifier string, _ 
 	}
 
 	cluster.Status = DBClusterStatusDeleting
+
 	delete(m.clusters, identifier)
 
 	return cluster, nil
@@ -464,4 +464,20 @@ func (m *MemoryStorage) getDefaultPort(engine string) int32 {
 
 func generateID() string {
 	return uuid.New().String()[:8]
+}
+
+func buildVpcSecurityGroups(sgIDs []string) []VpcSecurityGroupMembership {
+	if len(sgIDs) == 0 {
+		return nil
+	}
+
+	groups := make([]VpcSecurityGroupMembership, 0, len(sgIDs))
+	for _, sgID := range sgIDs {
+		groups = append(groups, VpcSecurityGroupMembership{
+			VpcSecurityGroupID: sgID,
+			Status:             "active",
+		})
+	}
+
+	return groups
 }

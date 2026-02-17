@@ -1,3 +1,4 @@
+// Package rds implements the RDS service handlers.
 package rds
 
 import (
@@ -471,10 +472,7 @@ func convertToXMLDBInstance(inst *DBInstance) XMLDBInstance {
 
 	vpcSecurityGroups := make([]XMLVpcSecurityGroupMembership, 0, len(inst.VpcSecurityGroups))
 	for _, sg := range inst.VpcSecurityGroups {
-		vpcSecurityGroups = append(vpcSecurityGroups, XMLVpcSecurityGroupMembership{
-			VpcSecurityGroupID: sg.VpcSecurityGroupID,
-			Status:             sg.Status,
-		})
+		vpcSecurityGroups = append(vpcSecurityGroups, XMLVpcSecurityGroupMembership(sg))
 	}
 
 	return XMLDBInstance{
@@ -505,10 +503,7 @@ func convertToXMLDBInstance(inst *DBInstance) XMLDBInstance {
 func convertToXMLDBCluster(cluster *DBCluster) XMLDBCluster {
 	vpcSecurityGroups := make([]XMLVpcSecurityGroupMembership, 0, len(cluster.VpcSecurityGroups))
 	for _, sg := range cluster.VpcSecurityGroups {
-		vpcSecurityGroups = append(vpcSecurityGroups, XMLVpcSecurityGroupMembership{
-			VpcSecurityGroupID: sg.VpcSecurityGroupID,
-			Status:             sg.Status,
-		})
+		vpcSecurityGroups = append(vpcSecurityGroups, XMLVpcSecurityGroupMembership(sg))
 	}
 
 	members := make([]XMLDBClusterMember, 0, len(cluster.DBClusterMembers))
