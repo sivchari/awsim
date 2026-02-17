@@ -29,9 +29,10 @@ func init() {
 
 	cborDecMode = decMode
 
-	// Configure encode mode to output time as Unix epoch (Tag 1)
+	// Configure encode mode to output time as Unix epoch with microseconds (Tag 1)
+	// SDK expects float64 timestamp, not integer
 	encOpts := cbor.EncOptions{
-		Time: cbor.TimeUnix,
+		Time: cbor.TimeUnixMicro,
 	}
 
 	encMode, err := encOpts.EncMode()
