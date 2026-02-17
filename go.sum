@@ -24,6 +24,8 @@ github.com/aws/aws-sdk-go-v2/service/athena v1.57.0 h1:zWpbEE0+lqHikRPOWOsboqEw/
 github.com/aws/aws-sdk-go-v2/service/athena v1.57.0/go.mod h1:4Hg2qtNOcRb/+xXK5wR+RbhIUV2/kKVLwtQg+Zih+X4=
 github.com/aws/aws-sdk-go-v2/service/batch v1.60.0 h1:3cvOakiTtrJ1aAhrOxdObtdu56JT8WfsVerxCkCJvVk=
 github.com/aws/aws-sdk-go-v2/service/batch v1.60.0/go.mod h1:AsiSt6Dqk71ynOK1sB4sEC2e9tf/h2pbgaodAKRVxIY=
+github.com/aws/aws-sdk-go-v2/service/cloudfront v1.60.0 h1:RUQqU9L1LnFJ+9t5hsSB7GI6dVvJDCnG4WgRlDeHK6E=
+github.com/aws/aws-sdk-go-v2/service/cloudfront v1.60.0/go.mod h1:9Hd/cqshF4zl13KGLkWtRfITbvKR6m6FZHwhL2BYDSY=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.63.1 h1:l65dmgr7tO26EcHe6WMdseRnFLoJ2nqdkPz1nJdXfaw=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.63.1/go.mod h1:wvnXh1w1pGS2UpEvPTKSjXYuxiXhuvob/IMaK2AWvek=
 github.com/aws/aws-sdk-go-v2/service/codeconnections v1.10.16 h1:7JabEMZbLSw9HJxlghUusC65ADiq4lbS/ViCRRXkp4g=

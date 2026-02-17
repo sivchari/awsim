@@ -1,0 +1,545 @@
+package cloudfront
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Storage defines the CloudFront storage interface.
+type Storage interface {
+	CreateDistribution(ctx context.Context, config *CreateDistributionRequest) (*Distribution, error)
+	GetDistribution(ctx context.Context, id string) (*Distribution, error)
+	ListDistributions(ctx context.Context, marker string, maxItems int) ([]*Distribution, string, error)
+	UpdateDistribution(ctx context.Context, id string, config *CreateDistributionRequest, etag string) (*Distribution, error)
+	DeleteDistribution(ctx context.Context, id string, etag string) error
+	CreateInvalidation(ctx context.Context, distributionID string, batch *CreateInvalidationRequest) (*Invalidation, error)
+	GetInvalidation(ctx context.Context, distributionID, invalidationID string) (*Invalidation, error)
+	ListInvalidations(ctx context.Context, distributionID, marker string, maxItems int) ([]*Invalidation, string, error)
+}
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu            sync.RWMutex
+	distributions map[string]*Distribution
+	invalidations map[string]map[string]*Invalidation // distributionID -> invalidationID -> Invalidation
+}
+
+// NewMemoryStorage creates a new memory storage.
+func NewMemoryStorage() *MemoryStorage {
+	return &MemoryStorage{
+		distributions: make(map[string]*Distribution),
+		invalidations: make(map[string]map[string]*Invalidation),
+	}
+}
+
+// Error represents a CloudFront error.
+type Error struct {
+	Code    string
+	Message string
+}
+
+func (e *Error) Error() string {
+	return e.Message
+}
+
+// CreateDistribution creates a new distribution.
+func (s *MemoryStorage) CreateDistribution(_ context.Context, config *CreateDistributionRequest) (*Distribution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check for duplicate caller reference.
+	for _, d := range s.distributions {
+		if d.DistributionConfig != nil && d.DistributionConfig.CallerReference == config.CallerReference {
+			return nil, &Error{
+				Code:    errDistributionAlreadyExists,
+				Message: fmt.Sprintf("A distribution with caller reference %s already exists", config.CallerReference),
+			}
+		}
+	}
+
+	// Generate distribution ID.
+	id := generateDistributionID()
+	etag := generateETag()
+	now := time.Now()
+
+	dist := &Distribution{
+		ID:               id,
+		ARN:              fmt.Sprintf("arn:aws:cloudfront::000000000000:distribution/%s", id),
+		Status:           "InProgress",
+		LastModifiedTime: now,
+		DomainName:       fmt.Sprintf("%s.cloudfront.net", id),
+		ETag:             etag,
+		DistributionConfig: &DistributionConfig{
+			CallerReference:      config.CallerReference,
+			Comment:              config.Comment,
+			Enabled:              config.Enabled,
+			PriceClass:           defaultString(config.PriceClass, "PriceClass_All"),
+			DefaultRootObject:    config.DefaultRootObject,
+			HttpVersion:          defaultString(config.HttpVersion, "http2"),
+			IsIPV6Enabled:        config.IsIPV6Enabled,
+			Origins:              convertOriginsFromXML(config.Origins),
+			DefaultCacheBehavior: convertDefaultCacheBehaviorFromXML(config.DefaultCacheBehavior),
+			Aliases:              convertAliasesFromXML(config.Aliases),
+			ViewerCertificate:    convertViewerCertificateFromXML(config.ViewerCertificate),
+		},
+		ActiveTrustedSigners:   &ActiveTrustedSigners{Enabled: false, Quantity: 0},
+		ActiveTrustedKeyGroups: &ActiveTrustedKeyGroups{Enabled: false, Quantity: 0},
+	}
+
+	s.distributions[id] = dist
+
+	return dist, nil
+}
+
+// GetDistribution retrieves a distribution by ID.
+func (s *MemoryStorage) GetDistribution(_ context.Context, id string) (*Distribution, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dist, exists := s.distributions[id]
+	if !exists {
+		return nil, &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", id),
+		}
+	}
+
+	return dist, nil
+}
+
+// ListDistributions lists all distributions.
+func (s *MemoryStorage) ListDistributions(_ context.Context, marker string, maxItems int) ([]*Distribution, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if maxItems <= 0 {
+		maxItems = 100
+	}
+
+	var dists []*Distribution
+	for _, d := range s.distributions {
+		dists = append(dists, d)
+	}
+
+	// Sort by ID for consistent ordering.
+	sortDistributionsByID(dists)
+
+	// Apply marker-based pagination.
+	startIdx := 0
+	if marker != "" {
+		for i, d := range dists {
+			if d.ID == marker {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+
+	// Slice the results.
+	endIdx := min(startIdx+maxItems, len(dists))
+
+	result := dists[startIdx:endIdx]
+
+	// Determine next marker.
+	var nextMarker string
+	if endIdx < len(dists) {
+		nextMarker = dists[endIdx-1].ID
+	}
+
+	return result, nextMarker, nil
+}
+
+// UpdateDistribution updates a distribution.
+func (s *MemoryStorage) UpdateDistribution(_ context.Context, id string, config *CreateDistributionRequest, etag string) (*Distribution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dist, exists := s.distributions[id]
+	if !exists {
+		return nil, &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", id),
+		}
+	}
+
+	// Validate ETag.
+	if dist.ETag != etag {
+		return nil, &Error{
+			Code:    errInvalidIfMatchVersion,
+			Message: "The If-Match version is missing or not valid for the resource",
+		}
+	}
+
+	// Update distribution.
+	newETag := generateETag()
+	dist.ETag = newETag
+	dist.LastModifiedTime = time.Now()
+	dist.Status = "InProgress"
+	dist.DistributionConfig = &DistributionConfig{
+		CallerReference:      config.CallerReference,
+		Comment:              config.Comment,
+		Enabled:              config.Enabled,
+		PriceClass:           defaultString(config.PriceClass, "PriceClass_All"),
+		DefaultRootObject:    config.DefaultRootObject,
+		HttpVersion:          defaultString(config.HttpVersion, "http2"),
+		IsIPV6Enabled:        config.IsIPV6Enabled,
+		Origins:              convertOriginsFromXML(config.Origins),
+		DefaultCacheBehavior: convertDefaultCacheBehaviorFromXML(config.DefaultCacheBehavior),
+		Aliases:              convertAliasesFromXML(config.Aliases),
+		ViewerCertificate:    convertViewerCertificateFromXML(config.ViewerCertificate),
+	}
+
+	return dist, nil
+}
+
+// DeleteDistribution deletes a distribution.
+func (s *MemoryStorage) DeleteDistribution(_ context.Context, id string, etag string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dist, exists := s.distributions[id]
+	if !exists {
+		return &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", id),
+		}
+	}
+
+	// Validate ETag.
+	if dist.ETag != etag {
+		return &Error{
+			Code:    errInvalidIfMatchVersion,
+			Message: "The If-Match version is missing or not valid for the resource",
+		}
+	}
+
+	delete(s.distributions, id)
+	delete(s.invalidations, id)
+
+	return nil
+}
+
+// CreateInvalidation creates a new invalidation.
+func (s *MemoryStorage) CreateInvalidation(_ context.Context, distributionID string, batch *CreateInvalidationRequest) (*Invalidation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if distribution exists.
+	if _, exists := s.distributions[distributionID]; !exists {
+		return nil, &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
+		}
+	}
+
+	// Generate invalidation ID.
+	id := generateInvalidationID()
+	now := time.Now()
+
+	inv := &Invalidation{
+		ID:         id,
+		Status:     "InProgress",
+		CreateTime: now,
+		InvalidationBatch: &InvalidationBatch{
+			CallerReference: batch.CallerReference,
+			Paths:           convertPathsFromXML(batch.Paths),
+		},
+	}
+
+	// Store invalidation.
+	if s.invalidations[distributionID] == nil {
+		s.invalidations[distributionID] = make(map[string]*Invalidation)
+	}
+	s.invalidations[distributionID][id] = inv
+
+	return inv, nil
+}
+
+// GetInvalidation retrieves an invalidation.
+func (s *MemoryStorage) GetInvalidation(_ context.Context, distributionID, invalidationID string) (*Invalidation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check if distribution exists.
+	if _, exists := s.distributions[distributionID]; !exists {
+		return nil, &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
+		}
+	}
+
+	invMap, exists := s.invalidations[distributionID]
+	if !exists {
+		return nil, &Error{
+			Code:    errNoSuchInvalidation,
+			Message: fmt.Sprintf("The invalidation with id %s does not exist", invalidationID),
+		}
+	}
+
+	inv, exists := invMap[invalidationID]
+	if !exists {
+		return nil, &Error{
+			Code:    errNoSuchInvalidation,
+			Message: fmt.Sprintf("The invalidation with id %s does not exist", invalidationID),
+		}
+	}
+
+	return inv, nil
+}
+
+// ListInvalidations lists invalidations for a distribution.
+func (s *MemoryStorage) ListInvalidations(_ context.Context, distributionID, marker string, maxItems int) ([]*Invalidation, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check if distribution exists.
+	if _, exists := s.distributions[distributionID]; !exists {
+		return nil, "", &Error{
+			Code:    errDistributionNotFound,
+			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
+		}
+	}
+
+	if maxItems <= 0 {
+		maxItems = 100
+	}
+
+	invMap := s.invalidations[distributionID]
+	if invMap == nil {
+		return []*Invalidation{}, "", nil
+	}
+
+	var invs []*Invalidation
+	for _, inv := range invMap {
+		invs = append(invs, inv)
+	}
+
+	// Sort by ID for consistent ordering.
+	sortInvalidationsByID(invs)
+
+	// Apply marker-based pagination.
+	startIdx := 0
+	if marker != "" {
+		for i, inv := range invs {
+			if inv.ID == marker {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+
+	// Slice the results.
+	endIdx := min(startIdx+maxItems, len(invs))
+
+	result := invs[startIdx:endIdx]
+
+	// Determine next marker.
+	var nextMarker string
+	if endIdx < len(invs) {
+		nextMarker = invs[endIdx-1].ID
+	}
+
+	return result, nextMarker, nil
+}
+
+// Helper functions.
+
+func generateDistributionID() string {
+	return "E" + uuid.New().String()[:13]
+}
+
+func generateInvalidationID() string {
+	return "I" + uuid.New().String()[:13]
+}
+
+func generateETag() string {
+	return "E" + uuid.New().String()[:32]
+}
+
+func defaultString(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
+func sortDistributionsByID(dists []*Distribution) {
+	for i := range len(dists) {
+		for j := i + 1; j < len(dists); j++ {
+			if dists[i].ID > dists[j].ID {
+				dists[i], dists[j] = dists[j], dists[i]
+			}
+		}
+	}
+}
+
+func sortInvalidationsByID(invs []*Invalidation) {
+	for i := range len(invs) {
+		for j := i + 1; j < len(invs); j++ {
+			if invs[i].ID > invs[j].ID {
+				invs[i], invs[j] = invs[j], invs[i]
+			}
+		}
+	}
+}
+
+func convertOriginsFromXML(origins *OriginsXML) *Origins {
+	if origins == nil {
+		return nil
+	}
+
+	result := &Origins{
+		Quantity: origins.Quantity,
+	}
+
+	if origins.Items != nil {
+		for _, o := range origins.Items.Origin {
+			origin := Origin{
+				ID:                    o.ID,
+				DomainName:            o.DomainName,
+				OriginPath:            o.OriginPath,
+				ConnectionAttempts:    o.ConnectionAttempts,
+				ConnectionTimeout:     o.ConnectionTimeout,
+				OriginAccessControlID: o.OriginAccessControlID,
+			}
+
+			if o.S3OriginConfig != nil {
+				origin.S3OriginConfig = &S3OriginConfig{
+					OriginAccessIdentity: o.S3OriginConfig.OriginAccessIdentity,
+				}
+			}
+
+			if o.CustomOriginConfig != nil {
+				origin.CustomOriginConfig = &CustomOriginConfig{
+					HTTPPort:               o.CustomOriginConfig.HTTPPort,
+					HTTPSPort:              o.CustomOriginConfig.HTTPSPort,
+					OriginProtocolPolicy:   o.CustomOriginConfig.OriginProtocolPolicy,
+					OriginReadTimeout:      o.CustomOriginConfig.OriginReadTimeout,
+					OriginKeepaliveTimeout: o.CustomOriginConfig.OriginKeepaliveTimeout,
+				}
+				if o.CustomOriginConfig.OriginSSLProtocols != nil {
+					origin.CustomOriginConfig.OriginSSLProtocols = &OriginSSLProtocols{
+						Quantity: o.CustomOriginConfig.OriginSSLProtocols.Quantity,
+						Items:    o.CustomOriginConfig.OriginSSLProtocols.Items,
+					}
+				}
+			}
+
+			result.Items = append(result.Items, origin)
+		}
+	}
+
+	return result
+}
+
+func convertDefaultCacheBehaviorFromXML(behavior *DefaultCacheBehaviorXML) *DefaultCacheBehavior {
+	if behavior == nil {
+		return nil
+	}
+
+	result := &DefaultCacheBehavior{
+		TargetOriginID:       behavior.TargetOriginID,
+		ViewerProtocolPolicy: behavior.ViewerProtocolPolicy,
+		MinTTL:               behavior.MinTTL,
+		DefaultTTL:           behavior.DefaultTTL,
+		MaxTTL:               behavior.MaxTTL,
+		Compress:             behavior.Compress,
+		CachePolicyID:        behavior.CachePolicyID,
+	}
+
+	if behavior.AllowedMethods != nil {
+		result.AllowedMethods = &AllowedMethods{
+			Quantity: behavior.AllowedMethods.Quantity,
+			Items:    behavior.AllowedMethods.Items,
+		}
+		if behavior.AllowedMethods.CachedMethods != nil {
+			result.CachedMethods = &CachedMethods{
+				Quantity: behavior.AllowedMethods.CachedMethods.Quantity,
+				Items:    behavior.AllowedMethods.CachedMethods.Items,
+			}
+		}
+	}
+
+	if behavior.ForwardedValues != nil {
+		result.ForwardedValues = &ForwardedValues{
+			QueryString: behavior.ForwardedValues.QueryString,
+		}
+		if behavior.ForwardedValues.Cookies != nil {
+			result.ForwardedValues.Cookies = &CookiePreference{
+				Forward: behavior.ForwardedValues.Cookies.Forward,
+			}
+		}
+		if behavior.ForwardedValues.Headers != nil {
+			result.ForwardedValues.Headers = &Headers{
+				Quantity: behavior.ForwardedValues.Headers.Quantity,
+				Items:    behavior.ForwardedValues.Headers.Items,
+			}
+		}
+	}
+
+	if behavior.TrustedSigners != nil {
+		result.TrustedSigners = &TrustedSigners{
+			Enabled:  behavior.TrustedSigners.Enabled,
+			Quantity: behavior.TrustedSigners.Quantity,
+			Items:    behavior.TrustedSigners.Items,
+		}
+	}
+
+	if behavior.TrustedKeyGroups != nil {
+		result.TrustedKeyGroups = &TrustedKeyGroups{
+			Enabled:  behavior.TrustedKeyGroups.Enabled,
+			Quantity: behavior.TrustedKeyGroups.Quantity,
+			Items:    behavior.TrustedKeyGroups.Items,
+		}
+	}
+
+	return result
+}
+
+func convertAliasesFromXML(aliases *AliasesXML) *Aliases {
+	if aliases == nil {
+		return nil
+	}
+
+	result := &Aliases{
+		Quantity: aliases.Quantity,
+	}
+
+	if aliases.Items != nil {
+		result.Items = aliases.Items.Items
+	}
+
+	return result
+}
+
+func convertViewerCertificateFromXML(cert *ViewerCertificateXML) *ViewerCertificate {
+	if cert == nil {
+		return &ViewerCertificate{
+			CloudFrontDefaultCertificate: true,
+			MinimumProtocolVersion:       "TLSv1",
+		}
+	}
+
+	return &ViewerCertificate{
+		CloudFrontDefaultCertificate: cert.CloudFrontDefaultCertificate,
+		IAMCertificateID:             cert.IAMCertificateID,
+		ACMCertificateArn:            cert.ACMCertificateArn,
+		SSLSupportMethod:             cert.SSLSupportMethod,
+		MinimumProtocolVersion:       cert.MinimumProtocolVersion,
+	}
+}
+
+func convertPathsFromXML(paths *PathsXML) *Paths {
+	if paths == nil {
+		return nil
+	}
+
+	return &Paths{
+		Quantity: paths.Quantity,
+		Items:    paths.Items,
+	}
+}

@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/apigateway v1.38.4
 	github.com/aws/aws-sdk-go-v2/service/athena v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/batch v1.60.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.60.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.63.1
 	github.com/aws/aws-sdk-go-v2/service/codeconnections v1.10.16
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.58.0
