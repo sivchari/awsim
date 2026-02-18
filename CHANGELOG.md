@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.3](https://github.com/sivchari/awsim/compare/v0.0.2...v0.0.3) - 2026-02-18
+- feat(rds): add RDS service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/233
+- feat(elasticache): add ElastiCache service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/235
+
 ## [v0.0.2](https://github.com/sivchari/awsim/compare/v0.0.1...v0.0.2) - 2026-02-17
 - feat(eks): add basic EKS service implementation by @sivchari in https://github.com/sivchari/awsim/pull/207
 - feat(ecs): add basic ECS service implementation by @sivchari in https://github.com/sivchari/awsim/pull/206
