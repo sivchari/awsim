@@ -161,6 +161,10 @@ linters:
       - path: internal/service/rds/types\.go
         linters:
           - tagliatelle
+      # AWS ElastiCache API requires PascalCase JSON field names.
+      - path: internal/service/elasticache/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
