@@ -181,6 +181,10 @@ linters:
       - path: internal/service/configservice/types\.go
         linters:
           - tagliatelle
+      # AWS Forecast API requires PascalCase JSON field names.
+      - path: internal/service/forecast/types\.go
+        linters:
+          - tagliatelle
       # AWS GameLift API requires PascalCase JSON field names.
       - path: internal/service/gamelift/types\.go
         linters:

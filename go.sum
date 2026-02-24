@@ -60,6 +60,8 @@ github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18 h1:Zqe/Mbpjy3Vk0IKreW4
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18/go.mod h1:oGNgLQOntNCt7Tl3d1NQu5QKFxdufg4huUAmyNECPDU=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9 h1:nFzEdq+y0lvgnSbYtRkgsSDFI7awmCrihWHFxWg8OQ0=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9/go.mod h1:rWQA39HYDLIx/K0Kdk5YXynPju527z3rXHrllkY1uTs=
+github.com/aws/aws-sdk-go-v2/service/forecast v1.41.18 h1:qnTIzASDu7VEzPhA8mH7CnbESv/pnYiIXL8bk3iNwOQ=
+github.com/aws/aws-sdk-go-v2/service/forecast v1.41.18/go.mod h1:kPcptcV41vB+gF0RdZpuCFbw21gOHbB/lsyAZzwbjNw=
 github.com/aws/aws-sdk-go-v2/service/gamelift v1.50.1 h1:KWDuiKX6GxDFCCgVRku5MJeadvkiwJj/cyGgUyLyrJ0=
 github.com/aws/aws-sdk-go-v2/service/gamelift v1.50.1/go.mod h1:2DjGCbbH1xsUxYgQ4DeKpCxD+wsxv37nmwaTKlwhBB0=
 github.com/aws/aws-sdk-go-v2/service/globalaccelerator v1.35.11 h1:4eqAOfI1HxSdRcJ6k9+0yBRvkyAqf7bIN1QoJY9Jql0=
