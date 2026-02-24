@@ -159,6 +159,8 @@ type PredictorSummary struct {
 }
 
 // ForecastSummary represents a forecast summary for list operations.
+//
+//nolint:revive // AWS API naming convention requires this name
 type ForecastSummary struct {
 	ForecastArn          string       `json:"ForecastArn,omitempty"`
 	ForecastName         string       `json:"ForecastName,omitempty"`

@@ -144,7 +144,7 @@ func (m *MemoryStorage) ListDatasets(_ context.Context, maxResults *int32, _ str
 	summaries := make([]*DatasetSummary, 0, len(m.datasets))
 
 	for _, ds := range m.datasets {
-		if int32(len(summaries)) >= limit {
+		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
 
@@ -278,7 +278,7 @@ func (m *MemoryStorage) ListDatasetGroups(_ context.Context, maxResults *int32, 
 	summaries := make([]*DatasetGroupSummary, 0, len(m.datasetGroups))
 
 	for _, dg := range m.datasetGroups {
-		if int32(len(summaries)) >= limit {
+		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
 
@@ -360,6 +360,8 @@ func (m *MemoryStorage) UpdateDatasetGroup(_ context.Context, datasetGroupArn st
 // Predictor operations.
 
 // CreatePredictor creates a new predictor.
+//
+//nolint:funlen // validation and struct initialization require more lines
 func (m *MemoryStorage) CreatePredictor(_ context.Context, req *CreatePredictorInput) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -456,7 +458,7 @@ func (m *MemoryStorage) ListPredictors(_ context.Context, maxResults *int32, _ s
 	summaries := make([]*PredictorSummary, 0, len(m.predictors))
 
 	for _, p := range m.predictors {
-		if int32(len(summaries)) >= limit {
+		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
 
