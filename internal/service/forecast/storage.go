@@ -598,7 +598,7 @@ func (m *MemoryStorage) ListForecasts(_ context.Context, maxResults *int32, _ st
 	summaries := make([]*ForecastSummary, 0, len(m.forecasts))
 
 	for _, f := range m.forecasts {
-		if int32(len(summaries)) >= limit {
+		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
 
