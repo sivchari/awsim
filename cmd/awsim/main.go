@@ -22,6 +22,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/ecs"
 	_ "github.com/sivchari/awsim/internal/service/eks"
 	_ "github.com/sivchari/awsim/internal/service/elasticache"
+	_ "github.com/sivchari/awsim/internal/service/elbv2"
 	_ "github.com/sivchari/awsim/internal/service/eventbridge"
 	_ "github.com/sivchari/awsim/internal/service/firehose"
 	_ "github.com/sivchari/awsim/internal/service/globalaccelerator"
