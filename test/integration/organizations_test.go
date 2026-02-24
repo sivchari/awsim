@@ -30,9 +30,39 @@ func newOrganizationsClient(t *testing.T) *organizations.Client {
 	})
 }
 
+// ensureNoOrganization deletes any existing organization to ensure clean test state.
+func ensureNoOrganization(t *testing.T, client *organizations.Client) {
+	t.Helper()
+
+	ctx := t.Context()
+
+	// Check if organization exists
+	_, err := client.DescribeOrganization(ctx, &organizations.DescribeOrganizationInput{})
+	if err != nil {
+		// No organization exists, we're good
+		return
+	}
+
+	// Organization exists, try to delete it
+	// First, list and handle any member accounts (except management account)
+	listOutput, _ := client.ListAccounts(ctx, &organizations.ListAccountsInput{})
+	if listOutput != nil && len(listOutput.Accounts) > 1 {
+		// There are member accounts, which would prevent deletion
+		// For test purposes, we skip deletion if there are member accounts
+		// The test will need to handle this case
+		return
+	}
+
+	// Delete the organization
+	_, _ = client.DeleteOrganization(ctx, &organizations.DeleteOrganizationInput{})
+}
+
 func TestOrganizations_CreateOrganization(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization
 	createOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -64,6 +94,9 @@ func TestOrganizations_DescribeOrganization(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Create organization first
 	createOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
@@ -85,6 +118,9 @@ func TestOrganizations_DescribeOrganization_NotInOrganization(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Try to describe without being in an organization
 	_, err := client.DescribeOrganization(ctx, &organizations.DescribeOrganizationInput{})
 	require.Error(t, err)
@@ -93,6 +129,9 @@ func TestOrganizations_DescribeOrganization_NotInOrganization(t *testing.T) {
 func TestOrganizations_CreateAccount(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -118,6 +157,9 @@ func TestOrganizations_CreateAccount(t *testing.T) {
 func TestOrganizations_ListAccounts(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -146,6 +188,9 @@ func TestOrganizations_DescribeAccount(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Create organization first
 	orgOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
@@ -169,6 +214,9 @@ func TestOrganizations_DescribeAccount_NotFound(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
@@ -189,6 +237,9 @@ func TestOrganizations_DescribeAccount_NotFound(t *testing.T) {
 func TestOrganizations_CreateOrganizationalUnit(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -220,6 +271,9 @@ func TestOrganizations_CreateOrganizationalUnit(t *testing.T) {
 func TestOrganizations_ListOrganizationalUnitsForParent(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -262,6 +316,9 @@ func TestOrganizations_ListRoots(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
@@ -284,6 +341,9 @@ func TestOrganizations_DeleteOrganization(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
 
+	// Ensure clean state
+	ensureNoOrganization(t, client)
+
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
@@ -302,6 +362,9 @@ func TestOrganizations_DeleteOrganization(t *testing.T) {
 func TestOrganizations_DeleteOrganization_NotEmpty(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// Create organization first
 	_, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
@@ -324,6 +387,9 @@ func TestOrganizations_DeleteOrganization_NotEmpty(t *testing.T) {
 func TestOrganizations_EndToEnd(t *testing.T) {
 	client := newOrganizationsClient(t)
 	ctx := t.Context()
+
+	// Ensure clean state
+	ensureNoOrganization(t, client)
 
 	// 1. Create organization
 	orgOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
