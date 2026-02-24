@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/batch v1.60.0
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.71.6
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.60.0
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.55.6
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.54.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.63.1
 	github.com/aws/aws-sdk-go-v2/service/codeconnections v1.10.16
