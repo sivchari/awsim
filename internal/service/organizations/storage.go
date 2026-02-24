@@ -180,7 +180,7 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 		Email:           m.organization.MasterAccountEmail,
 		ID:              m.accountID,
 		JoinedMethod:    joinedMethodCreated,
-		JoinedTimestamp: time.Now(),
+		JoinedTimestamp: ToAWSTimestamp(time.Now()),
 		Name:            "Management Account",
 		Status:          accountStatusActive,
 	}
@@ -257,7 +257,7 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 		Email:           req.Email,
 		ID:              accountID,
 		JoinedMethod:    joinedMethodCreated,
-		JoinedTimestamp: now,
+		JoinedTimestamp: ToAWSTimestamp(now),
 		Name:            req.AccountName,
 		Status:          accountStatusActive,
 	}
@@ -273,9 +273,9 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 	status := &CreateAccountStatus{
 		AccountID:          accountID,
 		AccountName:        req.AccountName,
-		CompletedTimestamp: now,
+		CompletedTimestamp: ToAWSTimestamp(now),
 		ID:                 requestID,
-		RequestedTimestamp: now,
+		RequestedTimestamp: ToAWSTimestamp(now),
 		State:              createAccountStatusSucceeded,
 	}
 

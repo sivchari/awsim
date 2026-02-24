@@ -1,6 +1,29 @@
 package organizations
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// AWSTimestamp is a time.Time that marshals to Unix timestamp (float64).
+// AWS APIs use Unix timestamps in JSON responses.
+type AWSTimestamp struct {
+	time.Time
+}
+
+// MarshalJSON implements json.Marshaler.
+func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return json.Marshal(nil) //nolint:wrapcheck // MarshalJSON interface requirement
+	}
+
+	return json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9) //nolint:wrapcheck // MarshalJSON interface requirement
+}
+
+// ToAWSTimestamp converts time.Time to AWSTimestamp.
+func ToAWSTimestamp(t time.Time) AWSTimestamp {
+	return AWSTimestamp{Time: t}
+}
 
 // Domain types.
 
@@ -23,13 +46,13 @@ type PolicyTypeSummary struct {
 
 // Account represents an AWS account in an organization.
 type Account struct {
-	ARN             string    `json:"Arn,omitempty"`
-	Email           string    `json:"Email,omitempty"`
-	ID              string    `json:"Id,omitempty"`
-	JoinedMethod    string    `json:"JoinedMethod,omitempty"`
-	JoinedTimestamp time.Time `json:"JoinedTimestamp,omitempty"`
-	Name            string    `json:"Name,omitempty"`
-	Status          string    `json:"Status,omitempty"`
+	ARN             string       `json:"Arn,omitempty"`
+	Email           string       `json:"Email,omitempty"`
+	ID              string       `json:"Id,omitempty"`
+	JoinedMethod    string       `json:"JoinedMethod,omitempty"`
+	JoinedTimestamp AWSTimestamp `json:"JoinedTimestamp,omitempty"`
+	Name            string       `json:"Name,omitempty"`
+	Status          string       `json:"Status,omitempty"`
 }
 
 // OrganizationalUnit represents an organizational unit.
@@ -65,14 +88,14 @@ type PolicySummary struct {
 
 // CreateAccountStatus represents the status of a CreateAccount request.
 type CreateAccountStatus struct {
-	AccountID          string    `json:"AccountId,omitempty"`
-	AccountName        string    `json:"AccountName,omitempty"`
-	CompletedTimestamp time.Time `json:"CompletedTimestamp,omitempty"`
-	FailureReason      string    `json:"FailureReason,omitempty"`
-	GovCloudAccountID  string    `json:"GovCloudAccountId,omitempty"`
-	ID                 string    `json:"Id,omitempty"`
-	RequestedTimestamp time.Time `json:"RequestedTimestamp,omitempty"`
-	State              string    `json:"State,omitempty"`
+	AccountID          string       `json:"AccountId,omitempty"`
+	AccountName        string       `json:"AccountName,omitempty"`
+	CompletedTimestamp AWSTimestamp `json:"CompletedTimestamp,omitempty"`
+	FailureReason      string       `json:"FailureReason,omitempty"`
+	GovCloudAccountID  string       `json:"GovCloudAccountId,omitempty"`
+	ID                 string       `json:"Id,omitempty"`
+	RequestedTimestamp AWSTimestamp `json:"RequestedTimestamp,omitempty"`
+	State              string       `json:"State,omitempty"`
 }
 
 // Tag represents a tag.
