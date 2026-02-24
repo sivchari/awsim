@@ -197,6 +197,10 @@ linters:
       - path: internal/service/organizations/types\.go
         linters:
           - tagliatelle
+      # AWS EventBridge Pipes API requires PascalCase JSON field names.
+      - path: internal/service/pipes/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

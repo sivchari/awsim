@@ -88,6 +88,8 @@ github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0 h1:u66DMbJWDFXs9458RAHNtq2d0
 github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0/go.mod h1:ogjbkxFgFOjG3dYFQ8irC92gQfpfMDcy1RDKNSZWXNU=
 github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3 h1:pqPwpyOjYTYwlexnCxSsy6kIz2lopj7AMA0TEpwvKfw=
 github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3/go.mod h1:v6v+HUbPtcnQ5iMgpz3vj9yV5pmMJ88PVJv1RbkCg74=
+github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17 h1:mVj6qM8m1vacLPRvpYsrhqIopj1gVSz0VbVxZDb6HQQ=
+github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17/go.mod h1:eLlxQF7rzISHqpiOqcW/IdjS7kwO+t1NdEpfLFIapAA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0 h1:oNl6YghOtxu3MiFk1tQ86QlrYMIEJazGUDbBCg9nxLA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0/go.mod h1:JBRYWpz5oXQtHgQC+X8LX9lh0FBCwRHJlWEIT+TTLaE=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2 h1:zoD/SoiVQi8l8tuQn//VexrXS2yorg/+717JNA4Ble8=
