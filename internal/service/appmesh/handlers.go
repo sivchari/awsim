@@ -115,7 +115,7 @@ func (s *Service) UpdateMesh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &UpdateMeshOutput{Mesh: *mesh})
+	writeJSON(w, mesh)
 }
 
 // DeleteMesh handles the DeleteMesh API operation.
@@ -136,7 +136,7 @@ func (s *Service) DeleteMesh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DeleteMeshOutput{Mesh: *mesh})
+	writeJSON(w, mesh)
 }
 
 // --- Virtual Node Handlers ---
@@ -168,7 +168,7 @@ func (s *Service) CreateVirtualNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateVirtualNodeOutput{VirtualNode: *node})
+	writeJSON(w, node)
 }
 
 // DescribeVirtualNode handles the DescribeVirtualNode API operation.
@@ -189,7 +189,7 @@ func (s *Service) DescribeVirtualNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DescribeVirtualNodeOutput{VirtualNode: *node})
+	writeJSON(w, node)
 }
 
 // ListVirtualNodes handles the ListVirtualNodes API operation.
@@ -258,7 +258,7 @@ func (s *Service) UpdateVirtualNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &UpdateVirtualNodeOutput{VirtualNode: *node})
+	writeJSON(w, node)
 }
 
 // DeleteVirtualNode handles the DeleteVirtualNode API operation.
@@ -279,7 +279,7 @@ func (s *Service) DeleteVirtualNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DeleteVirtualNodeOutput{VirtualNode: *node})
+	writeJSON(w, node)
 }
 
 // --- Virtual Service Handlers ---
@@ -311,7 +311,7 @@ func (s *Service) CreateVirtualService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateVirtualServiceOutput{VirtualService: *service})
+	writeJSON(w, service)
 }
 
 // DescribeVirtualService handles the DescribeVirtualService API operation.
@@ -332,7 +332,7 @@ func (s *Service) DescribeVirtualService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, &DescribeVirtualServiceOutput{VirtualService: *service})
+	writeJSON(w, service)
 }
 
 // ListVirtualServices handles the ListVirtualServices API operation.
@@ -401,7 +401,7 @@ func (s *Service) UpdateVirtualService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &UpdateVirtualServiceOutput{VirtualService: *service})
+	writeJSON(w, service)
 }
 
 // DeleteVirtualService handles the DeleteVirtualService API operation.
@@ -422,7 +422,7 @@ func (s *Service) DeleteVirtualService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DeleteVirtualServiceOutput{VirtualService: *service})
+	writeJSON(w, service)
 }
 
 // --- Virtual Router Handlers ---
@@ -454,7 +454,7 @@ func (s *Service) CreateVirtualRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateVirtualRouterOutput{VirtualRouter: *router})
+	writeJSON(w, router)
 }
 
 // DescribeVirtualRouter handles the DescribeVirtualRouter API operation.
@@ -475,7 +475,7 @@ func (s *Service) DescribeVirtualRouter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, &DescribeVirtualRouterOutput{VirtualRouter: *router})
+	writeJSON(w, router)
 }
 
 // ListVirtualRouters handles the ListVirtualRouters API operation.
@@ -544,7 +544,7 @@ func (s *Service) UpdateVirtualRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &UpdateVirtualRouterOutput{VirtualRouter: *router})
+	writeJSON(w, router)
 }
 
 // DeleteVirtualRouter handles the DeleteVirtualRouter API operation.
@@ -565,7 +565,7 @@ func (s *Service) DeleteVirtualRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DeleteVirtualRouterOutput{VirtualRouter: *router})
+	writeJSON(w, router)
 }
 
 // --- Route Handlers ---
@@ -598,7 +598,7 @@ func (s *Service) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateRouteOutput{Route: *route})
+	writeJSON(w, route)
 }
 
 // DescribeRoute handles the DescribeRoute API operation.
@@ -619,7 +619,7 @@ func (s *Service) DescribeRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DescribeRouteOutput{Route: *route})
+	writeJSON(w, route)
 }
 
 // ListRoutes handles the ListRoutes API operation.
@@ -690,7 +690,7 @@ func (s *Service) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &UpdateRouteOutput{Route: *route})
+	writeJSON(w, route)
 }
 
 // DeleteRoute handles the DeleteRoute API operation.
@@ -711,7 +711,7 @@ func (s *Service) DeleteRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DeleteRouteOutput{Route: *route})
+	writeJSON(w, route)
 }
 
 // --- Helper Functions ---
