@@ -62,13 +62,13 @@ func (s *Service) CreateTrail(w http.ResponseWriter, r *http.Request) {
 		TrailARN:                   trail.TrailARN,
 		S3BucketName:               trail.S3BucketName,
 		S3KeyPrefix:                trail.S3KeyPrefix,
-		IncludeGlobalServiceEvents: trail.IncludeGlobalServiceEvents,
-		IsMultiRegionTrail:         trail.IsMultiRegionTrail,
-		LogFileValidationEnabled:   trail.LogFileValidationEnabled,
+		IncludeGlobalServiceEvents: boolPtr(trail.IncludeGlobalServiceEvents),
+		IsMultiRegionTrail:         boolPtr(trail.IsMultiRegionTrail),
+		LogFileValidationEnabled:   boolPtr(trail.LogFileValidationEnabled),
 		CloudWatchLogsLogGroupArn:  trail.CloudWatchLogsLogGroupArn,
 		CloudWatchLogsRoleArn:      trail.CloudWatchLogsRoleArn,
 		KMSKeyID:                   trail.KMSKeyID,
-		IsOrganizationTrail:        trail.IsOrganizationTrail,
+		IsOrganizationTrail:        boolPtr(trail.IsOrganizationTrail),
 	}
 
 	writeResponse(w, resp)
@@ -262,13 +262,18 @@ func (s *Service) GetTrailStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &GetTrailStatusResponse{
-		IsLogging: trail.IsLogging,
+		IsLogging: boolPtr(trail.IsLogging),
 	}
 
 	writeResponse(w, resp)
 }
 
 // Helper functions.
+
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool {
+	return &b
+}
 
 // convertToTrailOutput converts a Trail to TrailOutput.
 func convertToTrailOutput(trail *Trail) *TrailOutput {

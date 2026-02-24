@@ -177,7 +177,8 @@ func TestCloudTrail_StartAndStopLogging(t *testing.T) {
 		Name: aws.String(trailName),
 	})
 	require.NoError(t, err)
-	require.True(t, statusOutput.IsLogging)
+	require.NotNil(t, statusOutput.IsLogging)
+	require.True(t, *statusOutput.IsLogging)
 
 	// Stop logging.
 	_, err = client.StopLogging(ctx, &cloudtrail.StopLoggingInput{
@@ -190,7 +191,8 @@ func TestCloudTrail_StartAndStopLogging(t *testing.T) {
 		Name: aws.String(trailName),
 	})
 	require.NoError(t, err)
-	require.False(t, statusOutput.IsLogging)
+	require.NotNil(t, statusOutput.IsLogging)
+	require.False(t, *statusOutput.IsLogging)
 }
 
 func TestCloudTrail_LookupEvents(t *testing.T) {
@@ -282,10 +284,14 @@ func TestCloudTrail_CreateTrailWithOptions(t *testing.T) {
 	require.NotNil(t, createOutput.TrailARN)
 	require.Equal(t, trailName, *createOutput.Name)
 	require.Equal(t, s3Prefix, *createOutput.S3KeyPrefix)
-	require.False(t, createOutput.IncludeGlobalServiceEvents)
-	require.True(t, createOutput.IsMultiRegionTrail)
-	require.True(t, createOutput.LogFileValidationEnabled)
-	require.False(t, createOutput.IsOrganizationTrail)
+	require.NotNil(t, createOutput.IncludeGlobalServiceEvents)
+	require.False(t, *createOutput.IncludeGlobalServiceEvents)
+	require.NotNil(t, createOutput.IsMultiRegionTrail)
+	require.True(t, *createOutput.IsMultiRegionTrail)
+	require.NotNil(t, createOutput.LogFileValidationEnabled)
+	require.True(t, *createOutput.LogFileValidationEnabled)
+	require.NotNil(t, createOutput.IsOrganizationTrail)
+	require.False(t, *createOutput.IsOrganizationTrail)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{

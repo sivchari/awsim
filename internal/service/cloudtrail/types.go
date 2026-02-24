@@ -63,13 +63,13 @@ type CreateTrailResponse struct {
 	TrailARN                   string `json:"TrailARN"`
 	S3BucketName               string `json:"S3BucketName"`
 	S3KeyPrefix                string `json:"S3KeyPrefix,omitempty"`
-	IncludeGlobalServiceEvents bool   `json:"IncludeGlobalServiceEvents"`
-	IsMultiRegionTrail         bool   `json:"IsMultiRegionTrail"`
-	LogFileValidationEnabled   bool   `json:"LogFileValidationEnabled"`
+	IncludeGlobalServiceEvents *bool  `json:"IncludeGlobalServiceEvents"`
+	IsMultiRegionTrail         *bool  `json:"IsMultiRegionTrail"`
+	LogFileValidationEnabled   *bool  `json:"LogFileValidationEnabled"`
 	CloudWatchLogsLogGroupArn  string `json:"CloudWatchLogsLogGroupArn,omitempty"`
 	CloudWatchLogsRoleArn      string `json:"CloudWatchLogsRoleArn,omitempty"`
 	KMSKeyID                   string `json:"KmsKeyId,omitempty"`
-	IsOrganizationTrail        bool   `json:"IsOrganizationTrail"`
+	IsOrganizationTrail        *bool  `json:"IsOrganizationTrail"`
 }
 
 // DeleteTrailRequest represents the DeleteTrail API request.
@@ -174,7 +174,7 @@ type GetTrailStatusRequest struct {
 
 // GetTrailStatusResponse represents the GetTrailStatus API response.
 type GetTrailStatusResponse struct {
-	IsLogging                         bool    `json:"IsLogging"`
+	IsLogging                         *bool   `json:"IsLogging"`
 	LatestDeliveryTime                float64 `json:"LatestDeliveryTime,omitempty"`
 	LatestNotificationTime            float64 `json:"LatestNotificationTime,omitempty"`
 	StartLoggingTime                  float64 `json:"StartLoggingTime,omitempty"`
