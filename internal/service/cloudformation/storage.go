@@ -232,33 +232,42 @@ func (m *MemoryStorage) ValidateTemplate(_ context.Context, templateBody string)
 	// Extract parameters.
 	if params, ok := template["Parameters"].(map[string]any); ok {
 		for key, value := range params {
-			param := TemplateParameter{
-				ParameterKey: key,
-			}
-
-			if paramDef, ok := value.(map[string]any); ok {
-				if defaultVal, ok := paramDef["Default"].(string); ok {
-					param.DefaultValue = defaultVal
-				}
-
-				if desc, ok := paramDef["Description"].(string); ok {
-					param.Description = desc
-				}
-
-				if paramType, ok := paramDef["Type"].(string); ok {
-					param.ParameterType = paramType
-				}
-
-				if noEcho, ok := paramDef["NoEcho"].(bool); ok {
-					param.NoEcho = noEcho
-				}
-			}
-
+			param := parseTemplateParameter(key, value)
 			result.Parameters = append(result.Parameters, param)
 		}
 	}
 
 	return result, nil
+}
+
+// parseTemplateParameter extracts a TemplateParameter from a template parameter definition.
+func parseTemplateParameter(key string, value any) TemplateParameter {
+	param := TemplateParameter{
+		ParameterKey: key,
+	}
+
+	paramDef, ok := value.(map[string]any)
+	if !ok {
+		return param
+	}
+
+	if defaultVal, ok := paramDef["Default"].(string); ok {
+		param.DefaultValue = defaultVal
+	}
+
+	if desc, ok := paramDef["Description"].(string); ok {
+		param.Description = desc
+	}
+
+	if paramType, ok := paramDef["Type"].(string); ok {
+		param.ParameterType = paramType
+	}
+
+	if noEcho, ok := paramDef["NoEcho"].(bool); ok {
+		param.NoEcho = noEcho
+	}
+
+	return param
 }
 
 // Helper functions.
