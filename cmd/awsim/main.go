@@ -40,6 +40,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/s3"
 	_ "github.com/sivchari/awsim/internal/service/s3tables"
 	_ "github.com/sivchari/awsim/internal/service/secretsmanager"
+	_ "github.com/sivchari/awsim/internal/service/servicequotas"
 	_ "github.com/sivchari/awsim/internal/service/sesv2"
 	_ "github.com/sivchari/awsim/internal/service/sfn"
 	_ "github.com/sivchari/awsim/internal/service/sns"
