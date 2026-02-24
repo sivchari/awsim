@@ -846,65 +846,58 @@ func (s *Service) DescribeNatGateways(w http.ResponseWriter, r *http.Request) {
 // DispatchAction routes the request to the appropriate handler based on Action parameter.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	action := extractAction(r)
+	handler := s.getActionHandler(action)
 
-	switch action {
-	case "RunInstances":
-		s.RunInstances(w, r)
-	case "TerminateInstances":
-		s.TerminateInstances(w, r)
-	case "DescribeInstances":
-		s.DescribeInstances(w, r)
-	case "StartInstances":
-		s.StartInstances(w, r)
-	case "StopInstances":
-		s.StopInstances(w, r)
-	case "CreateSecurityGroup":
-		s.CreateSecurityGroup(w, r)
-	case "DeleteSecurityGroup":
-		s.DeleteSecurityGroup(w, r)
-	case "AuthorizeSecurityGroupIngress":
-		s.AuthorizeSecurityGroupIngress(w, r)
-	case "AuthorizeSecurityGroupEgress":
-		s.AuthorizeSecurityGroupEgress(w, r)
-	case "CreateKeyPair":
-		s.CreateKeyPair(w, r)
-	case "DeleteKeyPair":
-		s.DeleteKeyPair(w, r)
-	case "DescribeKeyPairs":
-		s.DescribeKeyPairs(w, r)
-	case "CreateVpc":
-		s.CreateVpc(w, r)
-	case "DeleteVpc":
-		s.DeleteVpc(w, r)
-	case "DescribeVpcs":
-		s.DescribeVpcs(w, r)
-	case "CreateSubnet":
-		s.CreateSubnet(w, r)
-	case "DeleteSubnet":
-		s.DeleteSubnet(w, r)
-	case "DescribeSubnets":
-		s.DescribeSubnets(w, r)
-	case "CreateInternetGateway":
-		s.CreateInternetGateway(w, r)
-	case "AttachInternetGateway":
-		s.AttachInternetGateway(w, r)
-	case "DescribeInternetGateways":
-		s.DescribeInternetGateways(w, r)
-	case "CreateRouteTable":
-		s.CreateRouteTable(w, r)
-	case "CreateRoute":
-		s.CreateRoute(w, r)
-	case "AssociateRouteTable":
-		s.AssociateRouteTable(w, r)
-	case "DescribeRouteTables":
-		s.DescribeRouteTables(w, r)
-	case "CreateNatGateway":
-		s.CreateNatGateway(w, r)
-	case "DescribeNatGateways":
-		s.DescribeNatGateways(w, r)
-	default:
+	if handler == nil {
 		writeError(w, errInvalidAction, fmt.Sprintf("The action '%s' is not valid", action), http.StatusBadRequest)
+
+		return
 	}
+
+	handler(w, r)
+}
+
+// getActionHandler returns the handler function for the given action.
+func (s *Service) getActionHandler(action string) func(http.ResponseWriter, *http.Request) {
+	handlers := map[string]func(http.ResponseWriter, *http.Request){
+		// Instance operations
+		"RunInstances":       s.RunInstances,
+		"TerminateInstances": s.TerminateInstances,
+		"DescribeInstances":  s.DescribeInstances,
+		"StartInstances":     s.StartInstances,
+		"StopInstances":      s.StopInstances,
+		// Security group operations
+		"CreateSecurityGroup":           s.CreateSecurityGroup,
+		"DeleteSecurityGroup":           s.DeleteSecurityGroup,
+		"AuthorizeSecurityGroupIngress": s.AuthorizeSecurityGroupIngress,
+		"AuthorizeSecurityGroupEgress":  s.AuthorizeSecurityGroupEgress,
+		// Key pair operations
+		"CreateKeyPair":    s.CreateKeyPair,
+		"DeleteKeyPair":    s.DeleteKeyPair,
+		"DescribeKeyPairs": s.DescribeKeyPairs,
+		// VPC operations
+		"CreateVpc":    s.CreateVpc,
+		"DeleteVpc":    s.DeleteVpc,
+		"DescribeVpcs": s.DescribeVpcs,
+		// Subnet operations
+		"CreateSubnet":    s.CreateSubnet,
+		"DeleteSubnet":    s.DeleteSubnet,
+		"DescribeSubnets": s.DescribeSubnets,
+		// Internet gateway operations
+		"CreateInternetGateway":    s.CreateInternetGateway,
+		"AttachInternetGateway":    s.AttachInternetGateway,
+		"DescribeInternetGateways": s.DescribeInternetGateways,
+		// Route table operations
+		"CreateRouteTable":    s.CreateRouteTable,
+		"CreateRoute":         s.CreateRoute,
+		"AssociateRouteTable": s.AssociateRouteTable,
+		"DescribeRouteTables": s.DescribeRouteTables,
+		// NAT gateway operations
+		"CreateNatGateway":    s.CreateNatGateway,
+		"DescribeNatGateways": s.DescribeNatGateways,
+	}
+
+	return handlers[action]
 }
 
 // convertToXMLInstance converts an Instance to XMLInstance.
@@ -1019,7 +1012,7 @@ func handleError(w http.ResponseWriter, err error) {
 func convertToXMLVpc(vpc *Vpc) XMLVpc {
 	tags := make([]XMLTag, 0, len(vpc.Tags))
 	for _, t := range vpc.Tags {
-		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+		tags = append(tags, XMLTag(t))
 	}
 
 	return XMLVpc{
@@ -1036,7 +1029,7 @@ func convertToXMLVpc(vpc *Vpc) XMLVpc {
 func convertToXMLSubnet(subnet *Subnet) XMLSubnet {
 	tags := make([]XMLTag, 0, len(subnet.Tags))
 	for _, t := range subnet.Tags {
-		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+		tags = append(tags, XMLTag(t))
 	}
 
 	return XMLSubnet{
@@ -1055,15 +1048,12 @@ func convertToXMLSubnet(subnet *Subnet) XMLSubnet {
 func convertToXMLInternetGateway(igw *InternetGateway) XMLInternetGateway {
 	tags := make([]XMLTag, 0, len(igw.Tags))
 	for _, t := range igw.Tags {
-		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+		tags = append(tags, XMLTag(t))
 	}
 
 	attachments := make([]XMLInternetGatewayAttachment, 0, len(igw.Attachments))
 	for _, a := range igw.Attachments {
-		attachments = append(attachments, XMLInternetGatewayAttachment{
-			VpcID: a.VpcID,
-			State: a.State,
-		})
+		attachments = append(attachments, XMLInternetGatewayAttachment(a))
 	}
 
 	return XMLInternetGateway{
@@ -1077,28 +1067,17 @@ func convertToXMLInternetGateway(igw *InternetGateway) XMLInternetGateway {
 func convertToXMLRouteTable(rt *RouteTable) XMLRouteTable {
 	tags := make([]XMLTag, 0, len(rt.Tags))
 	for _, t := range rt.Tags {
-		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+		tags = append(tags, XMLTag(t))
 	}
 
 	routes := make([]XMLRoute, 0, len(rt.Routes))
 	for _, r := range rt.Routes {
-		routes = append(routes, XMLRoute{
-			DestinationCidrBlock: r.DestinationCidrBlock,
-			GatewayID:            r.GatewayID,
-			NatGatewayID:         r.NatGatewayID,
-			State:                r.State,
-			Origin:               r.Origin,
-		})
+		routes = append(routes, XMLRoute(r))
 	}
 
 	associations := make([]XMLRouteTableAssociation, 0, len(rt.Associations))
 	for _, a := range rt.Associations {
-		associations = append(associations, XMLRouteTableAssociation{
-			RouteTableAssociationID: a.RouteTableAssociationID,
-			RouteTableID:            a.RouteTableID,
-			SubnetID:                a.SubnetID,
-			Main:                    a.Main,
-		})
+		associations = append(associations, XMLRouteTableAssociation(a))
 	}
 
 	return XMLRouteTable{
@@ -1114,7 +1093,7 @@ func convertToXMLRouteTable(rt *RouteTable) XMLRouteTable {
 func convertToXMLNatGateway(natgw *NatGateway) XMLNatGateway {
 	tags := make([]XMLTag, 0, len(natgw.Tags))
 	for _, t := range natgw.Tags {
-		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+		tags = append(tags, XMLTag(t))
 	}
 
 	return XMLNatGateway{
