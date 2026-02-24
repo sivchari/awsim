@@ -1,3 +1,4 @@
+// Package emrserverless provides the EMR Serverless service implementation.
 package emrserverless
 
 import (
@@ -73,7 +74,7 @@ func (s *Service) ListApplications(w http.ResponseWriter, r *http.Request) {
 	if maxResultsStr := query.Get("maxResults"); maxResultsStr != "" {
 		var maxResults int32
 
-		if _, err := parseIntParam(maxResultsStr, &maxResults); err != nil {
+		if err := parseIntParam(maxResultsStr, &maxResults); err != nil {
 			writeError(w, errValidationException, "Invalid maxResults parameter", http.StatusBadRequest)
 
 			return
@@ -271,7 +272,7 @@ func (s *Service) ListJobRuns(w http.ResponseWriter, r *http.Request) {
 	if maxResultsStr := query.Get("maxResults"); maxResultsStr != "" {
 		var maxResults int32
 
-		if _, err := parseIntParam(maxResultsStr, &maxResults); err != nil {
+		if err := parseIntParam(maxResultsStr, &maxResults); err != nil {
 			writeError(w, errValidationException, "Invalid maxResults parameter", http.StatusBadRequest)
 
 			return
@@ -401,12 +402,12 @@ func extractApplicationAndJobRunID(path string) (string, string) {
 }
 
 // parseIntParam parses an integer parameter from a string.
-func parseIntParam(s string, result *int32) (int32, error) {
+func parseIntParam(s string, result *int32) error {
 	var val int
 
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return 0, errors.New("invalid integer")
+			return errors.New("invalid integer")
 		}
 
 		val = val*10 + int(c-'0')
@@ -414,7 +415,7 @@ func parseIntParam(s string, result *int32) (int32, error) {
 
 	*result = int32(val) //nolint:gosec // G115: val is bounded by input string length
 
-	return *result, nil
+	return nil
 }
 
 // writeJSON writes a JSON response with 200 OK status.

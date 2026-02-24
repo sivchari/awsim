@@ -206,8 +206,6 @@ func (m *MemoryStorage) ListApplications(_ context.Context, req *ListApplication
 }
 
 // UpdateApplication updates an existing application.
-//
-//nolint:funlen // field updates require more lines
 func (m *MemoryStorage) UpdateApplication(_ context.Context, req *UpdateApplicationInput) (*Application, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
