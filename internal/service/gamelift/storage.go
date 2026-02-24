@@ -421,6 +421,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 		result = append(result, playerSession)
 	}
 
+	//nolint:gosec // len(playerIDs) is bounded by the request, which is limited by AWS SDK.
 	gameSession.CurrentPlayerSessionCount += int32(len(playerIDs))
 
 	return result, nil
