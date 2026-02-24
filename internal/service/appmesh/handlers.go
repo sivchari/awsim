@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+const (
+	meshPathPrefix = "/v20190125/meshes/"
+)
+
 // --- Mesh Handlers ---
 
 // CreateMesh handles the CreateMesh API operation.
@@ -714,13 +718,11 @@ func (s *Service) DeleteRoute(w http.ResponseWriter, r *http.Request) {
 
 // extractMeshName extracts the mesh name from a URL path like /v20190125/meshes/{meshName}.
 func extractMeshName(path string) string {
-	const prefix = "/v20190125/meshes/"
-
-	if !strings.HasPrefix(path, prefix) {
+	if !strings.HasPrefix(path, meshPathPrefix) {
 		return ""
 	}
 
-	remainder := strings.TrimPrefix(path, prefix)
+	remainder := strings.TrimPrefix(path, meshPathPrefix)
 
 	// Remove any trailing path segments.
 	if idx := strings.Index(remainder, "/"); idx != -1 {
@@ -733,13 +735,11 @@ func extractMeshName(path string) string {
 // extractMeshAndResourceName extracts mesh name and resource name from paths like
 // /v20190125/meshes/{meshName}/{resourceType}/{resourceName}.
 func extractMeshAndResourceName(path, resourceType string) (string, string) {
-	prefix := "/v20190125/meshes/"
-
-	if !strings.HasPrefix(path, prefix) {
+	if !strings.HasPrefix(path, meshPathPrefix) {
 		return "", ""
 	}
 
-	remainder := strings.TrimPrefix(path, prefix)
+	remainder := strings.TrimPrefix(path, meshPathPrefix)
 	parts := strings.Split(remainder, "/")
 
 	// Expect: meshName, resourceType, resourceName
@@ -751,15 +751,13 @@ func extractMeshAndResourceName(path, resourceType string) (string, string) {
 }
 
 // extractMeshAndVirtualRouterForRoute extracts mesh name and virtual router name for route operations.
-// Path: /v20190125/meshes/{meshName}/virtualRouter/{virtualRouterName}/routes
+// Path: /v20190125/meshes/{meshName}/virtualRouter/{virtualRouterName}/routes.
 func extractMeshAndVirtualRouterForRoute(path string) (string, string) {
-	prefix := "/v20190125/meshes/"
-
-	if !strings.HasPrefix(path, prefix) {
+	if !strings.HasPrefix(path, meshPathPrefix) {
 		return "", ""
 	}
 
-	remainder := strings.TrimPrefix(path, prefix)
+	remainder := strings.TrimPrefix(path, meshPathPrefix)
 	parts := strings.Split(remainder, "/")
 
 	// Expect: meshName, virtualRouter, routerName, routes...
@@ -771,15 +769,13 @@ func extractMeshAndVirtualRouterForRoute(path string) (string, string) {
 }
 
 // extractRouteComponents extracts mesh name, virtual router name, and route name.
-// Path: /v20190125/meshes/{meshName}/virtualRouter/{virtualRouterName}/routes/{routeName}
+// Path: /v20190125/meshes/{meshName}/virtualRouter/{virtualRouterName}/routes/{routeName}.
 func extractRouteComponents(path string) (string, string, string) {
-	prefix := "/v20190125/meshes/"
-
-	if !strings.HasPrefix(path, prefix) {
+	if !strings.HasPrefix(path, meshPathPrefix) {
 		return "", "", ""
 	}
 
-	remainder := strings.TrimPrefix(path, prefix)
+	remainder := strings.TrimPrefix(path, meshPathPrefix)
 	parts := strings.Split(remainder, "/")
 
 	// Expect: meshName, virtualRouter, routerName, routes, routeName
@@ -801,7 +797,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 // writeError writes an error response.
-func writeError(w http.ResponseWriter, code, message string, status int) {
+func writeError(w http.ResponseWriter, _, message string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

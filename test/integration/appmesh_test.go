@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/appmesh"
 	"github.com/aws/aws-sdk-go-v2/service/appmesh/types"
 	"github.com/stretchr/testify/require"
@@ -14,8 +16,18 @@ import (
 func newAppMeshClient(t *testing.T) *appmesh.Client {
 	t.Helper()
 
-	return appmesh.NewFromConfig(testAWSConfig(t), func(o *appmesh.Options) {
-		o.BaseEndpoint = aws.String(awsimEndpoint)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	return appmesh.NewFromConfig(cfg, func(o *appmesh.Options) {
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
 
@@ -181,8 +193,8 @@ func TestAppMesh_CreateAndDescribeVirtualNode(t *testing.T) {
 					},
 				},
 			},
-			ServiceDiscovery: &types.ServiceDiscovery{
-				Dns: &types.DnsServiceDiscovery{
+			ServiceDiscovery: &types.ServiceDiscoveryMemberDns{
+				Value: types.DnsServiceDiscovery{
 					Hostname: aws.String("test.local"),
 				},
 			},
@@ -288,8 +300,8 @@ func TestAppMesh_CreateAndDescribeVirtualService(t *testing.T) {
 		MeshName:           aws.String(meshName),
 		VirtualServiceName: aws.String(virtualServiceName),
 		Spec: &types.VirtualServiceSpec{
-			Provider: &types.VirtualServiceProvider{
-				VirtualNode: &types.VirtualNodeServiceProvider{
+			Provider: &types.VirtualServiceProviderMemberVirtualNode{
+				Value: types.VirtualNodeServiceProvider{
 					VirtualNodeName: aws.String(virtualNodeName),
 				},
 			},

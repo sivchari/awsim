@@ -389,6 +389,7 @@ func (m *MemoryStorage) DeleteVirtualNode(_ context.Context, meshName, virtualNo
 	}
 
 	node.Status.Status = StatusDeleted
+
 	delete(m.virtualNodes[meshName], virtualNodeName)
 
 	return node, nil
@@ -553,6 +554,7 @@ func (m *MemoryStorage) DeleteVirtualService(_ context.Context, meshName, virtua
 	}
 
 	service.Status.Status = StatusDeleted
+
 	delete(m.virtualServices[meshName], virtualServiceName)
 
 	return service, nil
@@ -726,6 +728,7 @@ func (m *MemoryStorage) DeleteVirtualRouter(_ context.Context, meshName, virtual
 	}
 
 	router.Status.Status = StatusDeleted
+
 	delete(m.virtualRouters[meshName], virtualRouterName)
 	delete(m.routes[meshName], virtualRouterName)
 
