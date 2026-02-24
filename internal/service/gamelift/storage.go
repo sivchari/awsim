@@ -149,6 +149,7 @@ func (m *MemoryStorage) ListBuilds(_ context.Context, status string, limit int32
 
 		result = append(result, build)
 
+		//nolint:gosec // len(result) is bounded by the number of builds which is limited.
 		if limit > 0 && int32(len(result)) >= limit {
 			break
 		}
@@ -243,6 +244,7 @@ func (m *MemoryStorage) ListFleets(_ context.Context, buildID string, limit int3
 
 		result = append(result, fleet.FleetID)
 
+		//nolint:gosec // len(result) is bounded by the number of fleets which is limited.
 		if limit > 0 && int32(len(result)) >= limit {
 			break
 		}
@@ -393,6 +395,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + gameSessionID}
 	}
 
+	//nolint:gosec // len(playerIDs) is bounded by the request, which is limited by AWS SDK.
 	if gameSession.CurrentPlayerSessionCount+int32(len(playerIDs)) > gameSession.MaximumPlayerSessionCount {
 		return nil, &Error{Code: errInvalidRequestException, Message: "Not enough capacity for all players"}
 	}
