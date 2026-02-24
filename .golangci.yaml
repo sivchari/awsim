@@ -202,6 +202,10 @@ linters:
         linters:
           - tagliatelle
           - revive
+      # AWS EMR Serverless API requires PascalCase JSON field names.
+      - path: internal/service/emrserverless/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

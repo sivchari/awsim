@@ -73,7 +73,8 @@ func extractRoutePrefix(pattern string) string {
 	// CloudFront uses /2020-05-31 versioned paths
 	// /service is for RPC v2 CBOR protocol
 	// EventBridge Pipes uses /v1/pipes and /tags paths
-	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses", "/2020-05-31", "/2013-04-01", "/service", "/appsync", "/v1", "/tags"}
+	// EMR Serverless uses /applications paths
+	prefixes := []string{"/lambda", "/eks", "/iam", "/buckets", "/namespaces", "/tables", "/get-table", "/apigateway", "/ses", "/2020-05-31", "/2013-04-01", "/service", "/appsync", "/v1", "/tags", "/applications"}
 
 	for _, prefix := range prefixes {
 		if len(pattern) >= len(prefix) && pattern[:len(prefix)] == prefix {
