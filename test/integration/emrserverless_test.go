@@ -288,8 +288,8 @@ func TestEMRServerless_StartJobRun(t *testing.T) {
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
 		ApplicationId:    createOutput.ApplicationId,
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/test-execution-role"),
-		JobDriver: &types.JobDriver{
-			SparkSubmit: &types.SparkSubmit{
+		JobDriver: &types.JobDriverMemberSparkSubmit{
+			Value: types.SparkSubmit{
 				EntryPoint: aws.String("s3://bucket/script.py"),
 			},
 		},
@@ -330,8 +330,8 @@ func TestEMRServerless_GetJobRun(t *testing.T) {
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
 		ApplicationId:    createOutput.ApplicationId,
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/test-execution-role"),
-		JobDriver: &types.JobDriver{
-			SparkSubmit: &types.SparkSubmit{
+		JobDriver: &types.JobDriverMemberSparkSubmit{
+			Value: types.SparkSubmit{
 				EntryPoint: aws.String("s3://bucket/script.py"),
 			},
 		},
@@ -381,8 +381,8 @@ func TestEMRServerless_ListJobRuns(t *testing.T) {
 		_, err = client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
 			ApplicationId:    createOutput.ApplicationId,
 			ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/test-execution-role"),
-			JobDriver: &types.JobDriver{
-				SparkSubmit: &types.SparkSubmit{
+			JobDriver: &types.JobDriverMemberSparkSubmit{
+				Value: types.SparkSubmit{
 					EntryPoint: aws.String("s3://bucket/script.py"),
 				},
 			},
@@ -428,8 +428,8 @@ func TestEMRServerless_CancelJobRun(t *testing.T) {
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
 		ApplicationId:    createOutput.ApplicationId,
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/test-execution-role"),
-		JobDriver: &types.JobDriver{
-			SparkSubmit: &types.SparkSubmit{
+		JobDriver: &types.JobDriverMemberSparkSubmit{
+			Value: types.SparkSubmit{
 				EntryPoint: aws.String("s3://bucket/script.py"),
 			},
 		},
@@ -551,8 +551,8 @@ func TestEMRServerless_AutoStartApplication(t *testing.T) {
 	_, err = client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
 		ApplicationId:    createOutput.ApplicationId,
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/test-execution-role"),
-		JobDriver: &types.JobDriver{
-			SparkSubmit: &types.SparkSubmit{
+		JobDriver: &types.JobDriverMemberSparkSubmit{
+			Value: types.SparkSubmit{
 				EntryPoint: aws.String("s3://bucket/script.py"),
 			},
 		},
