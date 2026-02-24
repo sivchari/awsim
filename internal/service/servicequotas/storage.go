@@ -32,6 +32,16 @@ const (
 	quotaAppliedAtLevelAccount = "ACCOUNT"
 )
 
+// quotaDefinition represents a quota definition for initialization.
+type quotaDefinition struct {
+	code        string
+	name        string
+	value       float64
+	unit        string
+	adjustable  bool
+	description string
+}
+
 // Storage defines the Service Quotas storage interface.
 type Storage interface {
 	// Service operations
@@ -78,7 +88,15 @@ func NewMemoryStorage() *MemoryStorage {
 
 // initializeDefaultData sets up predefined services and quotas.
 func (m *MemoryStorage) initializeDefaultData() {
-	// Add common AWS services
+	m.initializeServices()
+	m.initializeEC2Quotas()
+	m.initializeS3Quotas()
+	m.initializeLambdaQuotas()
+	m.initializeDynamoDBQuotas()
+	m.initializeSQSQuotas()
+}
+
+func (m *MemoryStorage) initializeServices() {
 	services := []ServiceInfo{
 		{ServiceCode: "ec2", ServiceName: "Amazon Elastic Compute Cloud (Amazon EC2)"},
 		{ServiceCode: "s3", ServiceName: "Amazon Simple Storage Service (Amazon S3)"},
@@ -95,82 +113,45 @@ func (m *MemoryStorage) initializeDefaultData() {
 	for i := range services {
 		m.services[services[i].ServiceCode] = &services[i]
 	}
+}
 
-	// Add EC2 quotas
-	m.addServiceQuotas("ec2", "Amazon Elastic Compute Cloud (Amazon EC2)", []struct {
-		code        string
-		name        string
-		value       float64
-		unit        string
-		adjustable  bool
-		description string
-	}{
-		{"L-1216C47A", "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances", 1920, "None", true, "Maximum number of vCPUs for running On-Demand Standard instances"},
-		{"L-34B43A08", "All Standard (A, C, D, H, I, M, R, T, Z) Spot Instance Requests", 1920, "None", true, "Maximum number of vCPUs for all Standard Spot Instance Requests"},
-		{"L-0E3CBAB9", "EC2-VPC Elastic IPs", 5, "None", true, "Maximum number of Elastic IP addresses for EC2-VPC"},
+func (m *MemoryStorage) initializeEC2Quotas() {
+	m.addServiceQuotas("ec2", "Amazon Elastic Compute Cloud (Amazon EC2)", []quotaDefinition{
+		{"L-1216C47A", "Running On-Demand Standard instances", 1920, "None", true, "Max vCPUs for On-Demand Standard instances"},
+		{"L-34B43A08", "All Standard Spot Instance Requests", 1920, "None", true, "Max vCPUs for Standard Spot Requests"},
+		{"L-0E3CBAB9", "EC2-VPC Elastic IPs", 5, "None", true, "Max Elastic IP addresses for EC2-VPC"},
 		{"L-E4BF28E0", "VPCs per Region", 5, "None", true, "Maximum number of VPCs per Region"},
 	})
+}
 
-	// Add S3 quotas
-	m.addServiceQuotas("s3", "Amazon Simple Storage Service (Amazon S3)", []struct {
-		code        string
-		name        string
-		value       float64
-		unit        string
-		adjustable  bool
-		description string
-	}{
+func (m *MemoryStorage) initializeS3Quotas() {
+	m.addServiceQuotas("s3", "Amazon Simple Storage Service (Amazon S3)", []quotaDefinition{
 		{"L-DC2B2D3D", "Buckets", 100, "None", true, "Maximum number of buckets per account"},
 	})
+}
 
-	// Add Lambda quotas
-	m.addServiceQuotas("lambda", "AWS Lambda", []struct {
-		code        string
-		name        string
-		value       float64
-		unit        string
-		adjustable  bool
-		description string
-	}{
+func (m *MemoryStorage) initializeLambdaQuotas() {
+	m.addServiceQuotas("lambda", "AWS Lambda", []quotaDefinition{
 		{"L-B99A9384", "Concurrent executions", 1000, "None", true, "Maximum number of concurrent executions"},
-		{"L-2ACBD22F", "Function and layer storage", 75, "Gigabytes", true, "Maximum total storage for all functions and layers"},
+		{"L-2ACBD22F", "Function and layer storage", 75, "Gigabytes", true, "Max total storage for functions and layers"},
 	})
+}
 
-	// Add DynamoDB quotas
-	m.addServiceQuotas("dynamodb", "Amazon DynamoDB", []struct {
-		code        string
-		name        string
-		value       float64
-		unit        string
-		adjustable  bool
-		description string
-	}{
-		{"L-F98FE922", "Table-level read throughput", 40000, "None", true, "Maximum read capacity units per table"},
-		{"L-82ACEF56", "Table-level write throughput", 40000, "None", true, "Maximum write capacity units per table"},
+func (m *MemoryStorage) initializeDynamoDBQuotas() {
+	m.addServiceQuotas("dynamodb", "Amazon DynamoDB", []quotaDefinition{
+		{"L-F98FE922", "Table-level read throughput", 40000, "None", true, "Max read capacity units per table"},
+		{"L-82ACEF56", "Table-level write throughput", 40000, "None", true, "Max write capacity units per table"},
 	})
+}
 
-	// Add SQS quotas
-	m.addServiceQuotas("sqs", "Amazon Simple Queue Service (Amazon SQS)", []struct {
-		code        string
-		name        string
-		value       float64
-		unit        string
-		adjustable  bool
-		description string
-	}{
-		{"L-06F64E4A", "Messages per queue (backlog)", 120000, "None", false, "Maximum number of inflight messages per standard queue"},
+func (m *MemoryStorage) initializeSQSQuotas() {
+	m.addServiceQuotas("sqs", "Amazon Simple Queue Service (Amazon SQS)", []quotaDefinition{
+		{"L-06F64E4A", "Messages per queue (backlog)", 120000, "None", false, "Max inflight messages per queue"},
 	})
 }
 
 // addServiceQuotas adds quotas for a service.
-func (m *MemoryStorage) addServiceQuotas(serviceCode, serviceName string, quotas []struct {
-	code        string
-	name        string
-	value       float64
-	unit        string
-	adjustable  bool
-	description string
-}) {
+func (m *MemoryStorage) addServiceQuotas(serviceCode, serviceName string, quotas []quotaDefinition) {
 	if m.quotas[serviceCode] == nil {
 		m.quotas[serviceCode] = make(map[string]*ServiceQuota)
 	}
