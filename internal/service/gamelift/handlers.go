@@ -83,13 +83,13 @@ func (s *Service) DescribeBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.BuildId == "" {
+	if req.BuildID == "" {
 		writeError(w, "InvalidRequestException", "BuildId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	build, err := s.storage.DescribeBuild(r.Context(), req.BuildId)
+	build, err := s.storage.DescribeBuild(r.Context(), req.BuildID)
 	if err != nil {
 		handleError(w, err)
 
@@ -145,13 +145,13 @@ func (s *Service) DeleteBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.BuildId == "" {
+	if req.BuildID == "" {
 		writeError(w, "InvalidRequestException", "BuildId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	if err := s.storage.DeleteBuild(r.Context(), req.BuildId); err != nil {
+	if err := s.storage.DeleteBuild(r.Context(), req.BuildID); err != nil {
 		handleError(w, err)
 
 		return
@@ -192,7 +192,7 @@ func (s *Service) DescribeFleetAttributes(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	fleets, err := s.storage.DescribeFleetAttributes(r.Context(), req.FleetIds)
+	fleets, err := s.storage.DescribeFleetAttributes(r.Context(), req.FleetIDs)
 	if err != nil {
 		handleError(w, err)
 
@@ -225,7 +225,7 @@ func (s *Service) ListFleets(w http.ResponseWriter, r *http.Request) {
 		limit = *req.Limit
 	}
 
-	fleetIDs, err := s.storage.ListFleets(r.Context(), req.BuildId, limit)
+	fleetIDs, err := s.storage.ListFleets(r.Context(), req.BuildID, limit)
 	if err != nil {
 		handleError(w, err)
 
@@ -233,7 +233,7 @@ func (s *Service) ListFleets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &ListFleetsResponse{
-		FleetIds: fleetIDs,
+		FleetIDs: fleetIDs,
 	}
 
 	writeResponse(w, resp)
@@ -248,13 +248,13 @@ func (s *Service) DeleteFleet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.FleetId == "" {
+	if req.FleetID == "" {
 		writeError(w, "InvalidRequestException", "FleetId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	if err := s.storage.DeleteFleet(r.Context(), req.FleetId); err != nil {
+	if err := s.storage.DeleteFleet(r.Context(), req.FleetID); err != nil {
 		handleError(w, err)
 
 		return
@@ -295,7 +295,7 @@ func (s *Service) DescribeGameSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions, err := s.storage.DescribeGameSessions(r.Context(), req.FleetId, req.GameSessionId)
+	sessions, err := s.storage.DescribeGameSessions(r.Context(), req.FleetID, req.GameSessionID)
 	if err != nil {
 		handleError(w, err)
 
@@ -323,7 +323,7 @@ func (s *Service) UpdateGameSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.GameSessionId == "" {
+	if req.GameSessionID == "" {
 		writeError(w, "InvalidRequestException", "GameSessionId is required", http.StatusBadRequest)
 
 		return
@@ -352,19 +352,19 @@ func (s *Service) CreatePlayerSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.GameSessionId == "" {
+	if req.GameSessionID == "" {
 		writeError(w, "InvalidRequestException", "GameSessionId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	if req.PlayerId == "" {
+	if req.PlayerID == "" {
 		writeError(w, "InvalidRequestException", "PlayerId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	playerSession, err := s.storage.CreatePlayerSession(r.Context(), req.GameSessionId, req.PlayerId)
+	playerSession, err := s.storage.CreatePlayerSession(r.Context(), req.GameSessionID, req.PlayerID)
 	if err != nil {
 		handleError(w, err)
 
@@ -387,19 +387,19 @@ func (s *Service) CreatePlayerSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.GameSessionId == "" {
+	if req.GameSessionID == "" {
 		writeError(w, "InvalidRequestException", "GameSessionId is required", http.StatusBadRequest)
 
 		return
 	}
 
-	if len(req.PlayerIds) == 0 {
+	if len(req.PlayerIDs) == 0 {
 		writeError(w, "InvalidRequestException", "PlayerIds is required", http.StatusBadRequest)
 
 		return
 	}
 
-	playerSessions, err := s.storage.CreatePlayerSessions(r.Context(), req.GameSessionId, req.PlayerIds)
+	playerSessions, err := s.storage.CreatePlayerSessions(r.Context(), req.GameSessionID, req.PlayerIDs)
 	if err != nil {
 		handleError(w, err)
 
@@ -427,7 +427,7 @@ func (s *Service) DescribePlayerSessions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sessions, err := s.storage.DescribePlayerSessions(r.Context(), req.GameSessionId, req.PlayerSessionId, req.PlayerId)
+	sessions, err := s.storage.DescribePlayerSessions(r.Context(), req.GameSessionID, req.PlayerSessionID, req.PlayerID)
 	if err != nil {
 		handleError(w, err)
 
@@ -465,15 +465,15 @@ func convertToBuildOutput(build *Build) *BuildOutput {
 // convertToFleetAttributesOutput converts a Fleet to FleetAttributesOutput.
 func convertToFleetAttributesOutput(fleet *Fleet) *FleetAttributesOutput {
 	return &FleetAttributesOutput{
-		FleetId:                        fleet.FleetID,
-		FleetArn:                       fleet.FleetARN,
+		FleetID:                        fleet.FleetID,
+		FleetARN:                       fleet.FleetARN,
 		FleetType:                      fleet.FleetType,
 		InstanceType:                   fleet.InstanceType,
 		Description:                    fleet.Description,
 		Name:                           fleet.Name,
 		CreationTime:                   float64(fleet.CreationTime.Unix()),
 		Status:                         fleet.Status,
-		BuildId:                        fleet.BuildID,
+		BuildID:                        fleet.BuildID,
 		ServerLaunchPath:               fleet.ServerLaunchPath,
 		NewGameSessionProtectionPolicy: fleet.NewGameSessionProtectionPolicy,
 	}
@@ -482,31 +482,31 @@ func convertToFleetAttributesOutput(fleet *Fleet) *FleetAttributesOutput {
 // convertToGameSessionOutput converts a GameSession to GameSessionOutput.
 func convertToGameSessionOutput(session *GameSession) *GameSessionOutput {
 	return &GameSessionOutput{
-		GameSessionId:             session.GameSessionID,
+		GameSessionID:             session.GameSessionID,
 		Name:                      session.Name,
-		FleetId:                   session.FleetID,
-		FleetArn:                  session.FleetARN,
+		FleetID:                   session.FleetID,
+		FleetARN:                  session.FleetARN,
 		CreationTime:              float64(session.CreationTime.Unix()),
-		CurrentPlayerSessionCount: int32(session.CurrentPlayerSessionCount),
-		MaximumPlayerSessionCount: int32(session.MaximumPlayerSessionCount),
+		CurrentPlayerSessionCount: session.CurrentPlayerSessionCount,
+		MaximumPlayerSessionCount: session.MaximumPlayerSessionCount,
 		Status:                    session.Status,
-		IpAddress:                 session.IPAddress,
-		Port:                      int32(session.Port),
+		IPAddress:                 session.IPAddress,
+		Port:                      session.Port,
 	}
 }
 
 // convertToPlayerSessionOutput converts a PlayerSession to PlayerSessionOutput.
 func convertToPlayerSessionOutput(session *PlayerSession) *PlayerSessionOutput {
 	return &PlayerSessionOutput{
-		PlayerSessionId: session.PlayerSessionID,
-		PlayerId:        session.PlayerID,
-		GameSessionId:   session.GameSessionID,
-		FleetId:         session.FleetID,
-		FleetArn:        session.FleetARN,
+		PlayerSessionID: session.PlayerSessionID,
+		PlayerID:        session.PlayerID,
+		GameSessionID:   session.GameSessionID,
+		FleetID:         session.FleetID,
+		FleetARN:        session.FleetARN,
 		CreationTime:    float64(session.CreationTime.Unix()),
 		Status:          session.Status,
-		IpAddress:       session.IPAddress,
-		Port:            int32(session.Port),
+		IPAddress:       session.IPAddress,
+		Port:            session.Port,
 	}
 }
 

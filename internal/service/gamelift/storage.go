@@ -23,7 +23,7 @@ const (
 	defaultRegion    = "us-east-1"
 	defaultAccountID = "123456789012"
 	defaultIPAddress = "10.0.0.1"
-	defaultPort      = 7777
+	defaultPort      = int32(7777)
 )
 
 // Build status values.
@@ -188,7 +188,7 @@ func (m *MemoryStorage) CreateFleet(_ context.Context, req *CreateFleetRequest) 
 		FleetARN:                       fleetARN,
 		Name:                           req.Name,
 		Description:                    req.Description,
-		BuildID:                        req.BuildId,
+		BuildID:                        req.BuildID,
 		Status:                         fleetStatusActive,
 		FleetType:                      defaultString(req.FleetType, "ON_DEMAND"),
 		InstanceType:                   defaultString(req.EC2InstanceType, "c5.large"),
@@ -270,13 +270,13 @@ func (m *MemoryStorage) CreateGameSession(_ context.Context, req *CreateGameSess
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if req.FleetId == "" {
+	if req.FleetID == "" {
 		return nil, &Error{Code: errInvalidRequestException, Message: "FleetId is required"}
 	}
 
-	fleet, exists := m.fleets[req.FleetId]
+	fleet, exists := m.fleets[req.FleetID]
 	if !exists {
-		return nil, &Error{Code: errNotFoundException, Message: "Fleet not found: " + req.FleetId}
+		return nil, &Error{Code: errNotFoundException, Message: "Fleet not found: " + req.FleetID}
 	}
 
 	gameSessionID := "gsess-" + uuid.New().String()[:8]
@@ -290,7 +290,7 @@ func (m *MemoryStorage) CreateGameSession(_ context.Context, req *CreateGameSess
 		Name:                      req.Name,
 		Status:                    gameSessionStatusActive,
 		CurrentPlayerSessionCount: 0,
-		MaximumPlayerSessionCount: int(req.MaximumPlayerSessionCount),
+		MaximumPlayerSessionCount: req.MaximumPlayerSessionCount,
 		IPAddress:                 defaultIPAddress,
 		Port:                      defaultPort,
 		CreationTime:              time.Now(),
@@ -333,13 +333,13 @@ func (m *MemoryStorage) UpdateGameSession(_ context.Context, req *UpdateGameSess
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	session, exists := m.gameSessions[req.GameSessionId]
+	session, exists := m.gameSessions[req.GameSessionID]
 	if !exists {
-		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + req.GameSessionId}
+		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + req.GameSessionID}
 	}
 
 	if req.MaximumPlayerSessionCount != nil {
-		session.MaximumPlayerSessionCount = int(*req.MaximumPlayerSessionCount)
+		session.MaximumPlayerSessionCount = *req.MaximumPlayerSessionCount
 	}
 
 	if req.Name != "" {
@@ -393,7 +393,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + gameSessionID}
 	}
 
-	if gameSession.CurrentPlayerSessionCount+len(playerIDs) > gameSession.MaximumPlayerSessionCount {
+	if gameSession.CurrentPlayerSessionCount+int32(len(playerIDs)) > gameSession.MaximumPlayerSessionCount {
 		return nil, &Error{Code: errInvalidRequestException, Message: "Not enough capacity for all players"}
 	}
 
@@ -418,7 +418,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 		result = append(result, playerSession)
 	}
 
-	gameSession.CurrentPlayerSessionCount += len(playerIDs)
+	gameSession.CurrentPlayerSessionCount += int32(len(playerIDs))
 
 	return result, nil
 }

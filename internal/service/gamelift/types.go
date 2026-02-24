@@ -37,10 +37,10 @@ type GameSession struct {
 	FleetARN                  string
 	Name                      string
 	Status                    string
-	CurrentPlayerSessionCount int
-	MaximumPlayerSessionCount int
+	CurrentPlayerSessionCount int32
+	MaximumPlayerSessionCount int32
 	IPAddress                 string
-	Port                      int
+	Port                      int32
 	CreationTime              time.Time
 }
 
@@ -53,7 +53,7 @@ type PlayerSession struct {
 	PlayerID        string
 	Status          string
 	IPAddress       string
-	Port            int
+	Port            int32
 	CreationTime    time.Time
 }
 
@@ -114,14 +114,14 @@ type BuildOutput struct {
 
 // UploadCredentials represents temporary upload credentials.
 type UploadCredentials struct {
-	AccessKeyId     string `json:"AccessKeyId,omitempty"`
+	AccessKeyID     string `json:"AccessKeyId,omitempty"`
 	SecretAccessKey string `json:"SecretAccessKey,omitempty"`
 	SessionToken    string `json:"SessionToken,omitempty"`
 }
 
 // DescribeBuildRequest represents the DescribeBuild API request.
 type DescribeBuildRequest struct {
-	BuildId string `json:"BuildId"`
+	BuildID string `json:"BuildId"`
 }
 
 // DescribeBuildResponse represents the DescribeBuild API response.
@@ -144,7 +144,7 @@ type ListBuildsResponse struct {
 
 // DeleteBuildRequest represents the DeleteBuild API request.
 type DeleteBuildRequest struct {
-	BuildId string `json:"BuildId"`
+	BuildID string `json:"BuildId"`
 }
 
 // DeleteBuildResponse represents the DeleteBuild API response.
@@ -153,8 +153,8 @@ type DeleteBuildResponse struct{}
 // CreateFleetRequest represents the CreateFleet API request.
 type CreateFleetRequest struct {
 	Name                           string                `json:"Name"`
-	BuildId                        string                `json:"BuildId,omitempty"`
-	ScriptId                       string                `json:"ScriptId,omitempty"`
+	BuildID                        string                `json:"BuildId,omitempty"`
+	ScriptID                       string                `json:"ScriptId,omitempty"`
 	Description                    string                `json:"Description,omitempty"`
 	EC2InstanceType                string                `json:"EC2InstanceType,omitempty"`
 	FleetType                      string                `json:"FleetType,omitempty"`
@@ -162,7 +162,7 @@ type CreateFleetRequest struct {
 	ServerLaunchParameters         string                `json:"ServerLaunchParameters,omitempty"`
 	NewGameSessionProtectionPolicy string                `json:"NewGameSessionProtectionPolicy,omitempty"`
 	RuntimeConfiguration           *RuntimeConfiguration `json:"RuntimeConfiguration,omitempty"`
-	EC2InboundPermissions          []IpPermission        `json:"EC2InboundPermissions,omitempty"`
+	EC2InboundPermissions          []IPPermission        `json:"EC2InboundPermissions,omitempty"`
 	Tags                           []TagInput            `json:"Tags,omitempty"`
 }
 
@@ -180,11 +180,11 @@ type ServerProcess struct {
 	ConcurrentExecutions int32  `json:"ConcurrentExecutions"`
 }
 
-// IpPermission represents an IP permission.
-type IpPermission struct {
+// IPPermission represents an IP permission.
+type IPPermission struct {
 	FromPort int32  `json:"FromPort"`
 	ToPort   int32  `json:"ToPort"`
-	IpRange  string `json:"IpRange"`
+	IPRange  string `json:"IpRange"`
 	Protocol string `json:"Protocol"`
 }
 
@@ -195,16 +195,16 @@ type CreateFleetResponse struct {
 
 // FleetAttributesOutput represents the output format of fleet attributes.
 type FleetAttributesOutput struct {
-	FleetId                        string  `json:"FleetId,omitempty"`
-	FleetArn                       string  `json:"FleetArn,omitempty"`
+	FleetID                        string  `json:"FleetId,omitempty"`
+	FleetARN                       string  `json:"FleetArn,omitempty"`
 	FleetType                      string  `json:"FleetType,omitempty"`
 	InstanceType                   string  `json:"InstanceType,omitempty"`
 	Description                    string  `json:"Description,omitempty"`
 	Name                           string  `json:"Name,omitempty"`
 	CreationTime                   float64 `json:"CreationTime,omitempty"`
 	Status                         string  `json:"Status,omitempty"`
-	BuildId                        string  `json:"BuildId,omitempty"`
-	BuildArn                       string  `json:"BuildArn,omitempty"`
+	BuildID                        string  `json:"BuildId,omitempty"`
+	BuildARN                       string  `json:"BuildArn,omitempty"`
 	ServerLaunchPath               string  `json:"ServerLaunchPath,omitempty"`
 	ServerLaunchParameters         string  `json:"ServerLaunchParameters,omitempty"`
 	NewGameSessionProtectionPolicy string  `json:"NewGameSessionProtectionPolicy,omitempty"`
@@ -213,7 +213,7 @@ type FleetAttributesOutput struct {
 
 // DescribeFleetAttributesRequest represents the DescribeFleetAttributes API request.
 type DescribeFleetAttributesRequest struct {
-	FleetIds  []string `json:"FleetIds,omitempty"`
+	FleetIDs  []string `json:"FleetIds,omitempty"`
 	Limit     *int32   `json:"Limit,omitempty"`
 	NextToken string   `json:"NextToken,omitempty"`
 }
@@ -226,21 +226,21 @@ type DescribeFleetAttributesResponse struct {
 
 // ListFleetsRequest represents the ListFleets API request.
 type ListFleetsRequest struct {
-	BuildId   string `json:"BuildId,omitempty"`
-	ScriptId  string `json:"ScriptId,omitempty"`
+	BuildID   string `json:"BuildId,omitempty"`
+	ScriptID  string `json:"ScriptId,omitempty"`
 	Limit     *int32 `json:"Limit,omitempty"`
 	NextToken string `json:"NextToken,omitempty"`
 }
 
 // ListFleetsResponse represents the ListFleets API response.
 type ListFleetsResponse struct {
-	FleetIds  []string `json:"FleetIds,omitempty"`
+	FleetIDs  []string `json:"FleetIds,omitempty"`
 	NextToken string   `json:"NextToken,omitempty"`
 }
 
 // DeleteFleetRequest represents the DeleteFleet API request.
 type DeleteFleetRequest struct {
-	FleetId string `json:"FleetId"`
+	FleetID string `json:"FleetId"`
 }
 
 // DeleteFleetResponse represents the DeleteFleet API response.
@@ -248,12 +248,12 @@ type DeleteFleetResponse struct{}
 
 // CreateGameSessionRequest represents the CreateGameSession API request.
 type CreateGameSessionRequest struct {
-	FleetId                   string         `json:"FleetId,omitempty"`
-	AliasId                   string         `json:"AliasId,omitempty"`
+	FleetID                   string         `json:"FleetId,omitempty"`
+	AliasID                   string         `json:"AliasId,omitempty"`
 	MaximumPlayerSessionCount int32          `json:"MaximumPlayerSessionCount"`
 	Name                      string         `json:"Name,omitempty"`
 	GameProperties            []GameProperty `json:"GameProperties,omitempty"`
-	GameSessionId             string         `json:"GameSessionId,omitempty"`
+	GameSessionID             string         `json:"GameSessionId,omitempty"`
 	IdempotencyToken          string         `json:"IdempotencyToken,omitempty"`
 	GameSessionData           string         `json:"GameSessionData,omitempty"`
 	Location                  string         `json:"Location,omitempty"`
@@ -272,10 +272,10 @@ type CreateGameSessionResponse struct {
 
 // GameSessionOutput represents the output format of a game session.
 type GameSessionOutput struct {
-	GameSessionId               string         `json:"GameSessionId,omitempty"`
+	GameSessionID               string         `json:"GameSessionId,omitempty"`
 	Name                        string         `json:"Name,omitempty"`
-	FleetId                     string         `json:"FleetId,omitempty"`
-	FleetArn                    string         `json:"FleetArn,omitempty"`
+	FleetID                     string         `json:"FleetId,omitempty"`
+	FleetARN                    string         `json:"FleetArn,omitempty"`
 	CreationTime                float64        `json:"CreationTime,omitempty"`
 	TerminationTime             float64        `json:"TerminationTime,omitempty"`
 	CurrentPlayerSessionCount   int32          `json:"CurrentPlayerSessionCount,omitempty"`
@@ -283,11 +283,11 @@ type GameSessionOutput struct {
 	Status                      string         `json:"Status,omitempty"`
 	StatusReason                string         `json:"StatusReason,omitempty"`
 	GameProperties              []GameProperty `json:"GameProperties,omitempty"`
-	IpAddress                   string         `json:"IpAddress,omitempty"`
-	DnsName                     string         `json:"DnsName,omitempty"`
+	IPAddress                   string         `json:"IpAddress,omitempty"`
+	DNSName                     string         `json:"DnsName,omitempty"`
 	Port                        int32          `json:"Port,omitempty"`
 	PlayerSessionCreationPolicy string         `json:"PlayerSessionCreationPolicy,omitempty"`
-	CreatorId                   string         `json:"CreatorId,omitempty"`
+	CreatorID                   string         `json:"CreatorId,omitempty"`
 	GameSessionData             string         `json:"GameSessionData,omitempty"`
 	MatchmakerData              string         `json:"MatchmakerData,omitempty"`
 	Location                    string         `json:"Location,omitempty"`
@@ -295,9 +295,9 @@ type GameSessionOutput struct {
 
 // DescribeGameSessionsRequest represents the DescribeGameSessions API request.
 type DescribeGameSessionsRequest struct {
-	FleetId       string `json:"FleetId,omitempty"`
-	GameSessionId string `json:"GameSessionId,omitempty"`
-	AliasId       string `json:"AliasId,omitempty"`
+	FleetID       string `json:"FleetId,omitempty"`
+	GameSessionID string `json:"GameSessionId,omitempty"`
+	AliasID       string `json:"AliasId,omitempty"`
 	Location      string `json:"Location,omitempty"`
 	StatusFilter  string `json:"StatusFilter,omitempty"`
 	Limit         *int32 `json:"Limit,omitempty"`
@@ -312,7 +312,7 @@ type DescribeGameSessionsResponse struct {
 
 // UpdateGameSessionRequest represents the UpdateGameSession API request.
 type UpdateGameSessionRequest struct {
-	GameSessionId               string         `json:"GameSessionId"`
+	GameSessionID               string         `json:"GameSessionId"`
 	MaximumPlayerSessionCount   *int32         `json:"MaximumPlayerSessionCount,omitempty"`
 	Name                        string         `json:"Name,omitempty"`
 	PlayerSessionCreationPolicy string         `json:"PlayerSessionCreationPolicy,omitempty"`
@@ -327,8 +327,8 @@ type UpdateGameSessionResponse struct {
 
 // CreatePlayerSessionRequest represents the CreatePlayerSession API request.
 type CreatePlayerSessionRequest struct {
-	GameSessionId string `json:"GameSessionId"`
-	PlayerId      string `json:"PlayerId"`
+	GameSessionID string `json:"GameSessionId"`
+	PlayerID      string `json:"PlayerId"`
 	PlayerData    string `json:"PlayerData,omitempty"`
 }
 
@@ -339,24 +339,24 @@ type CreatePlayerSessionResponse struct {
 
 // PlayerSessionOutput represents the output format of a player session.
 type PlayerSessionOutput struct {
-	PlayerSessionId string  `json:"PlayerSessionId,omitempty"`
-	PlayerId        string  `json:"PlayerId,omitempty"`
-	GameSessionId   string  `json:"GameSessionId,omitempty"`
-	FleetId         string  `json:"FleetId,omitempty"`
-	FleetArn        string  `json:"FleetArn,omitempty"`
+	PlayerSessionID string  `json:"PlayerSessionId,omitempty"`
+	PlayerID        string  `json:"PlayerId,omitempty"`
+	GameSessionID   string  `json:"GameSessionId,omitempty"`
+	FleetID         string  `json:"FleetId,omitempty"`
+	FleetARN        string  `json:"FleetArn,omitempty"`
 	CreationTime    float64 `json:"CreationTime,omitempty"`
 	TerminationTime float64 `json:"TerminationTime,omitempty"`
 	Status          string  `json:"Status,omitempty"`
-	IpAddress       string  `json:"IpAddress,omitempty"`
-	DnsName         string  `json:"DnsName,omitempty"`
+	IPAddress       string  `json:"IpAddress,omitempty"`
+	DNSName         string  `json:"DnsName,omitempty"`
 	Port            int32   `json:"Port,omitempty"`
 	PlayerData      string  `json:"PlayerData,omitempty"`
 }
 
 // CreatePlayerSessionsRequest represents the CreatePlayerSessions API request.
 type CreatePlayerSessionsRequest struct {
-	GameSessionId string            `json:"GameSessionId"`
-	PlayerIds     []string          `json:"PlayerIds"`
+	GameSessionID string            `json:"GameSessionId"`
+	PlayerIDs     []string          `json:"PlayerIds"`
 	PlayerDataMap map[string]string `json:"PlayerDataMap,omitempty"`
 }
 
@@ -367,9 +367,9 @@ type CreatePlayerSessionsResponse struct {
 
 // DescribePlayerSessionsRequest represents the DescribePlayerSessions API request.
 type DescribePlayerSessionsRequest struct {
-	GameSessionId             string `json:"GameSessionId,omitempty"`
-	PlayerId                  string `json:"PlayerId,omitempty"`
-	PlayerSessionId           string `json:"PlayerSessionId,omitempty"`
+	GameSessionID             string `json:"GameSessionId,omitempty"`
+	PlayerID                  string `json:"PlayerId,omitempty"`
+	PlayerSessionID           string `json:"PlayerSessionId,omitempty"`
 	PlayerSessionStatusFilter string `json:"PlayerSessionStatusFilter,omitempty"`
 	Limit                     *int32 `json:"Limit,omitempty"`
 	NextToken                 string `json:"NextToken,omitempty"`
