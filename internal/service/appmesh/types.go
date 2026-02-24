@@ -1,7 +1,11 @@
 // Package appmesh provides the AWS App Mesh service implementation.
 package appmesh
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // Error codes for App Mesh API.
 const (
@@ -78,9 +82,23 @@ type AWSTimestamp struct {
 	time.Time
 }
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON serializes time to Unix epoch float64.
 func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
-	return []byte(t.Format("1136239445")), nil
+	if t.IsZero() {
+		data, err := json.Marshal(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal nil timestamp: %w", err)
+		}
+
+		return data, nil
+	}
+
+	data, err := json.Marshal(float64(t.Unix()) + float64(t.Nanosecond())/1e9)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal timestamp: %w", err)
+	}
+
+	return data, nil
 }
 
 // ResourceMetadata contains common metadata for all resources.
