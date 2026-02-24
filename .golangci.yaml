@@ -177,6 +177,10 @@ linters:
       - path: internal/service/cloudtrail/types\.go
         linters:
           - tagliatelle
+      # AWS Config API requires PascalCase JSON field names.
+      - path: internal/service/configservice/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
