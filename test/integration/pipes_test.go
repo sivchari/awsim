@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/pipes"
 	"github.com/aws/aws-sdk-go-v2/service/pipes/types"
 	"github.com/stretchr/testify/require"
@@ -14,10 +16,18 @@ import (
 func newPipesClient(t *testing.T) *pipes.Client {
 	t.Helper()
 
-	cfg := newAWSConfig(t)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
 
 	return pipes.NewFromConfig(cfg, func(o *pipes.Options) {
-		o.BaseEndpoint = aws.String(endpoint)
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
 
