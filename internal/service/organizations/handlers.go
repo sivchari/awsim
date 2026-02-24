@@ -2,6 +2,7 @@ package organizations
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -62,7 +63,7 @@ func (s *Service) CreateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, CreateOrganizationOutput{Organization: org})
+	writeJSON(w, CreateOrganizationOutput{Organization: org})
 }
 
 // DeleteOrganization handles the DeleteOrganization action.
@@ -85,7 +86,7 @@ func (s *Service) DescribeOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, DescribeOrganizationOutput{Organization: org})
+	writeJSON(w, DescribeOrganizationOutput{Organization: org})
 }
 
 // CreateAccount handles the CreateAccount action.
@@ -104,7 +105,7 @@ func (s *Service) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, CreateAccountOutput{CreateAccountStatus: status})
+	writeJSON(w, CreateAccountOutput{CreateAccountStatus: status})
 }
 
 // DescribeAccount handles the DescribeAccount action.
@@ -123,7 +124,7 @@ func (s *Service) DescribeAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, DescribeAccountOutput{Account: account})
+	writeJSON(w, DescribeAccountOutput{Account: account})
 }
 
 // ListAccounts handles the ListAccounts action.
@@ -142,7 +143,7 @@ func (s *Service) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ListAccountsOutput{Accounts: accounts, NextToken: nextToken})
+	writeJSON(w, ListAccountsOutput{Accounts: accounts, NextToken: nextToken})
 }
 
 // CreateOrganizationalUnit handles the CreateOrganizationalUnit action.
@@ -161,7 +162,7 @@ func (s *Service) CreateOrganizationalUnit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, CreateOrganizationalUnitOutput{OrganizationalUnit: ou})
+	writeJSON(w, CreateOrganizationalUnitOutput{OrganizationalUnit: ou})
 }
 
 // ListOrganizationalUnitsForParent handles the ListOrganizationalUnitsForParent action.
@@ -180,7 +181,7 @@ func (s *Service) ListOrganizationalUnitsForParent(w http.ResponseWriter, r *htt
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ListOrganizationalUnitsForParentOutput{OrganizationalUnits: ous, NextToken: nextToken})
+	writeJSON(w, ListOrganizationalUnitsForParentOutput{OrganizationalUnits: ous, NextToken: nextToken})
 }
 
 // AttachPolicy handles the AttachPolicy action.
@@ -235,14 +236,14 @@ func (s *Service) ListRoots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ListRootsOutput{Roots: roots, NextToken: nextToken})
+	writeJSON(w, ListRootsOutput{Roots: roots, NextToken: nextToken})
 }
 
 // Helper functions.
 
-func writeJSON(w http.ResponseWriter, statusCode int, data any) {
+func writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
-	w.WriteHeader(statusCode)
+	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -264,7 +265,8 @@ func writeError(w http.ResponseWriter, code, message string, statusCode int) {
 }
 
 func handleError(w http.ResponseWriter, err error) {
-	if e, ok := err.(*Error); ok {
+	var e *Error
+	if errors.As(err, &e) {
 		statusCode := http.StatusBadRequest
 
 		switch e.Code {
