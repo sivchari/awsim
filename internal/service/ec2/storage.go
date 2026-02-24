@@ -40,18 +40,48 @@ const (
 
 // Storage defines the EC2 storage interface.
 type Storage interface {
+	// Instance operations
 	RunInstances(ctx context.Context, req *RunInstancesRequest) ([]*Instance, string, error)
 	TerminateInstances(ctx context.Context, instanceIDs []string) ([]InstanceStateChange, error)
 	DescribeInstances(ctx context.Context, instanceIDs []string) ([]*Reservation, error)
 	StartInstances(ctx context.Context, instanceIDs []string) ([]InstanceStateChange, error)
 	StopInstances(ctx context.Context, instanceIDs []string) ([]InstanceStateChange, error)
+
+	// Security Group operations
 	CreateSecurityGroup(ctx context.Context, req *CreateSecurityGroupRequest) (*SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, groupID, groupName string) error
 	AuthorizeSecurityGroupIngress(ctx context.Context, groupID, groupName string, permissions []IPPermission) error
 	AuthorizeSecurityGroupEgress(ctx context.Context, groupID string, permissions []IPPermission) error
+
+	// Key Pair operations
 	CreateKeyPair(ctx context.Context, keyName, keyType string) (*KeyPair, error)
 	DeleteKeyPair(ctx context.Context, keyName, keyPairID string) error
 	DescribeKeyPairs(ctx context.Context, keyNames, keyPairIDs []string) ([]*KeyPair, error)
+
+	// VPC operations
+	CreateVpc(ctx context.Context, req *CreateVpcRequest) (*Vpc, error)
+	DeleteVpc(ctx context.Context, vpcID string) error
+	DescribeVpcs(ctx context.Context, vpcIDs []string) ([]*Vpc, error)
+
+	// Subnet operations
+	CreateSubnet(ctx context.Context, req *CreateSubnetRequest) (*Subnet, error)
+	DeleteSubnet(ctx context.Context, subnetID string) error
+	DescribeSubnets(ctx context.Context, subnetIDs []string, filters map[string][]string) ([]*Subnet, error)
+
+	// Internet Gateway operations
+	CreateInternetGateway(ctx context.Context, req *CreateInternetGatewayRequest) (*InternetGateway, error)
+	AttachInternetGateway(ctx context.Context, igwID, vpcID string) error
+	DescribeInternetGateways(ctx context.Context, igwIDs []string) ([]*InternetGateway, error)
+
+	// Route Table operations
+	CreateRouteTable(ctx context.Context, req *CreateRouteTableRequest) (*RouteTable, error)
+	CreateRoute(ctx context.Context, req *CreateRouteRequest) error
+	AssociateRouteTable(ctx context.Context, req *AssociateRouteTableRequest) (string, error)
+	DescribeRouteTables(ctx context.Context, rtbIDs []string) ([]*RouteTable, error)
+
+	// NAT Gateway operations
+	CreateNatGateway(ctx context.Context, req *CreateNatGatewayRequest) (*NatGateway, error)
+	DescribeNatGateways(ctx context.Context, natgwIDs []string) ([]*NatGateway, error)
 }
 
 // InstanceStateChange represents an instance state change.
@@ -75,15 +105,27 @@ type MemoryStorage struct {
 	reservations   map[string]*Reservation
 	securityGroups map[string]*SecurityGroup
 	keyPairs       map[string]*KeyPair
+
+	// VPC resources
+	vpcs             map[string]*Vpc
+	subnets          map[string]*Subnet
+	internetGateways map[string]*InternetGateway
+	routeTables      map[string]*RouteTable
+	natGateways      map[string]*NatGateway
 }
 
 // NewMemoryStorage creates a new in-memory EC2 storage.
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		instances:      make(map[string]*Instance),
-		reservations:   make(map[string]*Reservation),
-		securityGroups: make(map[string]*SecurityGroup),
-		keyPairs:       make(map[string]*KeyPair),
+		instances:        make(map[string]*Instance),
+		reservations:     make(map[string]*Reservation),
+		securityGroups:   make(map[string]*SecurityGroup),
+		keyPairs:         make(map[string]*KeyPair),
+		vpcs:             make(map[string]*Vpc),
+		subnets:          make(map[string]*Subnet),
+		internetGateways: make(map[string]*InternetGateway),
+		routeTables:      make(map[string]*RouteTable),
+		natGateways:      make(map[string]*NatGateway),
 	}
 }
 
@@ -598,4 +640,489 @@ func generateFingerprint(pubKey []byte) string {
 	hash := sha256.Sum256(pubKey)
 
 	return hex.EncodeToString(hash[:])
+}
+
+// CreateVpc creates a new VPC.
+func (m *MemoryStorage) CreateVpc(_ context.Context, req *CreateVpcRequest) (*Vpc, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	vpc := &Vpc{
+		VpcID:           "vpc-" + generateID(),
+		CidrBlock:       req.CidrBlock,
+		State:           "available",
+		IsDefault:       false,
+		InstanceTenancy: req.InstanceTenancy,
+		Tags:            []Tag{},
+	}
+
+	if vpc.InstanceTenancy == "" {
+		vpc.InstanceTenancy = "default"
+	}
+
+	m.vpcs[vpc.VpcID] = vpc
+
+	return vpc, nil
+}
+
+// DeleteVpc deletes a VPC.
+func (m *MemoryStorage) DeleteVpc(_ context.Context, vpcID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.vpcs[vpcID]; !exists {
+		return &Error{
+			Code:    "InvalidVpcID.NotFound",
+			Message: fmt.Sprintf("The vpc ID '%s' does not exist", vpcID),
+		}
+	}
+
+	// Check for dependencies
+	for _, subnet := range m.subnets {
+		if subnet.VpcID == vpcID {
+			return &Error{
+				Code:    "DependencyViolation",
+				Message: "The vpc has dependencies and cannot be deleted",
+			}
+		}
+	}
+
+	for _, igw := range m.internetGateways {
+		for _, attachment := range igw.Attachments {
+			if attachment.VpcID == vpcID {
+				return &Error{
+					Code:    "DependencyViolation",
+					Message: "The vpc has dependencies and cannot be deleted",
+				}
+			}
+		}
+	}
+
+	delete(m.vpcs, vpcID)
+
+	return nil
+}
+
+// DescribeVpcs describes VPCs.
+func (m *MemoryStorage) DescribeVpcs(_ context.Context, vpcIDs []string) ([]*Vpc, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if len(vpcIDs) == 0 {
+		vpcs := make([]*Vpc, 0, len(m.vpcs))
+		for _, vpc := range m.vpcs {
+			vpcs = append(vpcs, vpc)
+		}
+
+		return vpcs, nil
+	}
+
+	vpcs := make([]*Vpc, 0, len(vpcIDs))
+
+	for _, id := range vpcIDs {
+		vpc, exists := m.vpcs[id]
+		if !exists {
+			return nil, &Error{
+				Code:    "InvalidVpcID.NotFound",
+				Message: fmt.Sprintf("The vpc ID '%s' does not exist", id),
+			}
+		}
+
+		vpcs = append(vpcs, vpc)
+	}
+
+	return vpcs, nil
+}
+
+// CreateSubnet creates a new subnet.
+func (m *MemoryStorage) CreateSubnet(_ context.Context, req *CreateSubnetRequest) (*Subnet, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.vpcs[req.VpcID]; !exists {
+		return nil, &Error{
+			Code:    "InvalidVpcID.NotFound",
+			Message: fmt.Sprintf("The vpc ID '%s' does not exist", req.VpcID),
+		}
+	}
+
+	subnet := &Subnet{
+		SubnetID:                "subnet-" + generateID(),
+		VpcID:                   req.VpcID,
+		CidrBlock:               req.CidrBlock,
+		AvailabilityZone:        req.AvailabilityZone,
+		AvailableIPAddressCount: 251, // Default available IPs for /24
+		State:                   "available",
+		MapPublicIPOnLaunch:     false,
+		Tags:                    []Tag{},
+	}
+
+	if subnet.AvailabilityZone == "" {
+		subnet.AvailabilityZone = "us-east-1a"
+	}
+
+	m.subnets[subnet.SubnetID] = subnet
+
+	return subnet, nil
+}
+
+// DeleteSubnet deletes a subnet.
+func (m *MemoryStorage) DeleteSubnet(_ context.Context, subnetID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.subnets[subnetID]; !exists {
+		return &Error{
+			Code:    "InvalidSubnetID.NotFound",
+			Message: fmt.Sprintf("The subnet ID '%s' does not exist", subnetID),
+		}
+	}
+
+	delete(m.subnets, subnetID)
+
+	return nil
+}
+
+// DescribeSubnets describes subnets.
+func (m *MemoryStorage) DescribeSubnets(_ context.Context, subnetIDs []string, filters map[string][]string) ([]*Subnet, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var subnets []*Subnet
+
+	if len(subnetIDs) == 0 {
+		for _, subnet := range m.subnets {
+			if m.matchSubnetFilters(subnet, filters) {
+				subnets = append(subnets, subnet)
+			}
+		}
+
+		return subnets, nil
+	}
+
+	for _, id := range subnetIDs {
+		subnet, exists := m.subnets[id]
+		if !exists {
+			return nil, &Error{
+				Code:    "InvalidSubnetID.NotFound",
+				Message: fmt.Sprintf("The subnet ID '%s' does not exist", id),
+			}
+		}
+
+		if m.matchSubnetFilters(subnet, filters) {
+			subnets = append(subnets, subnet)
+		}
+	}
+
+	return subnets, nil
+}
+
+// matchSubnetFilters checks if a subnet matches the given filters.
+func (m *MemoryStorage) matchSubnetFilters(subnet *Subnet, filters map[string][]string) bool {
+	if len(filters) == 0 {
+		return true
+	}
+
+	for key, values := range filters {
+		switch key {
+		case "vpc-id":
+			if !containsString(values, subnet.VpcID) {
+				return false
+			}
+		case "availability-zone":
+			if !containsString(values, subnet.AvailabilityZone) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// CreateInternetGateway creates a new internet gateway.
+func (m *MemoryStorage) CreateInternetGateway(_ context.Context, _ *CreateInternetGatewayRequest) (*InternetGateway, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	igw := &InternetGateway{
+		InternetGatewayID: "igw-" + generateID(),
+		Attachments:       []InternetGatewayAttachment{},
+		Tags:              []Tag{},
+	}
+
+	m.internetGateways[igw.InternetGatewayID] = igw
+
+	return igw, nil
+}
+
+// AttachInternetGateway attaches an internet gateway to a VPC.
+func (m *MemoryStorage) AttachInternetGateway(_ context.Context, igwID, vpcID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	igw, exists := m.internetGateways[igwID]
+	if !exists {
+		return &Error{
+			Code:    "InvalidInternetGatewayID.NotFound",
+			Message: fmt.Sprintf("The internetGateway ID '%s' does not exist", igwID),
+		}
+	}
+
+	if _, exists := m.vpcs[vpcID]; !exists {
+		return &Error{
+			Code:    "InvalidVpcID.NotFound",
+			Message: fmt.Sprintf("The vpc ID '%s' does not exist", vpcID),
+		}
+	}
+
+	// Check if already attached
+	for _, attachment := range igw.Attachments {
+		if attachment.VpcID == vpcID {
+			return &Error{
+				Code:    "Resource.AlreadyAssociated",
+				Message: "The internet gateway is already attached to the VPC",
+			}
+		}
+	}
+
+	igw.Attachments = append(igw.Attachments, InternetGatewayAttachment{
+		VpcID: vpcID,
+		State: "available",
+	})
+
+	return nil
+}
+
+// DescribeInternetGateways describes internet gateways.
+func (m *MemoryStorage) DescribeInternetGateways(_ context.Context, igwIDs []string) ([]*InternetGateway, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if len(igwIDs) == 0 {
+		igws := make([]*InternetGateway, 0, len(m.internetGateways))
+		for _, igw := range m.internetGateways {
+			igws = append(igws, igw)
+		}
+
+		return igws, nil
+	}
+
+	igws := make([]*InternetGateway, 0, len(igwIDs))
+
+	for _, id := range igwIDs {
+		igw, exists := m.internetGateways[id]
+		if !exists {
+			return nil, &Error{
+				Code:    "InvalidInternetGatewayID.NotFound",
+				Message: fmt.Sprintf("The internetGateway ID '%s' does not exist", id),
+			}
+		}
+
+		igws = append(igws, igw)
+	}
+
+	return igws, nil
+}
+
+// CreateRouteTable creates a new route table.
+func (m *MemoryStorage) CreateRouteTable(_ context.Context, req *CreateRouteTableRequest) (*RouteTable, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.vpcs[req.VpcID]; !exists {
+		return nil, &Error{
+			Code:    "InvalidVpcID.NotFound",
+			Message: fmt.Sprintf("The vpc ID '%s' does not exist", req.VpcID),
+		}
+	}
+
+	rt := &RouteTable{
+		RouteTableID: "rtb-" + generateID(),
+		VpcID:        req.VpcID,
+		Routes: []Route{
+			{
+				DestinationCidrBlock: "local",
+				GatewayID:            "local",
+				State:                "active",
+			},
+		},
+		Associations: []RouteTableAssociation{},
+		Tags:         []Tag{},
+	}
+
+	m.routeTables[rt.RouteTableID] = rt
+
+	return rt, nil
+}
+
+// CreateRoute creates a route in a route table.
+func (m *MemoryStorage) CreateRoute(_ context.Context, req *CreateRouteRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rt, exists := m.routeTables[req.RouteTableID]
+	if !exists {
+		return &Error{
+			Code:    "InvalidRouteTableID.NotFound",
+			Message: fmt.Sprintf("The routeTable ID '%s' does not exist", req.RouteTableID),
+		}
+	}
+
+	// Check for duplicate route
+	for _, route := range rt.Routes {
+		if route.DestinationCidrBlock == req.DestinationCidrBlock {
+			return &Error{
+				Code:    "RouteAlreadyExists",
+				Message: "The route already exists",
+			}
+		}
+	}
+
+	route := Route{
+		DestinationCidrBlock: req.DestinationCidrBlock,
+		GatewayID:            req.GatewayID,
+		NatGatewayID:         req.NatGatewayID,
+		State:                "active",
+	}
+
+	rt.Routes = append(rt.Routes, route)
+
+	return nil
+}
+
+// AssociateRouteTable associates a route table with a subnet.
+func (m *MemoryStorage) AssociateRouteTable(_ context.Context, req *AssociateRouteTableRequest) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rt, exists := m.routeTables[req.RouteTableID]
+	if !exists {
+		return "", &Error{
+			Code:    "InvalidRouteTableID.NotFound",
+			Message: fmt.Sprintf("The routeTable ID '%s' does not exist", req.RouteTableID),
+		}
+	}
+
+	if _, exists := m.subnets[req.SubnetID]; !exists {
+		return "", &Error{
+			Code:    "InvalidSubnetID.NotFound",
+			Message: fmt.Sprintf("The subnet ID '%s' does not exist", req.SubnetID),
+		}
+	}
+
+	associationID := "rtbassoc-" + generateID()
+	rt.Associations = append(rt.Associations, RouteTableAssociation{
+		RouteTableAssociationID: associationID,
+		RouteTableID:            req.RouteTableID,
+		SubnetID:                req.SubnetID,
+		Main:                    false,
+	})
+
+	return associationID, nil
+}
+
+// DescribeRouteTables describes route tables.
+func (m *MemoryStorage) DescribeRouteTables(_ context.Context, rtbIDs []string) ([]*RouteTable, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if len(rtbIDs) == 0 {
+		rts := make([]*RouteTable, 0, len(m.routeTables))
+		for _, rt := range m.routeTables {
+			rts = append(rts, rt)
+		}
+
+		return rts, nil
+	}
+
+	rts := make([]*RouteTable, 0, len(rtbIDs))
+
+	for _, id := range rtbIDs {
+		rt, exists := m.routeTables[id]
+		if !exists {
+			return nil, &Error{
+				Code:    "InvalidRouteTableId.NotFound",
+				Message: fmt.Sprintf("The routeTable ID '%s' does not exist", id),
+			}
+		}
+
+		rts = append(rts, rt)
+	}
+
+	return rts, nil
+}
+
+// CreateNatGateway creates a new NAT gateway.
+func (m *MemoryStorage) CreateNatGateway(_ context.Context, req *CreateNatGatewayRequest) (*NatGateway, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	subnet, exists := m.subnets[req.SubnetID]
+	if !exists {
+		return nil, &Error{
+			Code:    "InvalidSubnetID.NotFound",
+			Message: fmt.Sprintf("The subnet ID '%s' does not exist", req.SubnetID),
+		}
+	}
+
+	natgw := &NatGateway{
+		NatGatewayID: "nat-" + generateID(),
+		SubnetID:     req.SubnetID,
+		VpcID:        subnet.VpcID,
+		State:        "available",
+		Tags:         []Tag{},
+	}
+
+	if req.ConnectivityType == "private" {
+		natgw.ConnectivityType = "private"
+	} else {
+		natgw.ConnectivityType = "public"
+		natgw.AllocationID = req.AllocationID
+	}
+
+	m.natGateways[natgw.NatGatewayID] = natgw
+
+	return natgw, nil
+}
+
+// DescribeNatGateways describes NAT gateways.
+func (m *MemoryStorage) DescribeNatGateways(_ context.Context, natgwIDs []string) ([]*NatGateway, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if len(natgwIDs) == 0 {
+		natgws := make([]*NatGateway, 0, len(m.natGateways))
+		for _, natgw := range m.natGateways {
+			natgws = append(natgws, natgw)
+		}
+
+		return natgws, nil
+	}
+
+	natgws := make([]*NatGateway, 0, len(natgwIDs))
+
+	for _, id := range natgwIDs {
+		natgw, exists := m.natGateways[id]
+		if !exists {
+			return nil, &Error{
+				Code:    "NatGatewayNotFound",
+				Message: fmt.Sprintf("The natGateway ID '%s' does not exist", id),
+			}
+		}
+
+		natgws = append(natgws, natgw)
+	}
+
+	return natgws, nil
+}
+
+// containsString checks if a slice contains a string.
+func containsString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+
+	return false
 }

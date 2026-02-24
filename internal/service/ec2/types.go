@@ -350,3 +350,406 @@ type Error struct {
 func (e *Error) Error() string {
 	return e.Code + ": " + e.Message
 }
+
+// VPC Domain Types
+
+// Vpc represents a VPC.
+type Vpc struct {
+	VpcID           string
+	CidrBlock       string
+	State           string
+	IsDefault       bool
+	InstanceTenancy string
+	Tags            []Tag
+}
+
+// Subnet represents a subnet.
+type Subnet struct {
+	SubnetID                string
+	VpcID                   string
+	CidrBlock               string
+	AvailabilityZone        string
+	AvailableIPAddressCount int
+	State                   string
+	MapPublicIPOnLaunch     bool
+	Tags                    []Tag
+}
+
+// InternetGateway represents an internet gateway.
+type InternetGateway struct {
+	InternetGatewayID string
+	Attachments       []InternetGatewayAttachment
+	Tags              []Tag
+}
+
+// InternetGatewayAttachment represents an attachment of an internet gateway to a VPC.
+type InternetGatewayAttachment struct {
+	VpcID string
+	State string
+}
+
+// RouteTable represents a route table.
+type RouteTable struct {
+	RouteTableID string
+	VpcID        string
+	Routes       []Route
+	Associations []RouteTableAssociation
+	Tags         []Tag
+}
+
+// Route represents a route in a route table.
+type Route struct {
+	DestinationCidrBlock string
+	GatewayID            string
+	NatGatewayID         string
+	State                string
+	Origin               string
+}
+
+// RouteTableAssociation represents an association between a route table and a subnet.
+type RouteTableAssociation struct {
+	RouteTableAssociationID string
+	RouteTableID            string
+	SubnetID                string
+	Main                    bool
+}
+
+// NatGateway represents a NAT gateway.
+type NatGateway struct {
+	NatGatewayID     string
+	SubnetID         string
+	VpcID            string
+	State            string
+	ConnectivityType string
+	AllocationID     string
+	Tags             []Tag
+}
+
+// VPC Request Types
+
+// CreateVpcRequest represents a CreateVpc request.
+type CreateVpcRequest struct {
+	CidrBlock       string `json:"CidrBlock"`
+	InstanceTenancy string `json:"InstanceTenancy,omitempty"`
+}
+
+// DeleteVpcRequest represents a DeleteVpc request.
+type DeleteVpcRequest struct {
+	VpcID string `json:"VpcId"`
+}
+
+// DescribeVpcsRequest represents a DescribeVpcs request.
+type DescribeVpcsRequest struct {
+	VpcIDs []string `json:"VpcIds,omitempty"`
+}
+
+// CreateSubnetRequest represents a CreateSubnet request.
+type CreateSubnetRequest struct {
+	VpcID            string `json:"VpcId"`
+	CidrBlock        string `json:"CidrBlock"`
+	AvailabilityZone string `json:"AvailabilityZone,omitempty"`
+}
+
+// DeleteSubnetRequest represents a DeleteSubnet request.
+type DeleteSubnetRequest struct {
+	SubnetID string `json:"SubnetId"`
+}
+
+// DescribeSubnetsRequest represents a DescribeSubnets request.
+type DescribeSubnetsRequest struct {
+	SubnetIDs []string `json:"SubnetIds,omitempty"`
+}
+
+// CreateInternetGatewayRequest represents a CreateInternetGateway request.
+type CreateInternetGatewayRequest struct{}
+
+// AttachInternetGatewayRequest represents an AttachInternetGateway request.
+type AttachInternetGatewayRequest struct {
+	InternetGatewayID string `json:"InternetGatewayId"`
+	VpcID             string `json:"VpcId"`
+}
+
+// CreateRouteTableRequest represents a CreateRouteTable request.
+type CreateRouteTableRequest struct {
+	VpcID string `json:"VpcId"`
+}
+
+// CreateRouteRequest represents a CreateRoute request.
+type CreateRouteRequest struct {
+	RouteTableID         string `json:"RouteTableId"`
+	DestinationCidrBlock string `json:"DestinationCidrBlock"`
+	GatewayID            string `json:"GatewayId,omitempty"`
+	NatGatewayID         string `json:"NatGatewayId,omitempty"`
+}
+
+// AssociateRouteTableRequest represents an AssociateRouteTable request.
+type AssociateRouteTableRequest struct {
+	RouteTableID string `json:"RouteTableId"`
+	SubnetID     string `json:"SubnetId"`
+}
+
+// CreateNatGatewayRequest represents a CreateNatGateway request.
+type CreateNatGatewayRequest struct {
+	SubnetID         string `json:"SubnetId"`
+	AllocationID     string `json:"AllocationId,omitempty"`
+	ConnectivityType string `json:"ConnectivityType,omitempty"`
+}
+
+// VPC XML Response Types
+
+// XMLCreateVpcResponse is the XML response for CreateVpc.
+type XMLCreateVpcResponse struct {
+	XMLName   xml.Name `xml:"CreateVpcResponse"`
+	Xmlns     string   `xml:"xmlns,attr"`
+	RequestID string   `xml:"requestId"`
+	Vpc       XMLVpc   `xml:"vpc"`
+}
+
+// XMLVpc represents a VPC in XML format.
+type XMLVpc struct {
+	VpcID           string    `xml:"vpcId"`
+	CidrBlock       string    `xml:"cidrBlock"`
+	State           string    `xml:"state"`
+	IsDefault       bool      `xml:"isDefault"`
+	InstanceTenancy string    `xml:"instanceTenancy"`
+	TagSet          XMLTagSet `xml:"tagSet"`
+}
+
+// XMLTagSet contains a list of tags.
+type XMLTagSet struct {
+	Items []XMLTag `xml:"item"`
+}
+
+// XMLTag represents a tag in XML format.
+type XMLTag struct {
+	Key   string `xml:"key"`
+	Value string `xml:"value"`
+}
+
+// XMLDeleteVpcResponse is the XML response for DeleteVpc.
+type XMLDeleteVpcResponse struct {
+	XMLName   xml.Name `xml:"DeleteVpcResponse"`
+	Xmlns     string   `xml:"xmlns,attr"`
+	RequestID string   `xml:"requestId"`
+	Return    bool     `xml:"return"`
+}
+
+// XMLDescribeVpcsResponse is the XML response for DescribeVpcs.
+type XMLDescribeVpcsResponse struct {
+	XMLName   xml.Name  `xml:"DescribeVpcsResponse"`
+	Xmlns     string    `xml:"xmlns,attr"`
+	RequestID string    `xml:"requestId"`
+	VpcSet    XMLVpcSet `xml:"vpcSet"`
+}
+
+// XMLVpcSet contains a list of VPCs.
+type XMLVpcSet struct {
+	Items []XMLVpc `xml:"item"`
+}
+
+// XMLCreateSubnetResponse is the XML response for CreateSubnet.
+type XMLCreateSubnetResponse struct {
+	XMLName   xml.Name  `xml:"CreateSubnetResponse"`
+	Xmlns     string    `xml:"xmlns,attr"`
+	RequestID string    `xml:"requestId"`
+	Subnet    XMLSubnet `xml:"subnet"`
+}
+
+// XMLSubnet represents a subnet in XML format.
+type XMLSubnet struct {
+	SubnetID                string    `xml:"subnetId"`
+	VpcID                   string    `xml:"vpcId"`
+	CidrBlock               string    `xml:"cidrBlock"`
+	AvailabilityZone        string    `xml:"availabilityZone"`
+	AvailableIPAddressCount int       `xml:"availableIpAddressCount"`
+	State                   string    `xml:"state"`
+	MapPublicIPOnLaunch     bool      `xml:"mapPublicIpOnLaunch"`
+	TagSet                  XMLTagSet `xml:"tagSet"`
+}
+
+// XMLDeleteSubnetResponse is the XML response for DeleteSubnet.
+type XMLDeleteSubnetResponse struct {
+	XMLName   xml.Name `xml:"DeleteSubnetResponse"`
+	Xmlns     string   `xml:"xmlns,attr"`
+	RequestID string   `xml:"requestId"`
+	Return    bool     `xml:"return"`
+}
+
+// XMLDescribeSubnetsResponse is the XML response for DescribeSubnets.
+type XMLDescribeSubnetsResponse struct {
+	XMLName   xml.Name     `xml:"DescribeSubnetsResponse"`
+	Xmlns     string       `xml:"xmlns,attr"`
+	RequestID string       `xml:"requestId"`
+	SubnetSet XMLSubnetSet `xml:"subnetSet"`
+}
+
+// XMLSubnetSet contains a list of subnets.
+type XMLSubnetSet struct {
+	Items []XMLSubnet `xml:"item"`
+}
+
+// XMLCreateInternetGatewayResponse is the XML response for CreateInternetGateway.
+type XMLCreateInternetGatewayResponse struct {
+	XMLName         xml.Name           `xml:"CreateInternetGatewayResponse"`
+	Xmlns           string             `xml:"xmlns,attr"`
+	RequestID       string             `xml:"requestId"`
+	InternetGateway XMLInternetGateway `xml:"internetGateway"`
+}
+
+// XMLInternetGateway represents an internet gateway in XML format.
+type XMLInternetGateway struct {
+	InternetGatewayID string                          `xml:"internetGatewayId"`
+	AttachmentSet     XMLInternetGatewayAttachmentSet `xml:"attachmentSet"`
+	TagSet            XMLTagSet                       `xml:"tagSet"`
+}
+
+// XMLInternetGatewayAttachmentSet contains a list of internet gateway attachments.
+type XMLInternetGatewayAttachmentSet struct {
+	Items []XMLInternetGatewayAttachment `xml:"item"`
+}
+
+// XMLInternetGatewayAttachment represents an internet gateway attachment in XML format.
+type XMLInternetGatewayAttachment struct {
+	VpcID string `xml:"vpcId"`
+	State string `xml:"state"`
+}
+
+// XMLAttachInternetGatewayResponse is the XML response for AttachInternetGateway.
+type XMLAttachInternetGatewayResponse struct {
+	XMLName   xml.Name `xml:"AttachInternetGatewayResponse"`
+	Xmlns     string   `xml:"xmlns,attr"`
+	RequestID string   `xml:"requestId"`
+	Return    bool     `xml:"return"`
+}
+
+// XMLCreateRouteTableResponse is the XML response for CreateRouteTable.
+type XMLCreateRouteTableResponse struct {
+	XMLName    xml.Name      `xml:"CreateRouteTableResponse"`
+	Xmlns      string        `xml:"xmlns,attr"`
+	RequestID  string        `xml:"requestId"`
+	RouteTable XMLRouteTable `xml:"routeTable"`
+}
+
+// XMLRouteTable represents a route table in XML format.
+type XMLRouteTable struct {
+	RouteTableID   string                      `xml:"routeTableId"`
+	VpcID          string                      `xml:"vpcId"`
+	RouteSet       XMLRouteSet                 `xml:"routeSet"`
+	AssociationSet XMLRouteTableAssociationSet `xml:"associationSet"`
+	TagSet         XMLTagSet                   `xml:"tagSet"`
+}
+
+// XMLRouteSet contains a list of routes.
+type XMLRouteSet struct {
+	Items []XMLRoute `xml:"item"`
+}
+
+// XMLRoute represents a route in XML format.
+type XMLRoute struct {
+	DestinationCidrBlock string `xml:"destinationCidrBlock"`
+	GatewayID            string `xml:"gatewayId,omitempty"`
+	NatGatewayID         string `xml:"natGatewayId,omitempty"`
+	State                string `xml:"state"`
+	Origin               string `xml:"origin"`
+}
+
+// XMLRouteTableAssociationSet contains a list of route table associations.
+type XMLRouteTableAssociationSet struct {
+	Items []XMLRouteTableAssociation `xml:"item"`
+}
+
+// XMLRouteTableAssociation represents a route table association in XML format.
+type XMLRouteTableAssociation struct {
+	RouteTableAssociationID string `xml:"routeTableAssociationId"`
+	RouteTableID            string `xml:"routeTableId"`
+	SubnetID                string `xml:"subnetId,omitempty"`
+	Main                    bool   `xml:"main"`
+}
+
+// XMLCreateRouteResponse is the XML response for CreateRoute.
+type XMLCreateRouteResponse struct {
+	XMLName   xml.Name `xml:"CreateRouteResponse"`
+	Xmlns     string   `xml:"xmlns,attr"`
+	RequestID string   `xml:"requestId"`
+	Return    bool     `xml:"return"`
+}
+
+// XMLAssociateRouteTableResponse is the XML response for AssociateRouteTable.
+type XMLAssociateRouteTableResponse struct {
+	XMLName       xml.Name `xml:"AssociateRouteTableResponse"`
+	Xmlns         string   `xml:"xmlns,attr"`
+	RequestID     string   `xml:"requestId"`
+	AssociationID string   `xml:"associationId"`
+}
+
+// XMLCreateNatGatewayResponse is the XML response for CreateNatGateway.
+type XMLCreateNatGatewayResponse struct {
+	XMLName    xml.Name      `xml:"CreateNatGatewayResponse"`
+	Xmlns      string        `xml:"xmlns,attr"`
+	RequestID  string        `xml:"requestId"`
+	NatGateway XMLNatGateway `xml:"natGateway"`
+}
+
+// XMLNatGateway represents a NAT gateway in XML format.
+type XMLNatGateway struct {
+	NatGatewayID     string    `xml:"natGatewayId"`
+	SubnetID         string    `xml:"subnetId"`
+	VpcID            string    `xml:"vpcId"`
+	State            string    `xml:"state"`
+	ConnectivityType string    `xml:"connectivityType"`
+	TagSet           XMLTagSet `xml:"tagSet"`
+}
+
+// DescribeInternetGatewaysRequest represents a DescribeInternetGateways request.
+type DescribeInternetGatewaysRequest struct {
+	InternetGatewayIDs []string `json:"InternetGatewayIds,omitempty"`
+}
+
+// DescribeRouteTablesRequest represents a DescribeRouteTables request.
+type DescribeRouteTablesRequest struct {
+	RouteTableIDs []string `json:"RouteTableIds,omitempty"`
+}
+
+// DescribeNatGatewaysRequest represents a DescribeNatGateways request.
+type DescribeNatGatewaysRequest struct {
+	NatGatewayIDs []string `json:"NatGatewayIds,omitempty"`
+}
+
+// XMLDescribeInternetGatewaysResponse is the XML response for DescribeInternetGateways.
+type XMLDescribeInternetGatewaysResponse struct {
+	XMLName            xml.Name              `xml:"DescribeInternetGatewaysResponse"`
+	Xmlns              string                `xml:"xmlns,attr"`
+	RequestID          string                `xml:"requestId"`
+	InternetGatewaySet XMLInternetGatewaySet `xml:"internetGatewaySet"`
+}
+
+// XMLInternetGatewaySet contains a list of internet gateways.
+type XMLInternetGatewaySet struct {
+	Items []XMLInternetGateway `xml:"item"`
+}
+
+// XMLDescribeRouteTablesResponse is the XML response for DescribeRouteTables.
+type XMLDescribeRouteTablesResponse struct {
+	XMLName       xml.Name         `xml:"DescribeRouteTablesResponse"`
+	Xmlns         string           `xml:"xmlns,attr"`
+	RequestID     string           `xml:"requestId"`
+	RouteTableSet XMLRouteTableSet `xml:"routeTableSet"`
+}
+
+// XMLRouteTableSet contains a list of route tables.
+type XMLRouteTableSet struct {
+	Items []XMLRouteTable `xml:"item"`
+}
+
+// XMLDescribeNatGatewaysResponse is the XML response for DescribeNatGateways.
+type XMLDescribeNatGatewaysResponse struct {
+	XMLName       xml.Name         `xml:"DescribeNatGatewaysResponse"`
+	Xmlns         string           `xml:"xmlns,attr"`
+	RequestID     string           `xml:"requestId"`
+	NatGatewaySet XMLNatGatewaySet `xml:"natGatewaySet"`
+}
+
+// XMLNatGatewaySet contains a list of NAT gateways.
+type XMLNatGatewaySet struct {
+	Items []XMLNatGateway `xml:"item"`
+}

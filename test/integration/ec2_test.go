@@ -312,3 +312,394 @@ func TestEC2_DescribeKeyPairs(t *testing.T) {
 		t.Errorf("expected key name %s, got %s", keyName, *descResult.KeyPairs[0].KeyName)
 	}
 }
+
+func TestEC2_CreateAndDeleteVpc(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC
+	createResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	if createResult.Vpc == nil {
+		t.Fatal("expected VPC to be set")
+	}
+
+	if createResult.Vpc.VpcId == nil {
+		t.Error("expected VPC ID to be set")
+	}
+
+	vpcID := *createResult.Vpc.VpcId
+
+	// Delete VPC
+	_, err = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		VpcId: aws.String(vpcID),
+	})
+	if err != nil {
+		t.Fatalf("failed to delete VPC: %v", err)
+	}
+}
+
+func TestEC2_DescribeVpcs(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC
+	createResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *createResult.Vpc.VpcId
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Describe VPCs
+	descResult, err := client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		VpcIds: []string{vpcID},
+	})
+	if err != nil {
+		t.Fatalf("failed to describe VPCs: %v", err)
+	}
+
+	if len(descResult.Vpcs) != 1 {
+		t.Errorf("expected 1 VPC, got %d", len(descResult.Vpcs))
+	}
+
+	if *descResult.Vpcs[0].VpcId != vpcID {
+		t.Errorf("expected VPC ID %s, got %s", vpcID, *descResult.Vpcs[0].VpcId)
+	}
+}
+
+func TestEC2_CreateAndDeleteSubnet(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC first
+	vpcResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *vpcResult.Vpc.VpcId
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Create Subnet
+	subnetResult, err := client.CreateSubnet(ctx, &ec2.CreateSubnetInput{
+		VpcId:     aws.String(vpcID),
+		CidrBlock: aws.String("10.0.1.0/24"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create subnet: %v", err)
+	}
+
+	if subnetResult.Subnet == nil {
+		t.Fatal("expected subnet to be set")
+	}
+
+	subnetID := *subnetResult.Subnet.SubnetId
+
+	// Delete Subnet
+	_, err = client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+		SubnetId: aws.String(subnetID),
+	})
+	if err != nil {
+		t.Fatalf("failed to delete subnet: %v", err)
+	}
+}
+
+func TestEC2_CreateInternetGatewayAndAttach(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC first
+	vpcResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *vpcResult.Vpc.VpcId
+
+	// Create Internet Gateway
+	igwResult, err := client.CreateInternetGateway(ctx, &ec2.CreateInternetGatewayInput{})
+	if err != nil {
+		t.Fatalf("failed to create internet gateway: %v", err)
+	}
+
+	if igwResult.InternetGateway == nil {
+		t.Fatal("expected internet gateway to be set")
+	}
+
+	igwID := *igwResult.InternetGateway.InternetGatewayId
+
+	t.Cleanup(func() {
+		_, _ = client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+			VpcId:             aws.String(vpcID),
+		})
+		_, _ = client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+		})
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Attach Internet Gateway to VPC
+	_, err = client.AttachInternetGateway(ctx, &ec2.AttachInternetGatewayInput{
+		InternetGatewayId: aws.String(igwID),
+		VpcId:             aws.String(vpcID),
+	})
+	if err != nil {
+		t.Fatalf("failed to attach internet gateway: %v", err)
+	}
+
+	// Describe Internet Gateways
+	descResult, err := client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
+		InternetGatewayIds: []string{igwID},
+	})
+	if err != nil {
+		t.Fatalf("failed to describe internet gateways: %v", err)
+	}
+
+	if len(descResult.InternetGateways) != 1 {
+		t.Errorf("expected 1 internet gateway, got %d", len(descResult.InternetGateways))
+	}
+
+	if len(descResult.InternetGateways[0].Attachments) != 1 {
+		t.Errorf("expected 1 attachment, got %d", len(descResult.InternetGateways[0].Attachments))
+	}
+
+	if *descResult.InternetGateways[0].Attachments[0].VpcId != vpcID {
+		t.Errorf("expected attachment VPC ID %s, got %s", vpcID, *descResult.InternetGateways[0].Attachments[0].VpcId)
+	}
+}
+
+func TestEC2_CreateRouteTableAndAssociate(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC first
+	vpcResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *vpcResult.Vpc.VpcId
+
+	// Create Subnet
+	subnetResult, err := client.CreateSubnet(ctx, &ec2.CreateSubnetInput{
+		VpcId:     aws.String(vpcID),
+		CidrBlock: aws.String("10.0.1.0/24"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create subnet: %v", err)
+	}
+
+	subnetID := *subnetResult.Subnet.SubnetId
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+			SubnetId: aws.String(subnetID),
+		})
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Create Route Table
+	rtResult, err := client.CreateRouteTable(ctx, &ec2.CreateRouteTableInput{
+		VpcId: aws.String(vpcID),
+	})
+	if err != nil {
+		t.Fatalf("failed to create route table: %v", err)
+	}
+
+	if rtResult.RouteTable == nil {
+		t.Fatal("expected route table to be set")
+	}
+
+	rtID := *rtResult.RouteTable.RouteTableId
+
+	// Associate Route Table with Subnet
+	assocResult, err := client.AssociateRouteTable(ctx, &ec2.AssociateRouteTableInput{
+		RouteTableId: aws.String(rtID),
+		SubnetId:     aws.String(subnetID),
+	})
+	if err != nil {
+		t.Fatalf("failed to associate route table: %v", err)
+	}
+
+	if assocResult.AssociationId == nil {
+		t.Error("expected association ID to be set")
+	}
+}
+
+func TestEC2_CreateRoute(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC first
+	vpcResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *vpcResult.Vpc.VpcId
+
+	// Create Internet Gateway
+	igwResult, err := client.CreateInternetGateway(ctx, &ec2.CreateInternetGatewayInput{})
+	if err != nil {
+		t.Fatalf("failed to create internet gateway: %v", err)
+	}
+
+	igwID := *igwResult.InternetGateway.InternetGatewayId
+
+	// Attach Internet Gateway to VPC
+	_, err = client.AttachInternetGateway(ctx, &ec2.AttachInternetGatewayInput{
+		InternetGatewayId: aws.String(igwID),
+		VpcId:             aws.String(vpcID),
+	})
+	if err != nil {
+		t.Fatalf("failed to attach internet gateway: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+			VpcId:             aws.String(vpcID),
+		})
+		_, _ = client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+		})
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Create Route Table
+	rtResult, err := client.CreateRouteTable(ctx, &ec2.CreateRouteTableInput{
+		VpcId: aws.String(vpcID),
+	})
+	if err != nil {
+		t.Fatalf("failed to create route table: %v", err)
+	}
+
+	rtID := *rtResult.RouteTable.RouteTableId
+
+	// Create Route
+	_, err = client.CreateRoute(ctx, &ec2.CreateRouteInput{
+		RouteTableId:         aws.String(rtID),
+		DestinationCidrBlock: aws.String("0.0.0.0/0"),
+		GatewayId:            aws.String(igwID),
+	})
+	if err != nil {
+		t.Fatalf("failed to create route: %v", err)
+	}
+
+	// Describe Route Tables
+	descResult, err := client.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []string{rtID},
+	})
+	if err != nil {
+		t.Fatalf("failed to describe route tables: %v", err)
+	}
+
+	if len(descResult.RouteTables) != 1 {
+		t.Errorf("expected 1 route table, got %d", len(descResult.RouteTables))
+	}
+
+	// Check for the new route (should have local + our new route)
+	if len(descResult.RouteTables[0].Routes) < 2 {
+		t.Errorf("expected at least 2 routes, got %d", len(descResult.RouteTables[0].Routes))
+	}
+}
+
+func TestEC2_CreateNatGateway(t *testing.T) {
+	client := newEC2Client(t)
+	ctx := t.Context()
+
+	// Create VPC first
+	vpcResult, err := client.CreateVpc(ctx, &ec2.CreateVpcInput{
+		CidrBlock: aws.String("10.0.0.0/16"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create VPC: %v", err)
+	}
+
+	vpcID := *vpcResult.Vpc.VpcId
+
+	// Create Subnet
+	subnetResult, err := client.CreateSubnet(ctx, &ec2.CreateSubnetInput{
+		VpcId:     aws.String(vpcID),
+		CidrBlock: aws.String("10.0.1.0/24"),
+	})
+	if err != nil {
+		t.Fatalf("failed to create subnet: %v", err)
+	}
+
+	subnetID := *subnetResult.Subnet.SubnetId
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+			SubnetId: aws.String(subnetID),
+		})
+		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+			VpcId: aws.String(vpcID),
+		})
+	})
+
+	// Create NAT Gateway (private connectivity type - no EIP required)
+	natgwResult, err := client.CreateNatGateway(ctx, &ec2.CreateNatGatewayInput{
+		SubnetId:         aws.String(subnetID),
+		ConnectivityType: types.ConnectivityTypePrivate,
+	})
+	if err != nil {
+		t.Fatalf("failed to create NAT gateway: %v", err)
+	}
+
+	if natgwResult.NatGateway == nil {
+		t.Fatal("expected NAT gateway to be set")
+	}
+
+	natgwID := *natgwResult.NatGateway.NatGatewayId
+
+	// Describe NAT Gateways
+	descResult, err := client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{
+		NatGatewayIds: []string{natgwID},
+	})
+	if err != nil {
+		t.Fatalf("failed to describe NAT gateways: %v", err)
+	}
+
+	if len(descResult.NatGateways) != 1 {
+		t.Errorf("expected 1 NAT gateway, got %d", len(descResult.NatGateways))
+	}
+
+	if *descResult.NatGateways[0].NatGatewayId != natgwID {
+		t.Errorf("expected NAT gateway ID %s, got %s", natgwID, *descResult.NatGateways[0].NatGatewayId)
+	}
+}

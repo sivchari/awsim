@@ -399,6 +399,450 @@ func (s *Service) DescribeKeyPairs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateVpc handles the CreateVpc action.
+func (s *Service) CreateVpc(w http.ResponseWriter, r *http.Request) {
+	var req CreateVpcRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.CidrBlock == "" {
+		writeError(w, errInvalidParameter, "CidrBlock is required", http.StatusBadRequest)
+
+		return
+	}
+
+	vpc, err := s.storage.CreateVpc(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateVpcResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Vpc:       convertToXMLVpc(vpc),
+	})
+}
+
+// DeleteVpc handles the DeleteVpc action.
+func (s *Service) DeleteVpc(w http.ResponseWriter, r *http.Request) {
+	var req DeleteVpcRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.VpcID == "" {
+		writeError(w, errInvalidParameter, "VpcId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.DeleteVpc(r.Context(), req.VpcID); err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLDeleteVpcResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Return:    true,
+	})
+}
+
+// DescribeVpcs handles the DescribeVpcs action.
+func (s *Service) DescribeVpcs(w http.ResponseWriter, r *http.Request) {
+	var req DescribeVpcsRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	vpcs, err := s.storage.DescribeVpcs(r.Context(), req.VpcIDs)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	xmlVpcs := make([]XMLVpc, 0, len(vpcs))
+	for _, vpc := range vpcs {
+		xmlVpcs = append(xmlVpcs, convertToXMLVpc(vpc))
+	}
+
+	writeEC2XMLResponse(w, XMLDescribeVpcsResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		VpcSet:    XMLVpcSet{Items: xmlVpcs},
+	})
+}
+
+// CreateSubnet handles the CreateSubnet action.
+func (s *Service) CreateSubnet(w http.ResponseWriter, r *http.Request) {
+	var req CreateSubnetRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.VpcID == "" {
+		writeError(w, errInvalidParameter, "VpcId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.CidrBlock == "" {
+		writeError(w, errInvalidParameter, "CidrBlock is required", http.StatusBadRequest)
+
+		return
+	}
+
+	subnet, err := s.storage.CreateSubnet(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateSubnetResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Subnet:    convertToXMLSubnet(subnet),
+	})
+}
+
+// DeleteSubnet handles the DeleteSubnet action.
+func (s *Service) DeleteSubnet(w http.ResponseWriter, r *http.Request) {
+	var req DeleteSubnetRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.SubnetID == "" {
+		writeError(w, errInvalidParameter, "SubnetId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.DeleteSubnet(r.Context(), req.SubnetID); err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLDeleteSubnetResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Return:    true,
+	})
+}
+
+// DescribeSubnets handles the DescribeSubnets action.
+func (s *Service) DescribeSubnets(w http.ResponseWriter, r *http.Request) {
+	var req DescribeSubnetsRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	subnets, err := s.storage.DescribeSubnets(r.Context(), req.SubnetIDs, nil)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	xmlSubnets := make([]XMLSubnet, 0, len(subnets))
+	for _, subnet := range subnets {
+		xmlSubnets = append(xmlSubnets, convertToXMLSubnet(subnet))
+	}
+
+	writeEC2XMLResponse(w, XMLDescribeSubnetsResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		SubnetSet: XMLSubnetSet{Items: xmlSubnets},
+	})
+}
+
+// CreateInternetGateway handles the CreateInternetGateway action.
+func (s *Service) CreateInternetGateway(w http.ResponseWriter, r *http.Request) {
+	var req CreateInternetGatewayRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	igw, err := s.storage.CreateInternetGateway(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateInternetGatewayResponse{
+		Xmlns:           ec2XMLNS,
+		RequestID:       uuid.New().String(),
+		InternetGateway: convertToXMLInternetGateway(igw),
+	})
+}
+
+// AttachInternetGateway handles the AttachInternetGateway action.
+func (s *Service) AttachInternetGateway(w http.ResponseWriter, r *http.Request) {
+	var req AttachInternetGatewayRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.InternetGatewayID == "" {
+		writeError(w, errInvalidParameter, "InternetGatewayId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.VpcID == "" {
+		writeError(w, errInvalidParameter, "VpcId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.AttachInternetGateway(r.Context(), req.InternetGatewayID, req.VpcID); err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLAttachInternetGatewayResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Return:    true,
+	})
+}
+
+// DescribeInternetGateways handles the DescribeInternetGateways action.
+func (s *Service) DescribeInternetGateways(w http.ResponseWriter, r *http.Request) {
+	var req DescribeInternetGatewaysRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	igws, err := s.storage.DescribeInternetGateways(r.Context(), req.InternetGatewayIDs)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	xmlIgws := make([]XMLInternetGateway, 0, len(igws))
+	for _, igw := range igws {
+		xmlIgws = append(xmlIgws, convertToXMLInternetGateway(igw))
+	}
+
+	writeEC2XMLResponse(w, XMLDescribeInternetGatewaysResponse{
+		Xmlns:              ec2XMLNS,
+		RequestID:          uuid.New().String(),
+		InternetGatewaySet: XMLInternetGatewaySet{Items: xmlIgws},
+	})
+}
+
+// CreateRouteTable handles the CreateRouteTable action.
+func (s *Service) CreateRouteTable(w http.ResponseWriter, r *http.Request) {
+	var req CreateRouteTableRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.VpcID == "" {
+		writeError(w, errInvalidParameter, "VpcId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	rt, err := s.storage.CreateRouteTable(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateRouteTableResponse{
+		Xmlns:      ec2XMLNS,
+		RequestID:  uuid.New().String(),
+		RouteTable: convertToXMLRouteTable(rt),
+	})
+}
+
+// CreateRoute handles the CreateRoute action.
+func (s *Service) CreateRoute(w http.ResponseWriter, r *http.Request) {
+	var req CreateRouteRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.RouteTableID == "" {
+		writeError(w, errInvalidParameter, "RouteTableId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.DestinationCidrBlock == "" {
+		writeError(w, errInvalidParameter, "DestinationCidrBlock is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.CreateRoute(r.Context(), &req); err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateRouteResponse{
+		Xmlns:     ec2XMLNS,
+		RequestID: uuid.New().String(),
+		Return:    true,
+	})
+}
+
+// AssociateRouteTable handles the AssociateRouteTable action.
+func (s *Service) AssociateRouteTable(w http.ResponseWriter, r *http.Request) {
+	var req AssociateRouteTableRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.RouteTableID == "" {
+		writeError(w, errInvalidParameter, "RouteTableId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.SubnetID == "" {
+		writeError(w, errInvalidParameter, "SubnetId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	associationID, err := s.storage.AssociateRouteTable(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLAssociateRouteTableResponse{
+		Xmlns:         ec2XMLNS,
+		RequestID:     uuid.New().String(),
+		AssociationID: associationID,
+	})
+}
+
+// DescribeRouteTables handles the DescribeRouteTables action.
+func (s *Service) DescribeRouteTables(w http.ResponseWriter, r *http.Request) {
+	var req DescribeRouteTablesRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	rts, err := s.storage.DescribeRouteTables(r.Context(), req.RouteTableIDs)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	xmlRts := make([]XMLRouteTable, 0, len(rts))
+	for _, rt := range rts {
+		xmlRts = append(xmlRts, convertToXMLRouteTable(rt))
+	}
+
+	writeEC2XMLResponse(w, XMLDescribeRouteTablesResponse{
+		Xmlns:         ec2XMLNS,
+		RequestID:     uuid.New().String(),
+		RouteTableSet: XMLRouteTableSet{Items: xmlRts},
+	})
+}
+
+// CreateNatGateway handles the CreateNatGateway action.
+func (s *Service) CreateNatGateway(w http.ResponseWriter, r *http.Request) {
+	var req CreateNatGatewayRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.SubnetID == "" {
+		writeError(w, errInvalidParameter, "SubnetId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	natgw, err := s.storage.CreateNatGateway(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeEC2XMLResponse(w, XMLCreateNatGatewayResponse{
+		Xmlns:      ec2XMLNS,
+		RequestID:  uuid.New().String(),
+		NatGateway: convertToXMLNatGateway(natgw),
+	})
+}
+
+// DescribeNatGateways handles the DescribeNatGateways action.
+func (s *Service) DescribeNatGateways(w http.ResponseWriter, r *http.Request) {
+	var req DescribeNatGatewaysRequest
+	if err := readEC2JSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	natgws, err := s.storage.DescribeNatGateways(r.Context(), req.NatGatewayIDs)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	xmlNatgws := make([]XMLNatGateway, 0, len(natgws))
+	for _, natgw := range natgws {
+		xmlNatgws = append(xmlNatgws, convertToXMLNatGateway(natgw))
+	}
+
+	writeEC2XMLResponse(w, XMLDescribeNatGatewaysResponse{
+		Xmlns:         ec2XMLNS,
+		RequestID:     uuid.New().String(),
+		NatGatewaySet: XMLNatGatewaySet{Items: xmlNatgws},
+	})
+}
+
 // DispatchAction routes the request to the appropriate handler based on Action parameter.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	action := extractAction(r)
@@ -428,6 +872,36 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.DeleteKeyPair(w, r)
 	case "DescribeKeyPairs":
 		s.DescribeKeyPairs(w, r)
+	case "CreateVpc":
+		s.CreateVpc(w, r)
+	case "DeleteVpc":
+		s.DeleteVpc(w, r)
+	case "DescribeVpcs":
+		s.DescribeVpcs(w, r)
+	case "CreateSubnet":
+		s.CreateSubnet(w, r)
+	case "DeleteSubnet":
+		s.DeleteSubnet(w, r)
+	case "DescribeSubnets":
+		s.DescribeSubnets(w, r)
+	case "CreateInternetGateway":
+		s.CreateInternetGateway(w, r)
+	case "AttachInternetGateway":
+		s.AttachInternetGateway(w, r)
+	case "DescribeInternetGateways":
+		s.DescribeInternetGateways(w, r)
+	case "CreateRouteTable":
+		s.CreateRouteTable(w, r)
+	case "CreateRoute":
+		s.CreateRoute(w, r)
+	case "AssociateRouteTable":
+		s.AssociateRouteTable(w, r)
+	case "DescribeRouteTables":
+		s.DescribeRouteTables(w, r)
+	case "CreateNatGateway":
+		s.CreateNatGateway(w, r)
+	case "DescribeNatGateways":
+		s.DescribeNatGateways(w, r)
 	default:
 		writeError(w, errInvalidAction, fmt.Sprintf("The action '%s' is not valid", action), http.StatusBadRequest)
 	}
@@ -539,4 +1013,116 @@ func handleError(w http.ResponseWriter, err error) {
 	}
 
 	writeError(w, errInternalError, "Internal server error", http.StatusInternalServerError)
+}
+
+// convertToXMLVpc converts a Vpc to XMLVpc.
+func convertToXMLVpc(vpc *Vpc) XMLVpc {
+	tags := make([]XMLTag, 0, len(vpc.Tags))
+	for _, t := range vpc.Tags {
+		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+	}
+
+	return XMLVpc{
+		VpcID:           vpc.VpcID,
+		CidrBlock:       vpc.CidrBlock,
+		State:           vpc.State,
+		IsDefault:       vpc.IsDefault,
+		InstanceTenancy: vpc.InstanceTenancy,
+		TagSet:          XMLTagSet{Items: tags},
+	}
+}
+
+// convertToXMLSubnet converts a Subnet to XMLSubnet.
+func convertToXMLSubnet(subnet *Subnet) XMLSubnet {
+	tags := make([]XMLTag, 0, len(subnet.Tags))
+	for _, t := range subnet.Tags {
+		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+	}
+
+	return XMLSubnet{
+		SubnetID:                subnet.SubnetID,
+		VpcID:                   subnet.VpcID,
+		CidrBlock:               subnet.CidrBlock,
+		AvailabilityZone:        subnet.AvailabilityZone,
+		AvailableIPAddressCount: subnet.AvailableIPAddressCount,
+		State:                   subnet.State,
+		MapPublicIPOnLaunch:     subnet.MapPublicIPOnLaunch,
+		TagSet:                  XMLTagSet{Items: tags},
+	}
+}
+
+// convertToXMLInternetGateway converts an InternetGateway to XMLInternetGateway.
+func convertToXMLInternetGateway(igw *InternetGateway) XMLInternetGateway {
+	tags := make([]XMLTag, 0, len(igw.Tags))
+	for _, t := range igw.Tags {
+		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+	}
+
+	attachments := make([]XMLInternetGatewayAttachment, 0, len(igw.Attachments))
+	for _, a := range igw.Attachments {
+		attachments = append(attachments, XMLInternetGatewayAttachment{
+			VpcID: a.VpcID,
+			State: a.State,
+		})
+	}
+
+	return XMLInternetGateway{
+		InternetGatewayID: igw.InternetGatewayID,
+		AttachmentSet:     XMLInternetGatewayAttachmentSet{Items: attachments},
+		TagSet:            XMLTagSet{Items: tags},
+	}
+}
+
+// convertToXMLRouteTable converts a RouteTable to XMLRouteTable.
+func convertToXMLRouteTable(rt *RouteTable) XMLRouteTable {
+	tags := make([]XMLTag, 0, len(rt.Tags))
+	for _, t := range rt.Tags {
+		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+	}
+
+	routes := make([]XMLRoute, 0, len(rt.Routes))
+	for _, r := range rt.Routes {
+		routes = append(routes, XMLRoute{
+			DestinationCidrBlock: r.DestinationCidrBlock,
+			GatewayID:            r.GatewayID,
+			NatGatewayID:         r.NatGatewayID,
+			State:                r.State,
+			Origin:               r.Origin,
+		})
+	}
+
+	associations := make([]XMLRouteTableAssociation, 0, len(rt.Associations))
+	for _, a := range rt.Associations {
+		associations = append(associations, XMLRouteTableAssociation{
+			RouteTableAssociationID: a.RouteTableAssociationID,
+			RouteTableID:            a.RouteTableID,
+			SubnetID:                a.SubnetID,
+			Main:                    a.Main,
+		})
+	}
+
+	return XMLRouteTable{
+		RouteTableID:   rt.RouteTableID,
+		VpcID:          rt.VpcID,
+		RouteSet:       XMLRouteSet{Items: routes},
+		AssociationSet: XMLRouteTableAssociationSet{Items: associations},
+		TagSet:         XMLTagSet{Items: tags},
+	}
+}
+
+// convertToXMLNatGateway converts a NatGateway to XMLNatGateway.
+func convertToXMLNatGateway(natgw *NatGateway) XMLNatGateway {
+	tags := make([]XMLTag, 0, len(natgw.Tags))
+	for _, t := range natgw.Tags {
+		tags = append(tags, XMLTag{Key: t.Key, Value: t.Value})
+	}
+
+	return XMLNatGateway{
+		NatGatewayID:     natgw.NatGatewayID,
+		SubnetID:         natgw.SubnetID,
+		VpcID:            natgw.VpcID,
+		State:            natgw.State,
+		ConnectivityType: natgw.ConnectivityType,
+		TagSet:           XMLTagSet{Items: tags},
+	}
 }

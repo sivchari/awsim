@@ -46,18 +46,41 @@ func (s *Service) TargetPrefix() string {
 // Actions returns the list of action names this service handles.
 func (s *Service) Actions() []string {
 	return []string{
+		// Instance operations
 		"RunInstances",
 		"TerminateInstances",
 		"DescribeInstances",
 		"StartInstances",
 		"StopInstances",
+		// Security Group operations
 		"CreateSecurityGroup",
 		"DeleteSecurityGroup",
 		"AuthorizeSecurityGroupIngress",
 		"AuthorizeSecurityGroupEgress",
+		// Key Pair operations
 		"CreateKeyPair",
 		"DeleteKeyPair",
 		"DescribeKeyPairs",
+		// VPC operations
+		"CreateVpc",
+		"DeleteVpc",
+		"DescribeVpcs",
+		// Subnet operations
+		"CreateSubnet",
+		"DeleteSubnet",
+		"DescribeSubnets",
+		// Internet Gateway operations
+		"CreateInternetGateway",
+		"AttachInternetGateway",
+		"DescribeInternetGateways",
+		// Route Table operations
+		"CreateRouteTable",
+		"CreateRoute",
+		"AssociateRouteTable",
+		"DescribeRouteTables",
+		// NAT Gateway operations
+		"CreateNatGateway",
+		"DescribeNatGateways",
 	}
 }
 
