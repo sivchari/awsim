@@ -29,7 +29,7 @@ func (s *Service) Prefix() string {
 
 // TargetPrefix returns the X-Amz-Target prefix.
 func (s *Service) TargetPrefix() string {
-	return "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101"
+	return "CloudTrail_20131101"
 }
 
 // JSONProtocol marks this service as using AWS JSON protocol.

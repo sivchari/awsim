@@ -29,7 +29,7 @@ func (s *Service) getActionHandlers() map[string]handlerFunc {
 // DispatchAction dispatches the request to the appropriate handler.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
-	action := strings.TrimPrefix(target, "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.")
+	action := strings.TrimPrefix(target, "CloudTrail_20131101.")
 
 	handlers := s.getActionHandlers()
 	if handler, ok := handlers[action]; ok {
