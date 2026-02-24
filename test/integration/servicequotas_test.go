@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,10 +16,16 @@ import (
 func newServiceQuotasClient(t *testing.T) *servicequotas.Client {
 	t.Helper()
 
-	cfg := newAWSConfig(t)
+	cfg, err := config.LoadDefaultConfig(t.Context(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			"test", "test", "",
+		)),
+	)
+	require.NoError(t, err)
 
 	return servicequotas.NewFromConfig(cfg, func(o *servicequotas.Options) {
-		o.BaseEndpoint = aws.String(getEndpoint())
+		o.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 }
 
@@ -258,7 +266,7 @@ func TestServiceQuotas_EndToEnd(t *testing.T) {
 	var adjustableQuotaCode *string
 
 	for _, q := range quotasOutput.Quotas {
-		if q.Adjustable != nil && *q.Adjustable {
+		if q.Adjustable {
 			adjustableQuota = q.QuotaCode
 			adjustableQuotaCode = q.QuotaCode
 
