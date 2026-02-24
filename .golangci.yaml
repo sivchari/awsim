@@ -189,6 +189,10 @@ linters:
       - path: internal/service/servicequotas/types\.go
         linters:
           - tagliatelle
+      # AWS Organizations API requires PascalCase JSON field names.
+      - path: internal/service/organizations/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
