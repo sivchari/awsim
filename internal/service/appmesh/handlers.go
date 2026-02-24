@@ -34,7 +34,7 @@ func (s *Service) CreateMesh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateMeshOutput{Mesh: *mesh})
+	writeJSON(w, mesh)
 }
 
 // DescribeMesh handles the DescribeMesh API operation.
@@ -55,7 +55,7 @@ func (s *Service) DescribeMesh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &DescribeMeshOutput{Mesh: *mesh})
+	writeJSON(w, mesh)
 }
 
 // ListMeshes handles the ListMeshes API operation.
