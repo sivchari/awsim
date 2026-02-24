@@ -51,40 +51,71 @@ func NewMemoryStorage() *MemoryStorage {
 	}
 }
 
+// loadBalancerDefaults holds default values for load balancer creation.
+type loadBalancerDefaults struct {
+	lbType        string
+	scheme        string
+	ipAddressType string
+}
+
+// getLoadBalancerDefaults returns default values for load balancer fields.
+func getLoadBalancerDefaults(req *CreateLoadBalancerRequest) loadBalancerDefaults {
+	defaults := loadBalancerDefaults{
+		lbType:        req.Type,
+		scheme:        req.Scheme,
+		ipAddressType: req.IPAddressType,
+	}
+
+	if defaults.lbType == "" {
+		defaults.lbType = "application"
+	}
+
+	if defaults.scheme == "" {
+		defaults.scheme = "internet-facing"
+	}
+
+	if defaults.ipAddressType == "" {
+		defaults.ipAddressType = "ipv4"
+	}
+
+	return defaults
+}
+
 // CreateLoadBalancer creates a new load balancer.
 func (m *MemoryStorage) CreateLoadBalancer(_ context.Context, req *CreateLoadBalancerRequest) (*LoadBalancer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check for duplicate name.
+	if err := m.checkDuplicateLoadBalancerName(req.Name); err != nil {
+		return nil, err
+	}
+
+	defaults := getLoadBalancerDefaults(req)
+	lb := m.buildLoadBalancer(req, defaults)
+	m.loadBalancers[lb.LoadBalancerArn] = lb
+
+	return lb, nil
+}
+
+// checkDuplicateLoadBalancerName checks if a load balancer with the given name already exists.
+func (m *MemoryStorage) checkDuplicateLoadBalancerName(name string) error {
 	for _, lb := range m.loadBalancers {
-		if lb.LoadBalancerName == req.Name {
-			return nil, &Error{
+		if lb.LoadBalancerName == name {
+			return &Error{
 				Code:    "DuplicateLoadBalancerName",
-				Message: fmt.Sprintf("A load balancer with the name '%s' already exists", req.Name),
+				Message: fmt.Sprintf("A load balancer with the name '%s' already exists", name),
 			}
 		}
 	}
 
-	lbType := req.Type
-	if lbType == "" {
-		lbType = "application"
-	}
+	return nil
+}
 
-	scheme := req.Scheme
-	if scheme == "" {
-		scheme = "internet-facing"
-	}
-
-	ipAddressType := req.IPAddressType
-	if ipAddressType == "" {
-		ipAddressType = "ipv4"
-	}
-
+// buildLoadBalancer constructs a LoadBalancer from request and defaults.
+func (m *MemoryStorage) buildLoadBalancer(req *CreateLoadBalancerRequest, defaults loadBalancerDefaults) *LoadBalancer {
 	lbID := uuid.New().String()[:17]
 	arn := fmt.Sprintf("arn:aws:elasticloadbalancing:%s:%s:loadbalancer/%s/%s/%s",
-		defaultRegion, defaultAccountID, lbType[:3], req.Name, lbID)
-
+		defaultRegion, defaultAccountID, defaults.lbType[:3], req.Name, lbID)
 	dnsName := fmt.Sprintf("%s-%s.%s.elb.amazonaws.com", req.Name, lbID[:8], defaultRegion)
 
 	azs := make([]AvailabilityZone, 0, len(req.Subnets))
@@ -95,26 +126,20 @@ func (m *MemoryStorage) CreateLoadBalancer(_ context.Context, req *CreateLoadBal
 		})
 	}
 
-	lb := &LoadBalancer{
+	return &LoadBalancer{
 		LoadBalancerArn:       arn,
 		DNSName:               dnsName,
 		CanonicalHostedZoneID: "Z35SXDOTRQ7X7K",
 		CreatedTime:           time.Now(),
 		LoadBalancerName:      req.Name,
-		Scheme:                scheme,
+		Scheme:                defaults.scheme,
 		VpcID:                 "vpc-" + uuid.New().String()[:8],
-		State: LoadBalancerState{
-			Code: "active",
-		},
-		Type:              lbType,
-		AvailabilityZones: azs,
-		SecurityGroups:    req.SecurityGroups,
-		IPAddressType:     ipAddressType,
+		State:                 LoadBalancerState{Code: "active"},
+		Type:                  defaults.lbType,
+		AvailabilityZones:     azs,
+		SecurityGroups:        req.SecurityGroups,
+		IPAddressType:         defaults.ipAddressType,
 	}
-
-	m.loadBalancers[arn] = lb
-
-	return lb, nil
 }
 
 // DeleteLoadBalancer deletes a load balancer.
@@ -184,90 +209,123 @@ func (m *MemoryStorage) DescribeLoadBalancers(_ context.Context, arns, names []s
 	return result, nil
 }
 
+// targetGroupDefaults holds default values for target group creation.
+type targetGroupDefaults struct {
+	targetType          string
+	healthCheckPort     string
+	healthCheckProtocol string
+	healthCheckPath     string
+	healthCheckInterval int
+	healthCheckTimeout  int
+	healthyThreshold    int
+	unhealthyThreshold  int
+}
+
+// getTargetGroupDefaults returns default values for target group fields.
+func getTargetGroupDefaults(req *CreateTargetGroupRequest) targetGroupDefaults {
+	defaults := targetGroupDefaults{
+		targetType:          req.TargetType,
+		healthCheckPort:     req.HealthCheckPort,
+		healthCheckProtocol: req.HealthCheckProtocol,
+		healthCheckPath:     req.HealthCheckPath,
+		healthCheckInterval: req.HealthCheckIntervalSeconds,
+		healthCheckTimeout:  req.HealthCheckTimeoutSeconds,
+		healthyThreshold:    req.HealthyThresholdCount,
+		unhealthyThreshold:  req.UnhealthyThresholdCount,
+	}
+
+	if defaults.targetType == "" {
+		defaults.targetType = "instance"
+	}
+
+	if defaults.healthCheckPort == "" {
+		defaults.healthCheckPort = "traffic-port"
+	}
+
+	if defaults.healthCheckProtocol == "" {
+		defaults.healthCheckProtocol = req.Protocol
+		if defaults.healthCheckProtocol == "" {
+			defaults.healthCheckProtocol = "HTTP"
+		}
+	}
+
+	if defaults.healthCheckPath == "" && (defaults.healthCheckProtocol == "HTTP" || defaults.healthCheckProtocol == "HTTPS") {
+		defaults.healthCheckPath = "/"
+	}
+
+	if defaults.healthCheckInterval == 0 {
+		defaults.healthCheckInterval = 30
+	}
+
+	if defaults.healthCheckTimeout == 0 {
+		defaults.healthCheckTimeout = 5
+	}
+
+	if defaults.healthyThreshold == 0 {
+		defaults.healthyThreshold = 5
+	}
+
+	if defaults.unhealthyThreshold == 0 {
+		defaults.unhealthyThreshold = 2
+	}
+
+	return defaults
+}
+
 // CreateTargetGroup creates a new target group.
 func (m *MemoryStorage) CreateTargetGroup(_ context.Context, req *CreateTargetGroupRequest) (*TargetGroup, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check for duplicate name.
+	if err := m.checkDuplicateTargetGroupName(req.Name); err != nil {
+		return nil, err
+	}
+
+	defaults := getTargetGroupDefaults(req)
+	tg := m.buildTargetGroup(req, defaults)
+	m.targetGroups[tg.TargetGroupArn] = tg
+	m.targets[tg.TargetGroupArn] = []Target{}
+
+	return tg, nil
+}
+
+// checkDuplicateTargetGroupName checks if a target group with the given name already exists.
+func (m *MemoryStorage) checkDuplicateTargetGroupName(name string) error {
 	for _, tg := range m.targetGroups {
-		if tg.TargetGroupName == req.Name {
-			return nil, &Error{
+		if tg.TargetGroupName == name {
+			return &Error{
 				Code:    "DuplicateTargetGroupName",
-				Message: fmt.Sprintf("A target group with the name '%s' already exists", req.Name),
+				Message: fmt.Sprintf("A target group with the name '%s' already exists", name),
 			}
 		}
 	}
 
-	targetType := req.TargetType
-	if targetType == "" {
-		targetType = "instance"
-	}
+	return nil
+}
 
-	healthCheckPort := req.HealthCheckPort
-	if healthCheckPort == "" {
-		healthCheckPort = "traffic-port"
-	}
-
-	healthCheckProtocol := req.HealthCheckProtocol
-	if healthCheckProtocol == "" {
-		healthCheckProtocol = req.Protocol
-		if healthCheckProtocol == "" {
-			healthCheckProtocol = "HTTP"
-		}
-	}
-
-	healthCheckPath := req.HealthCheckPath
-	if healthCheckPath == "" && (healthCheckProtocol == "HTTP" || healthCheckProtocol == "HTTPS") {
-		healthCheckPath = "/"
-	}
-
-	healthCheckInterval := req.HealthCheckIntervalSeconds
-	if healthCheckInterval == 0 {
-		healthCheckInterval = 30
-	}
-
-	healthCheckTimeout := req.HealthCheckTimeoutSeconds
-	if healthCheckTimeout == 0 {
-		healthCheckTimeout = 5
-	}
-
-	healthyThreshold := req.HealthyThresholdCount
-	if healthyThreshold == 0 {
-		healthyThreshold = 5
-	}
-
-	unhealthyThreshold := req.UnhealthyThresholdCount
-	if unhealthyThreshold == 0 {
-		unhealthyThreshold = 2
-	}
-
+// buildTargetGroup constructs a TargetGroup from request and defaults.
+func (m *MemoryStorage) buildTargetGroup(req *CreateTargetGroupRequest, defaults targetGroupDefaults) *TargetGroup {
 	tgID := uuid.New().String()[:17]
 	arn := fmt.Sprintf("arn:aws:elasticloadbalancing:%s:%s:targetgroup/%s/%s",
 		defaultRegion, defaultAccountID, req.Name, tgID)
 
-	tg := &TargetGroup{
+	return &TargetGroup{
 		TargetGroupArn:             arn,
 		TargetGroupName:            req.Name,
 		Protocol:                   req.Protocol,
 		Port:                       req.Port,
 		VpcID:                      req.VpcID,
 		HealthCheckEnabled:         true,
-		HealthCheckIntervalSeconds: healthCheckInterval,
-		HealthCheckPath:            healthCheckPath,
-		HealthCheckPort:            healthCheckPort,
-		HealthCheckProtocol:        healthCheckProtocol,
-		HealthCheckTimeoutSeconds:  healthCheckTimeout,
-		HealthyThresholdCount:      healthyThreshold,
-		UnhealthyThresholdCount:    unhealthyThreshold,
-		TargetType:                 targetType,
+		HealthCheckIntervalSeconds: defaults.healthCheckInterval,
+		HealthCheckPath:            defaults.healthCheckPath,
+		HealthCheckPort:            defaults.healthCheckPort,
+		HealthCheckProtocol:        defaults.healthCheckProtocol,
+		HealthCheckTimeoutSeconds:  defaults.healthCheckTimeout,
+		HealthyThresholdCount:      defaults.healthyThreshold,
+		UnhealthyThresholdCount:    defaults.unhealthyThreshold,
+		TargetType:                 defaults.targetType,
 		LoadBalancerArns:           []string{},
 	}
-
-	m.targetGroups[arn] = tg
-	m.targets[arn] = []Target{}
-
-	return tg, nil
 }
 
 // DeleteTargetGroup deletes a target group.
