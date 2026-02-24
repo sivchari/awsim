@@ -931,6 +931,7 @@ func (m *MemoryStorage) DeleteRoute(_ context.Context, meshName, virtualRouterNa
 	}
 
 	route.Status.Status = StatusDeleted
+
 	delete(m.routes[meshName][virtualRouterName], routeName)
 
 	return route, nil
