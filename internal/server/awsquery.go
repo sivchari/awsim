@@ -123,10 +123,22 @@ func formToJSON(form map[string][]string) []byte {
 		}
 	}
 
-	// Add indexed arrays to result with plural form (e.g., InstanceId -> InstanceIds).
+	// Add indexed arrays to result.
+	// Handle two patterns:
+	// 1. List.member.N pattern (AWS Query Protocol lists) -> strip ".member" to get "List"
+	// 2. Simple InstanceId.N pattern -> pluralize to "InstanceIds"
 	for baseName, arr := range indexedArrays {
-		pluralName := baseName + "s"
-		result[pluralName] = arr
+		var keyName string
+
+		if stripped, found := strings.CutSuffix(baseName, ".member"); found {
+			// AWS Query Protocol list pattern: Subnets.member.1 -> Subnets
+			keyName = stripped
+		} else {
+			// Simple indexed pattern: InstanceId.1 -> InstanceIds
+			keyName = baseName + "s"
+		}
+
+		result[keyName] = arr
 	}
 
 	// Handle nested attributes (like Attributes.entry.N.key/value).
