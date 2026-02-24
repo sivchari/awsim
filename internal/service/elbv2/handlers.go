@@ -403,11 +403,7 @@ func convertToXMLTargetGroup(tg *TargetGroup) XMLTargetGroup {
 func convertToXMLListener(l *Listener) XMLListener {
 	actions := make([]XMLAction, 0, len(l.DefaultActions))
 	for _, a := range l.DefaultActions {
-		actions = append(actions, XMLAction{
-			Type:           a.Type,
-			TargetGroupArn: a.TargetGroupArn,
-			Order:          a.Order,
-		})
+		actions = append(actions, XMLAction(a))
 	}
 
 	return XMLListener{

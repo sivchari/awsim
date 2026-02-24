@@ -282,7 +282,7 @@ func (m *MemoryStorage) CreateTargetGroup(_ context.Context, req *CreateTargetGr
 	}
 
 	defaults := getTargetGroupDefaults(req)
-	tg := m.buildTargetGroup(req, defaults)
+	tg := m.buildTargetGroup(req, &defaults)
 	m.targetGroups[tg.TargetGroupArn] = tg
 	m.targets[tg.TargetGroupArn] = []Target{}
 
@@ -304,7 +304,7 @@ func (m *MemoryStorage) checkDuplicateTargetGroupName(name string) error {
 }
 
 // buildTargetGroup constructs a TargetGroup from request and defaults.
-func (m *MemoryStorage) buildTargetGroup(req *CreateTargetGroupRequest, defaults targetGroupDefaults) *TargetGroup {
+func (m *MemoryStorage) buildTargetGroup(req *CreateTargetGroupRequest, defaults *targetGroupDefaults) *TargetGroup {
 	tgID := uuid.New().String()[:17]
 	arn := fmt.Sprintf("arn:aws:elasticloadbalancing:%s:%s:targetgroup/%s/%s",
 		defaultRegion, defaultAccountID, req.Name, tgID)
