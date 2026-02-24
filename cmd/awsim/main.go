@@ -31,6 +31,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/kms"
 	_ "github.com/sivchari/awsim/internal/service/lambda"
 	_ "github.com/sivchari/awsim/internal/service/rds"
+	_ "github.com/sivchari/awsim/internal/service/route53"
 	_ "github.com/sivchari/awsim/internal/service/s3"
 	_ "github.com/sivchari/awsim/internal/service/s3tables"
 	_ "github.com/sivchari/awsim/internal/service/secretsmanager"
