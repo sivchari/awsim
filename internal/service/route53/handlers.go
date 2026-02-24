@@ -54,9 +54,12 @@ func (s *Service) CreateHostedZone(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.CreateHostedZone(zone); err != nil {
 		if errors.Is(err, ErrHostedZoneAlreadyExists) {
 			writeErrorResponse(w, http.StatusConflict, "HostedZoneAlreadyExists", "Hosted zone already exists")
+
 			return
 		}
+
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -91,13 +94,17 @@ func (s *Service) GetHostedZone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zoneID := "/hostedzone/" + id
+
 	zone, err := s.storage.GetHostedZone(zoneID)
 	if err != nil {
 		if errors.Is(err, ErrHostedZoneNotFound) {
 			writeErrorResponse(w, http.StatusNotFound, "NoSuchHostedZone", "Hosted zone not found")
+
 			return
 		}
+
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -149,16 +156,22 @@ func (s *Service) DeleteHostedZone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zoneID := "/hostedzone/" + id
+
 	if err := s.storage.DeleteHostedZone(zoneID); err != nil {
 		if errors.Is(err, ErrHostedZoneNotFound) {
 			writeErrorResponse(w, http.StatusNotFound, "NoSuchHostedZone", "Hosted zone not found")
+
 			return
 		}
+
 		if errors.Is(err, ErrHostedZoneNotEmpty) {
 			writeErrorResponse(w, http.StatusBadRequest, "HostedZoneNotEmpty", "Hosted zone is not empty")
+
 			return
 		}
+
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -200,24 +213,34 @@ func (s *Service) ChangeResourceRecordSets(w http.ResponseWriter, r *http.Reques
 	}
 
 	zoneID := "/hostedzone/" + id
+
 	if err := s.storage.ChangeRecordSets(zoneID, req.ChangeBatch.Changes); err != nil {
 		if errors.Is(err, ErrHostedZoneNotFound) {
 			writeErrorResponse(w, http.StatusNotFound, "NoSuchHostedZone", "Hosted zone not found")
+
 			return
 		}
+
 		if errors.Is(err, ErrRecordSetAlreadyExists) {
 			writeErrorResponse(w, http.StatusBadRequest, "ResourceRecordAlreadyExists", "Resource record already exists")
+
 			return
 		}
+
 		if errors.Is(err, ErrRecordSetNotFound) {
 			writeErrorResponse(w, http.StatusBadRequest, "InvalidChangeBatch", "Resource record not found")
+
 			return
 		}
+
 		if errors.Is(err, ErrInvalidInput) {
 			writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Invalid change action")
+
 			return
 		}
+
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -243,13 +266,17 @@ func (s *Service) ListResourceRecordSets(w http.ResponseWriter, r *http.Request)
 	}
 
 	zoneID := "/hostedzone/" + id
+
 	records, err := s.storage.GetRecordSets(zoneID)
 	if err != nil {
 		if errors.Is(err, ErrHostedZoneNotFound) {
 			writeErrorResponse(w, http.StatusNotFound, "NoSuchHostedZone", "Hosted zone not found")
+
 			return
 		}
+
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -266,10 +293,10 @@ func (s *Service) ListResourceRecordSets(w http.ResponseWriter, r *http.Request)
 // writeXMLResponse writes an XML response.
 func writeXMLResponse(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("x-amzn-RequestId", uuid.New().String())
+	w.Header().Set("x-amzn-RequestID", uuid.New().String())
 	w.WriteHeader(status)
-	io.WriteString(w, xml.Header)
-	xml.NewEncoder(w).Encode(v)
+	_, _ = io.WriteString(w, xml.Header)
+	_ = xml.NewEncoder(w).Encode(v)
 }
 
 // writeErrorResponse writes an error response.
@@ -281,12 +308,12 @@ func writeErrorResponse(w http.ResponseWriter, status int, code, message string)
 			Code:    code,
 			Message: message,
 		},
-		RequestId: uuid.New().String(),
+		RequestID: uuid.New().String(),
 	}
 
 	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("x-amzn-RequestId", resp.RequestId)
+	w.Header().Set("x-amzn-RequestID", resp.RequestID)
 	w.WriteHeader(status)
-	io.WriteString(w, xml.Header)
-	xml.NewEncoder(w).Encode(resp)
+	_, _ = io.WriteString(w, xml.Header)
+	_ = xml.NewEncoder(w).Encode(resp)
 }

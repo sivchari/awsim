@@ -144,12 +144,14 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 			if s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type) >= 0 {
 				return ErrRecordSetAlreadyExists
 			}
+
 			records = append(records, change.ResourceRecordSet)
 		case "DELETE":
 			idx := s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type)
 			if idx < 0 {
 				return ErrRecordSetNotFound
 			}
+
 			records = append(records[:idx], records[idx+1:]...)
 		case "UPSERT":
 			idx := s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type)

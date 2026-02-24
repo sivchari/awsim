@@ -30,7 +30,7 @@ type ResourceRecordSet struct {
 	Weight           *int64           `xml:"Weight,omitempty"`
 	Region           string           `xml:"Region,omitempty"`
 	Failover         string           `xml:"Failover,omitempty"`
-	HealthCheckId    string           `xml:"HealthCheckId,omitempty"`
+	HealthCheckID    string           `xml:"HealthCheckId,omitempty"`
 	MultiValueAnswer *bool            `xml:"MultiValueAnswer,omitempty"`
 }
 
@@ -41,7 +41,7 @@ type ResourceRecord struct {
 
 // AliasTarget represents an alias target for a record set.
 type AliasTarget struct {
-	HostedZoneId         string `xml:"HostedZoneId"`
+	HostedZoneID         string `xml:"HostedZoneId"`
 	DNSName              string `xml:"DNSName"`
 	EvaluateTargetHealth bool   `xml:"EvaluateTargetHealth"`
 }
@@ -145,7 +145,7 @@ type ErrorResponse struct {
 	XMLName   xml.Name `xml:"ErrorResponse"`
 	XMLNS     string   `xml:"xmlns,attr"`
 	Error     Error    `xml:"Error"`
-	RequestId string   `xml:"RequestId"`
+	RequestID string   `xml:"RequestId"`
 }
 
 // Error represents an error detail.
