@@ -157,6 +157,8 @@ func (m *MemoryStorage) DescribePipe(_ context.Context, name string) (*Pipe, err
 }
 
 // UpdatePipe updates an existing pipe.
+//
+//nolint:funlen // field updates require more lines
 func (m *MemoryStorage) UpdatePipe(_ context.Context, req *UpdatePipeInput) (*Pipe, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
