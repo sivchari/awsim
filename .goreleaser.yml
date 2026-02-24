@@ -78,3 +78,13 @@ docker_manifests:
     image_templates:
       - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
       - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
+
+brews:
+  - name: awsim
+    repository:
+      owner: sivchari
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/sivchari/awsim
+    description: "A lightweight AWS service emulator for CI/CD environments"
+    license: MIT
