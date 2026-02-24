@@ -1,3 +1,4 @@
+// Package route53 provides an implementation of AWS Route 53 service.
 package route53
 
 import (
@@ -13,33 +14,39 @@ import (
 )
 
 // CreateHostedZone handles the CreateHostedZone API.
+//
+//nolint:funlen // Handler includes validation and response building
 func (s *Service) CreateHostedZone(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Failed to read request body")
+
 		return
 	}
 
 	var req CreateHostedZoneRequest
 	if err := xml.Unmarshal(body, &req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Failed to parse request body")
+
 		return
 	}
 
 	if req.Name == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Name is required")
+
 		return
 	}
 
 	if req.CallerReference == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "CallerReference is required")
+
 		return
 	}
 
 	// Ensure name ends with a dot
 	name := req.Name
 	if !strings.HasSuffix(name, ".") {
-		name = name + "."
+		name += "."
 	}
 
 	zoneID := uuid.New().String()
@@ -90,6 +97,7 @@ func (s *Service) GetHostedZone(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Hosted zone ID is required")
+
 		return
 	}
 
@@ -125,10 +133,11 @@ func (s *Service) GetHostedZone(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListHostedZones handles the ListHostedZones API.
-func (s *Service) ListHostedZones(w http.ResponseWriter, r *http.Request) {
+func (s *Service) ListHostedZones(w http.ResponseWriter, _ *http.Request) {
 	zones, err := s.storage.ListHostedZones()
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
 		return
 	}
 
@@ -152,6 +161,7 @@ func (s *Service) DeleteHostedZone(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Hosted zone ID is required")
+
 		return
 	}
 
@@ -188,27 +198,33 @@ func (s *Service) DeleteHostedZone(w http.ResponseWriter, r *http.Request) {
 }
 
 // ChangeResourceRecordSets handles the ChangeResourceRecordSets API.
+//
+//nolint:funlen // Handler includes validation and error handling for multiple cases
 func (s *Service) ChangeResourceRecordSets(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Hosted zone ID is required")
+
 		return
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Failed to read request body")
+
 		return
 	}
 
 	var req ChangeResourceRecordSetsRequest
 	if err := xml.Unmarshal(body, &req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Failed to parse request body")
+
 		return
 	}
 
 	if len(req.ChangeBatch.Changes) == 0 {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "At least one change is required")
+
 		return
 	}
 
@@ -262,6 +278,7 @@ func (s *Service) ListResourceRecordSets(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	if id == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Hosted zone ID is required")
+
 		return
 	}
 

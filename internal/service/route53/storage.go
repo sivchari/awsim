@@ -97,8 +97,8 @@ func (s *MemoryStorage) DeleteHostedZone(id string) error {
 
 	// Check if hosted zone has record sets (other than NS and SOA)
 	if records, ok := s.recordSets[id]; ok {
-		for _, r := range records {
-			if r.Type != "NS" && r.Type != "SOA" {
+		for i := range records {
+			if records[i].Type != "NS" && records[i].Type != "SOA" {
 				return ErrHostedZoneNotEmpty
 			}
 		}
@@ -138,27 +138,27 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 
 	records := s.recordSets[hostedZoneID]
 
-	for _, change := range changes {
-		switch change.Action {
+	for i := range changes {
+		switch changes[i].Action {
 		case "CREATE":
-			if s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type) >= 0 {
+			if s.findRecordIndex(records, changes[i].ResourceRecordSet.Name, changes[i].ResourceRecordSet.Type) >= 0 {
 				return ErrRecordSetAlreadyExists
 			}
 
-			records = append(records, change.ResourceRecordSet)
+			records = append(records, changes[i].ResourceRecordSet)
 		case "DELETE":
-			idx := s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type)
+			idx := s.findRecordIndex(records, changes[i].ResourceRecordSet.Name, changes[i].ResourceRecordSet.Type)
 			if idx < 0 {
 				return ErrRecordSetNotFound
 			}
 
 			records = append(records[:idx], records[idx+1:]...)
 		case "UPSERT":
-			idx := s.findRecordIndex(records, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type)
+			idx := s.findRecordIndex(records, changes[i].ResourceRecordSet.Name, changes[i].ResourceRecordSet.Type)
 			if idx >= 0 {
-				records[idx] = change.ResourceRecordSet
+				records[idx] = changes[i].ResourceRecordSet
 			} else {
-				records = append(records, change.ResourceRecordSet)
+				records = append(records, changes[i].ResourceRecordSet)
 			}
 		default:
 			return ErrInvalidInput
@@ -177,10 +177,11 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 
 // findRecordIndex finds the index of a record set by name and type.
 func (s *MemoryStorage) findRecordIndex(records []ResourceRecordSet, name, recordType string) int {
-	for i, r := range records {
-		if r.Name == name && r.Type == recordType {
+	for i := range records {
+		if records[i].Name == name && records[i].Type == recordType {
 			return i
 		}
 	}
+
 	return -1
 }
