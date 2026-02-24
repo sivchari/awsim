@@ -83,7 +83,7 @@ func TestConfigService_DescribeConfigurationRecorders(t *testing.T) {
 			Name:    aws.String(recorderName),
 			RoleARN: aws.String(roleARN),
 			RecordingGroup: &types.RecordingGroup{
-				AllSupported: aws.Bool(true),
+				AllSupported: true,
 			},
 		},
 	})
