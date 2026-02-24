@@ -66,6 +66,8 @@ func generatePipeArn(name string) string {
 }
 
 // CreatePipe creates a new pipe.
+//
+//nolint:funlen // validation and struct initialization require more lines
 func (m *MemoryStorage) CreatePipe(_ context.Context, req *CreatePipeInput) (*Pipe, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -101,6 +103,7 @@ func (m *MemoryStorage) CreatePipe(_ context.Context, req *CreatePipeInput) (*Pi
 	}
 
 	now := time.Now()
+
 	desiredState := req.DesiredState
 	if desiredState == "" {
 		desiredState = DesiredStateRunning
@@ -184,10 +187,12 @@ func (m *MemoryStorage) UpdatePipe(_ context.Context, req *UpdatePipeInput) (*Pi
 
 	if req.DesiredState != "" {
 		pipe.DesiredState = req.DesiredState
+
 		// For simulation, immediately update current state.
-		if req.DesiredState == DesiredStateRunning {
+		switch req.DesiredState {
+		case DesiredStateRunning:
 			pipe.CurrentState = CurrentStateRunning
-		} else if req.DesiredState == DesiredStateStopped {
+		case DesiredStateStopped:
 			pipe.CurrentState = CurrentStateStopped
 		}
 	}

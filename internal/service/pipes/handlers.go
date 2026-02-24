@@ -46,7 +46,7 @@ func (s *Service) CreatePipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // DescribePipe handles the DescribePipe API operation.
@@ -89,7 +89,7 @@ func (s *Service) DescribePipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime:     pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // UpdatePipe handles the UpdatePipe API operation.
@@ -129,7 +129,7 @@ func (s *Service) UpdatePipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // DeletePipe handles the DeletePipe API operation.
@@ -160,7 +160,7 @@ func (s *Service) DeletePipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // ListPipes handles the ListPipes API operation.
@@ -198,7 +198,7 @@ func (s *Service) ListPipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // StartPipe handles the StartPipe API operation.
@@ -229,7 +229,7 @@ func (s *Service) StartPipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // StopPipe handles the StopPipe API operation.
@@ -260,7 +260,7 @@ func (s *Service) StopPipe(w http.ResponseWriter, r *http.Request) {
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // TagResource handles the TagResource API operation.
@@ -362,7 +362,7 @@ func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 		Tags: tags,
 	}
 
-	writeJSON(w, http.StatusOK, output)
+	writeJSON(w, output)
 }
 
 // Helper functions.
@@ -429,15 +429,15 @@ func parseIntParam(s string, result *int32) (int32, error) {
 		val = val*10 + int(c-'0')
 	}
 
-	*result = int32(val)
+	*result = int32(val) //nolint:gosec // G115: val is bounded by input string length
 
 	return *result, nil
 }
 
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v any) {
+// writeJSON writes a JSON response with 200 OK status.
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -453,7 +453,7 @@ func writeError(w http.ResponseWriter, _, message string, status int) {
 		Message: message,
 	}
 
-	json.NewEncoder(w).Encode(resp) //nolint:errcheck // best effort
+	json.NewEncoder(w).Encode(resp) //nolint:errcheck,gosec // best effort error handling
 }
 
 // handleError handles storage errors and writes an appropriate HTTP response.

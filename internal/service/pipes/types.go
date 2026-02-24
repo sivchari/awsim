@@ -3,6 +3,7 @@ package pipes
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 )
@@ -15,21 +16,31 @@ type AWSTimestamp struct {
 // MarshalJSON marshals the timestamp to Unix epoch seconds.
 func (t AWSTimestamp) MarshalJSON() ([]byte, error) {
 	if t.IsZero() {
-		return json.Marshal(nil)
+		data, err := json.Marshal(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal nil timestamp: %w", err)
+		}
+
+		return data, nil
 	}
 
 	seconds := float64(t.UnixNano()) / float64(time.Second)
 	// Round to 3 decimal places for millisecond precision.
 	seconds = math.Round(seconds*1000) / 1000
 
-	return json.Marshal(seconds)
+	data, err := json.Marshal(seconds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal timestamp: %w", err)
+	}
+
+	return data, nil
 }
 
 // UnmarshalJSON unmarshals Unix epoch seconds to a timestamp.
 func (t *AWSTimestamp) UnmarshalJSON(data []byte) error {
 	var seconds float64
 	if err := json.Unmarshal(data, &seconds); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal timestamp: %w", err)
 	}
 
 	nanos := int64(seconds * float64(time.Second))
