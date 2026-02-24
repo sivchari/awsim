@@ -29,9 +29,32 @@ func newConfigServiceClient(t *testing.T) *configservice.Client {
 	})
 }
 
+// cleanupExistingRecorders removes any existing configuration recorders.
+// AWS Config only allows one recorder per region.
+func cleanupExistingRecorders(t *testing.T, client *configservice.Client) {
+	t.Helper()
+	ctx := t.Context()
+
+	resp, err := client.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{})
+	if err != nil {
+		return
+	}
+
+	for _, recorder := range resp.ConfigurationRecorders {
+		if recorder.Name != nil {
+			_, _ = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+				ConfigurationRecorderName: recorder.Name,
+			})
+		}
+	}
+}
+
 func TestConfigService_PutAndDeleteConfigurationRecorder(t *testing.T) {
 	client := newConfigServiceClient(t)
 	ctx := t.Context()
+
+	// Clean up any existing recorders first.
+	cleanupExistingRecorders(t, client)
 
 	recorderName := "test-recorder-create-delete"
 	roleARN := "arn:aws:iam::123456789012:role/config-role"
@@ -74,6 +97,9 @@ func TestConfigService_DescribeConfigurationRecorders(t *testing.T) {
 	client := newConfigServiceClient(t)
 	ctx := t.Context()
 
+	// Clean up any existing recorders first.
+	cleanupExistingRecorders(t, client)
+
 	recorderName := "test-recorder-describe"
 	roleARN := "arn:aws:iam::123456789012:role/config-role"
 
@@ -112,6 +138,9 @@ func TestConfigService_DescribeConfigurationRecorders(t *testing.T) {
 func TestConfigService_StartAndStopConfigurationRecorder(t *testing.T) {
 	client := newConfigServiceClient(t)
 	ctx := t.Context()
+
+	// Clean up any existing recorders first.
+	cleanupExistingRecorders(t, client)
 
 	recorderName := "test-recorder-start-stop"
 	roleARN := "arn:aws:iam::123456789012:role/config-role"
