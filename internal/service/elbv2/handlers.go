@@ -76,6 +76,7 @@ func (s *Service) DeleteLoadBalancer(w http.ResponseWriter, r *http.Request) {
 
 	writeELBXMLResponse(w, XMLDeleteLoadBalancerResponse{
 		Xmlns:            elbXMLNS,
+		Result:           XMLDeleteLoadBalancerResult{},
 		ResponseMetadata: XMLResponseMetadata{RequestID: uuid.New().String()},
 	})
 }
@@ -167,6 +168,7 @@ func (s *Service) DeleteTargetGroup(w http.ResponseWriter, r *http.Request) {
 
 	writeELBXMLResponse(w, XMLDeleteTargetGroupResponse{
 		Xmlns:            elbXMLNS,
+		Result:           XMLDeleteTargetGroupResult{},
 		ResponseMetadata: XMLResponseMetadata{RequestID: uuid.New().String()},
 	})
 }
@@ -225,6 +227,7 @@ func (s *Service) RegisterTargets(w http.ResponseWriter, r *http.Request) {
 
 	writeELBXMLResponse(w, XMLRegisterTargetsResponse{
 		Xmlns:            elbXMLNS,
+		Result:           XMLRegisterTargetsResult{},
 		ResponseMetadata: XMLResponseMetadata{RequestID: uuid.New().String()},
 	})
 }
@@ -253,6 +256,7 @@ func (s *Service) DeregisterTargets(w http.ResponseWriter, r *http.Request) {
 
 	writeELBXMLResponse(w, XMLDeregisterTargetsResponse{
 		Xmlns:            elbXMLNS,
+		Result:           XMLDeregisterTargetsResult{},
 		ResponseMetadata: XMLResponseMetadata{RequestID: uuid.New().String()},
 	})
 }
@@ -314,6 +318,7 @@ func (s *Service) DeleteListener(w http.ResponseWriter, r *http.Request) {
 
 	writeELBXMLResponse(w, XMLDeleteListenerResponse{
 		Xmlns:            elbXMLNS,
+		Result:           XMLDeleteListenerResult{},
 		ResponseMetadata: XMLResponseMetadata{RequestID: uuid.New().String()},
 	})
 }

@@ -185,10 +185,14 @@ type XMLCreateLoadBalancerResult struct {
 
 // XMLDeleteLoadBalancerResponse is the XML response for DeleteLoadBalancer.
 type XMLDeleteLoadBalancerResponse struct {
-	XMLName          xml.Name            `xml:"DeleteLoadBalancerResponse"`
-	Xmlns            string              `xml:"xmlns,attr"`
-	ResponseMetadata XMLResponseMetadata `xml:"ResponseMetadata"`
+	XMLName          xml.Name                    `xml:"DeleteLoadBalancerResponse"`
+	Xmlns            string                      `xml:"xmlns,attr"`
+	Result           XMLDeleteLoadBalancerResult `xml:"DeleteLoadBalancerResult"`
+	ResponseMetadata XMLResponseMetadata         `xml:"ResponseMetadata"`
 }
+
+// XMLDeleteLoadBalancerResult is an empty result for DeleteLoadBalancer.
+type XMLDeleteLoadBalancerResult struct{}
 
 // XMLDescribeLoadBalancersResponse is the XML response for DescribeLoadBalancers.
 type XMLDescribeLoadBalancersResponse struct {
@@ -261,10 +265,14 @@ type XMLCreateTargetGroupResult struct {
 
 // XMLDeleteTargetGroupResponse is the XML response for DeleteTargetGroup.
 type XMLDeleteTargetGroupResponse struct {
-	XMLName          xml.Name            `xml:"DeleteTargetGroupResponse"`
-	Xmlns            string              `xml:"xmlns,attr"`
-	ResponseMetadata XMLResponseMetadata `xml:"ResponseMetadata"`
+	XMLName          xml.Name                   `xml:"DeleteTargetGroupResponse"`
+	Xmlns            string                     `xml:"xmlns,attr"`
+	Result           XMLDeleteTargetGroupResult `xml:"DeleteTargetGroupResult"`
+	ResponseMetadata XMLResponseMetadata        `xml:"ResponseMetadata"`
 }
+
+// XMLDeleteTargetGroupResult is an empty result for DeleteTargetGroup.
+type XMLDeleteTargetGroupResult struct{}
 
 // XMLDescribeTargetGroupsResponse is the XML response for DescribeTargetGroups.
 type XMLDescribeTargetGroupsResponse struct {
@@ -310,17 +318,25 @@ type XMLLoadBalancerArns struct {
 
 // XMLRegisterTargetsResponse is the XML response for RegisterTargets.
 type XMLRegisterTargetsResponse struct {
-	XMLName          xml.Name            `xml:"RegisterTargetsResponse"`
-	Xmlns            string              `xml:"xmlns,attr"`
-	ResponseMetadata XMLResponseMetadata `xml:"ResponseMetadata"`
+	XMLName          xml.Name                 `xml:"RegisterTargetsResponse"`
+	Xmlns            string                   `xml:"xmlns,attr"`
+	Result           XMLRegisterTargetsResult `xml:"RegisterTargetsResult"`
+	ResponseMetadata XMLResponseMetadata      `xml:"ResponseMetadata"`
 }
+
+// XMLRegisterTargetsResult is an empty result for RegisterTargets.
+type XMLRegisterTargetsResult struct{}
 
 // XMLDeregisterTargetsResponse is the XML response for DeregisterTargets.
 type XMLDeregisterTargetsResponse struct {
-	XMLName          xml.Name            `xml:"DeregisterTargetsResponse"`
-	Xmlns            string              `xml:"xmlns,attr"`
-	ResponseMetadata XMLResponseMetadata `xml:"ResponseMetadata"`
+	XMLName          xml.Name                   `xml:"DeregisterTargetsResponse"`
+	Xmlns            string                     `xml:"xmlns,attr"`
+	Result           XMLDeregisterTargetsResult `xml:"DeregisterTargetsResult"`
+	ResponseMetadata XMLResponseMetadata        `xml:"ResponseMetadata"`
 }
+
+// XMLDeregisterTargetsResult is an empty result for DeregisterTargets.
+type XMLDeregisterTargetsResult struct{}
 
 // XMLCreateListenerResponse is the XML response for CreateListener.
 type XMLCreateListenerResponse struct {
@@ -337,10 +353,14 @@ type XMLCreateListenerResult struct {
 
 // XMLDeleteListenerResponse is the XML response for DeleteListener.
 type XMLDeleteListenerResponse struct {
-	XMLName          xml.Name            `xml:"DeleteListenerResponse"`
-	Xmlns            string              `xml:"xmlns,attr"`
-	ResponseMetadata XMLResponseMetadata `xml:"ResponseMetadata"`
+	XMLName          xml.Name                `xml:"DeleteListenerResponse"`
+	Xmlns            string                  `xml:"xmlns,attr"`
+	Result           XMLDeleteListenerResult `xml:"DeleteListenerResult"`
+	ResponseMetadata XMLResponseMetadata     `xml:"ResponseMetadata"`
 }
+
+// XMLDeleteListenerResult is an empty result for DeleteListener.
+type XMLDeleteListenerResult struct{}
 
 // XMLListeners contains a list of listeners.
 type XMLListeners struct {
