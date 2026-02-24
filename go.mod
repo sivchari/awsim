@@ -28,6 +28,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.54.7
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9
+	github.com/aws/aws-sdk-go-v2/service/gamelift v1.50.1
 	github.com/aws/aws-sdk-go-v2/service/globalaccelerator v1.35.11
 	github.com/aws/aws-sdk-go-v2/service/glue v1.137.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.2
