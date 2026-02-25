@@ -218,6 +218,10 @@ linters:
       - path: internal/service/dlm/types\.go
         linters:
           - tagliatelle
+      # AWS SageMaker API requires PascalCase JSON field names.
+      - path: internal/service/sagemaker/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
