@@ -49,7 +49,7 @@ func (s *Service) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, &CreateScheduleResponse{
+	writeResponse(w, &CreateScheduleResponse{
 		ScheduleArn: schedule.ARN,
 	})
 }
@@ -98,7 +98,7 @@ func (s *Service) GetSchedule(w http.ResponseWriter, r *http.Request) {
 		resp.EndDate = &endDate
 	}
 
-	writeResponse(w, http.StatusOK, resp)
+	writeResponse(w, resp)
 }
 
 // UpdateSchedule handles the UpdateSchedule API.
@@ -142,7 +142,7 @@ func (s *Service) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, &UpdateScheduleResponse{
+	writeResponse(w, &UpdateScheduleResponse{
 		ScheduleArn: schedule.ARN,
 	})
 }
@@ -164,7 +164,7 @@ func (s *Service) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, struct{}{})
+	writeResponse(w, struct{}{})
 }
 
 // ListSchedules handles the ListSchedules API.
@@ -199,7 +199,7 @@ func (s *Service) ListSchedules(w http.ResponseWriter, r *http.Request) {
 		summaries = append(summaries, summary)
 	}
 
-	writeResponse(w, http.StatusOK, &ListSchedulesResponse{
+	writeResponse(w, &ListSchedulesResponse{
 		Schedules: summaries,
 	})
 }
@@ -226,7 +226,7 @@ func (s *Service) CreateScheduleGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, &CreateScheduleGroupResponse{
+	writeResponse(w, &CreateScheduleGroupResponse{
 		ScheduleGroupArn: group.ARN,
 	})
 }
@@ -247,7 +247,7 @@ func (s *Service) GetScheduleGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, &GetScheduleGroupResponse{
+	writeResponse(w, &GetScheduleGroupResponse{
 		Arn:                  group.ARN,
 		CreationDate:         float64(group.CreationDate.Unix()),
 		LastModificationDate: float64(group.CreationDate.Unix()),
@@ -271,7 +271,7 @@ func (s *Service) DeleteScheduleGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, struct{}{})
+	writeResponse(w, struct{}{})
 }
 
 // ListScheduleGroups handles the ListScheduleGroups API.
@@ -295,16 +295,16 @@ func (s *Service) ListScheduleGroups(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeResponse(w, http.StatusOK, &ListScheduleGroupsResponse{
+	writeResponse(w, &ListScheduleGroupsResponse{
 		ScheduleGroups: summaries,
 	})
 }
 
 // writeResponse writes a JSON response.
-func writeResponse(w http.ResponseWriter, status int, resp any) {
+func writeResponse(w http.ResponseWriter, resp any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }
 

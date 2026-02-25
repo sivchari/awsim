@@ -117,7 +117,7 @@ type PipelineParameter struct {
 
 // SqsParameters represents SQS target parameters.
 type SqsParameters struct {
-	MessageGroupId string `json:"MessageGroupId,omitempty"`
+	MessageGroupID string `json:"MessageGroupId,omitempty"`
 }
 
 // CreateScheduleRequest represents the CreateSchedule API request.

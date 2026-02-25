@@ -214,7 +214,7 @@ func (m *MemoryStorage) ListSchedules(_ context.Context, groupName string, limit
 
 		result = append(result, schedule)
 
-		if limit > 0 && int32(len(result)) >= limit {
+		if limit > 0 && len(result) >= int(limit) {
 			break
 		}
 	}
@@ -294,7 +294,7 @@ func (m *MemoryStorage) ListScheduleGroups(_ context.Context, limit int32) ([]*S
 	for _, group := range m.scheduleGroups {
 		result = append(result, group)
 
-		if limit > 0 && int32(len(result)) >= limit {
+		if limit > 0 && len(result) >= int(limit) {
 			break
 		}
 	}
