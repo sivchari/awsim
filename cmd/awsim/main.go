@@ -20,6 +20,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/codeconnections"
 	_ "github.com/sivchari/awsim/internal/service/cognito"
 	_ "github.com/sivchari/awsim/internal/service/configservice"
+	_ "github.com/sivchari/awsim/internal/service/dlm"
 	_ "github.com/sivchari/awsim/internal/service/dynamodb"
 	_ "github.com/sivchari/awsim/internal/service/ec2"
 	_ "github.com/sivchari/awsim/internal/service/ecr"

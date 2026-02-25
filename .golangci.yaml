@@ -214,6 +214,10 @@ linters:
       - path: internal/service/scheduler/types\.go
         linters:
           - tagliatelle
+      # AWS DLM API requires PascalCase JSON field names.
+      - path: internal/service/dlm/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
