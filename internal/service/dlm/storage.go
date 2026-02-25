@@ -27,7 +27,7 @@ const (
 type Storage interface {
 	CreateLifecyclePolicy(ctx context.Context, req *CreateLifecyclePolicyRequest) (*LifecyclePolicy, error)
 	GetLifecyclePolicy(ctx context.Context, policyID string) (*LifecyclePolicy, error)
-	GetLifecyclePolicies(ctx context.Context, policyIDs []string, state string, resourceTypes []string, targetTags []string) ([]*LifecyclePolicySummary, error)
+	GetLifecyclePolicies(ctx context.Context, policyIDs []string, state string, resourceTypes, targetTags []string) ([]*LifecyclePolicySummary, error)
 	UpdateLifecyclePolicy(ctx context.Context, policyID string, req *UpdateLifecyclePolicyRequest) error
 	DeleteLifecyclePolicy(ctx context.Context, policyID string) error
 }
@@ -90,7 +90,7 @@ func (m *MemoryStorage) GetLifecyclePolicy(_ context.Context, policyID string) (
 }
 
 // GetLifecyclePolicies retrieves lifecycle policies with optional filters.
-func (m *MemoryStorage) GetLifecyclePolicies(_ context.Context, policyIDs []string, state string, resourceTypes []string, targetTags []string) ([]*LifecyclePolicySummary, error) {
+func (m *MemoryStorage) GetLifecyclePolicies(_ context.Context, policyIDs []string, state string, resourceTypes, targetTags []string) ([]*LifecyclePolicySummary, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -185,59 +185,56 @@ func generatePolicyArn(region, accountID, policyID string) string {
 	return fmt.Sprintf("arn:aws:dlm:%s:%s:policy/%s", region, accountID, policyID)
 }
 
-func matchesFilters(policy *LifecyclePolicy, state string, resourceTypes []string, targetTags []string) bool {
-	// Filter by state.
-	if state != "" && policy.State != state {
+func matchesFilters(policy *LifecyclePolicy, state string, resourceTypes, targetTags []string) bool {
+	if !matchesState(policy, state) {
 		return false
 	}
 
-	// Filter by resource types.
-	if len(resourceTypes) > 0 && policy.PolicyDetails != nil {
-		found := false
-
-		for _, rt := range resourceTypes {
-			for _, prt := range policy.PolicyDetails.ResourceTypes {
-				if rt == prt {
-					found = true
-
-					break
-				}
-			}
-
-			if found {
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !matchesResourceTypes(policy, resourceTypes) {
+		return false
 	}
 
-	// Filter by target tags (simplified - just check if any tag matches).
-	if len(targetTags) > 0 && policy.PolicyDetails != nil {
-		found := false
-
-		for _, tt := range targetTags {
-			for _, ptt := range policy.PolicyDetails.TargetTags {
-				if tt == ptt.Key || tt == ptt.Value {
-					found = true
-
-					break
-				}
-			}
-
-			if found {
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !matchesTargetTags(policy, targetTags) {
+		return false
 	}
 
 	return true
+}
+
+func matchesState(policy *LifecyclePolicy, state string) bool {
+	return state == "" || policy.State == state
+}
+
+func matchesResourceTypes(policy *LifecyclePolicy, resourceTypes []string) bool {
+	if len(resourceTypes) == 0 || policy.PolicyDetails == nil {
+		return true
+	}
+
+	for _, rt := range resourceTypes {
+		for _, prt := range policy.PolicyDetails.ResourceTypes {
+			if rt == prt {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func matchesTargetTags(policy *LifecyclePolicy, targetTags []string) bool {
+	if len(targetTags) == 0 || policy.PolicyDetails == nil {
+		return true
+	}
+
+	for _, tt := range targetTags {
+		for _, ptt := range policy.PolicyDetails.TargetTags {
+			if tt == ptt.Key || tt == ptt.Value {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func toSummary(policy *LifecyclePolicy) *LifecyclePolicySummary {

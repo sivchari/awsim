@@ -37,7 +37,7 @@ func TestDLM_CreateAndDeleteLifecyclePolicy(t *testing.T) {
 	createOutput, err := client.CreateLifecyclePolicy(ctx, &dlm.CreateLifecyclePolicyInput{
 		Description:      aws.String("Test policy for EBS snapshots"),
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/dlm-role"),
-		State:            types.SettablePolicyStateValueEnabled,
+		State:            types.SettablePolicyStateValuesEnabled,
 		PolicyDetails: &types.PolicyDetails{
 			ResourceTypes: []types.ResourceTypeValues{types.ResourceTypeValuesVolume},
 			TargetTags: []types.Tag{
@@ -102,7 +102,7 @@ func TestDLM_UpdateLifecyclePolicy(t *testing.T) {
 	createOutput, err := client.CreateLifecyclePolicy(ctx, &dlm.CreateLifecyclePolicyInput{
 		Description:      aws.String("Test policy"),
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/dlm-role"),
-		State:            types.SettablePolicyStateValueEnabled,
+		State:            types.SettablePolicyStateValuesEnabled,
 		PolicyDetails: &types.PolicyDetails{
 			ResourceTypes: []types.ResourceTypeValues{types.ResourceTypeValuesVolume},
 			TargetTags: []types.Tag{
@@ -139,7 +139,7 @@ func TestDLM_UpdateLifecyclePolicy(t *testing.T) {
 	_, err = client.UpdateLifecyclePolicy(ctx, &dlm.UpdateLifecyclePolicyInput{
 		PolicyId:    aws.String(policyID),
 		Description: aws.String("Updated test policy"),
-		State:       types.SettablePolicyStateValueDisabled,
+		State:       types.SettablePolicyStateValuesDisabled,
 	})
 	require.NoError(t, err)
 
@@ -163,7 +163,7 @@ func TestDLM_GetLifecyclePolicies(t *testing.T) {
 		createOutput, err := client.CreateLifecyclePolicy(ctx, &dlm.CreateLifecyclePolicyInput{
 			Description:      aws.String("Test policy for listing"),
 			ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/dlm-role"),
-			State:            types.SettablePolicyStateValueEnabled,
+			State:            types.SettablePolicyStateValuesEnabled,
 			PolicyDetails: &types.PolicyDetails{
 				ResourceTypes: []types.ResourceTypeValues{types.ResourceTypeValuesVolume},
 				TargetTags: []types.Tag{
@@ -236,7 +236,7 @@ func TestDLM_FilterPoliciesByState(t *testing.T) {
 	createOutput, err := client.CreateLifecyclePolicy(ctx, &dlm.CreateLifecyclePolicyInput{
 		Description:      aws.String("Enabled policy"),
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/dlm-role"),
-		State:            types.SettablePolicyStateValueEnabled,
+		State:            types.SettablePolicyStateValuesEnabled,
 		PolicyDetails: &types.PolicyDetails{
 			ResourceTypes: []types.ResourceTypeValues{types.ResourceTypeValuesVolume},
 			TargetTags: []types.Tag{
