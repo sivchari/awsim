@@ -25,24 +25,25 @@ func (s *Service) Name() string {
 }
 
 // Prefix returns the URL prefix for the service.
+// Note: Scheduler uses /scheduler prefix to avoid conflicts with S3 wildcard routes.
 func (s *Service) Prefix() string {
-	return ""
+	return "/scheduler"
 }
 
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Schedule operations
-	r.HandleFunc("POST", "/schedules/{name}", s.CreateSchedule)
-	r.HandleFunc("GET", "/schedules/{name}", s.GetSchedule)
-	r.HandleFunc("PUT", "/schedules/{name}", s.UpdateSchedule)
-	r.HandleFunc("DELETE", "/schedules/{name}", s.DeleteSchedule)
-	r.HandleFunc("GET", "/schedules", s.ListSchedules)
+	r.HandleFunc("POST", "/scheduler/schedules/{name}", s.CreateSchedule)
+	r.HandleFunc("GET", "/scheduler/schedules/{name}", s.GetSchedule)
+	r.HandleFunc("PUT", "/scheduler/schedules/{name}", s.UpdateSchedule)
+	r.HandleFunc("DELETE", "/scheduler/schedules/{name}", s.DeleteSchedule)
+	r.HandleFunc("GET", "/scheduler/schedules", s.ListSchedules)
 
 	// Schedule group operations
-	r.HandleFunc("POST", "/schedule-groups/{name}", s.CreateScheduleGroup)
-	r.HandleFunc("GET", "/schedule-groups/{name}", s.GetScheduleGroup)
-	r.HandleFunc("DELETE", "/schedule-groups/{name}", s.DeleteScheduleGroup)
-	r.HandleFunc("GET", "/schedule-groups", s.ListScheduleGroups)
+	r.HandleFunc("POST", "/scheduler/schedule-groups/{name}", s.CreateScheduleGroup)
+	r.HandleFunc("GET", "/scheduler/schedule-groups/{name}", s.GetScheduleGroup)
+	r.HandleFunc("DELETE", "/scheduler/schedule-groups/{name}", s.DeleteScheduleGroup)
+	r.HandleFunc("GET", "/scheduler/schedule-groups", s.ListScheduleGroups)
 }
 
 // Ensure Service implements service.Service.

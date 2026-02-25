@@ -25,7 +25,7 @@ func newSchedulerClient(t *testing.T) *scheduler.Client {
 	require.NoError(t, err)
 
 	return scheduler.NewFromConfig(cfg, func(o *scheduler.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:4566")
+		o.BaseEndpoint = aws.String("http://localhost:4566/scheduler")
 	})
 }
 
