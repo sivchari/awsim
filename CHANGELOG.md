@@ -1,5 +1,26 @@
 # Changelog
 
+## [v0.1.0](https://github.com/sivchari/awsim/compare/v0.0.2...v0.1.0) - 2026-02-25
+- feat(rds): add RDS service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/233
+- feat(elasticache): add ElastiCache service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/235
+- feat(route53): add Route 53 service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/237
+- feat(ec2): add VPC service implementation by @sivchari in https://github.com/sivchari/awsim/pull/238
+- feat(elbv2): add ELB v2 service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/239
+- feat(cloudformation): add CloudFormation service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/240
+- feat(cloudtrail): add CloudTrail service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/241
+- feat(configservice): add AWS Config service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/242
+- feat(gamelift): add GameLift service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/243
+- feat(servicequotas): add Service Quotas service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/244
+- feat(organizations): add Organizations service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/245
+- feat(forecast): add Forecast service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/246
+- feat(pipes): add EventBridge Pipes service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/247
+- feat(emrserverless): add EMR Serverless service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/248
+- feat(appmesh): add App Mesh service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/249
+- chore: bump version to v0.1.0 by @sivchari in https://github.com/sivchari/awsim/pull/250
+- feat(scheduler): add EventBridge Scheduler service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/251
+- feat(dlm): add DLM service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/252
+- feat(sagemaker): add SageMaker service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/253
+
 ## [v0.0.2](https://github.com/sivchari/awsim/compare/v0.0.1...v0.0.2) - 2026-02-17
 - feat(eks): add basic EKS service implementation by @sivchari in https://github.com/sivchari/awsim/pull/207
 - feat(ecs): add basic ECS service implementation by @sivchari in https://github.com/sivchari/awsim/pull/206
