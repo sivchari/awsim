@@ -111,51 +111,71 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 	ctx := t.Context()
 	client := createAppSyncClient(t)
 
-	// Create 5 APIs.
+	// Create 3 APIs with a unique name prefix for this test.
+	const testPrefix = "pagination-test-api-"
+
 	var apiIDs []*string
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		result, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
-			Name:               aws.String("pagination-test-api"),
+			Name:               aws.String(testPrefix),
 			AuthenticationType: types.AuthenticationTypeApiKey,
 		})
 		require.NoError(t, err)
 		apiIDs = append(apiIDs, result.GraphqlApi.ApiId)
 	}
 
-	// List with maxResults = 2.
-	listResult, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: 2,
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, listResult)
-	assert.Len(t, listResult.GraphqlApis, 2)
-	assert.NotNil(t, listResult.NextToken)
+	// Verify pagination works by collecting all results through pagination.
+	var allResults []types.GraphqlApi
 
-	// List next page using nextToken.
-	listResult2, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: 2,
-		NextToken:  listResult.NextToken,
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, listResult2)
-	assert.Len(t, listResult2.GraphqlApis, 2)
-	assert.NotNil(t, listResult2.NextToken)
+	var nextToken *string
 
-	// List last page.
-	listResult3, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: 2,
-		NextToken:  listResult2.NextToken,
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, listResult3)
-	assert.Len(t, listResult3.GraphqlApis, 1)
-	// No more pages.
-	assert.Nil(t, listResult3.NextToken)
+	pageCount := 0
+
+	for {
+		listResult, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
+			MaxResults: 2,
+			NextToken:  nextToken,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, listResult)
+
+		// Each page should have at most maxResults items.
+		assert.LessOrEqual(t, len(listResult.GraphqlApis), 2)
+
+		allResults = append(allResults, listResult.GraphqlApis...)
+		pageCount++
+
+		if listResult.NextToken == nil {
+			break
+		}
+
+		nextToken = listResult.NextToken
+
+		// Safety limit to prevent infinite loop.
+		if pageCount > 100 {
+			t.Fatal("Too many pages, possible infinite loop")
+		}
+	}
+
+	// Verify we got all the APIs we created (and possibly others from parallel tests).
+	foundCount := 0
+
+	for _, api := range allResults {
+		for _, id := range apiIDs {
+			if api.ApiId != nil && *api.ApiId == *id {
+				foundCount++
+
+				break
+			}
+		}
+	}
+
+	assert.Equal(t, 3, foundCount, "All created APIs should be found through pagination")
 
 	// Clean up.
 	for _, apiID := range apiIDs {
-		_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
+		_, err := client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
 			ApiId: apiID,
 		})
 		require.NoError(t, err)
