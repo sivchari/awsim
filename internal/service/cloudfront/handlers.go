@@ -527,17 +527,26 @@ func buildDistributionListXML(dists []*Distribution, marker string, maxItems int
 
 func buildDistributionSummaryXML(d *Distribution) DistributionSummaryXML {
 	summary := DistributionSummaryXML{
-		ID:               d.ID,
-		ARN:              d.ARN,
-		Status:           d.Status,
-		LastModifiedTime: d.LastModifiedTime.Format(time.RFC3339),
-		DomainName:       d.DomainName,
-		Enabled:          d.DistributionConfig.Enabled,
-		Comment:          d.DistributionConfig.Comment,
-		PriceClass:       d.DistributionConfig.PriceClass,
-		HTTPVersion:      d.DistributionConfig.HTTPVersion,
-		IsIPV6Enabled:    d.DistributionConfig.IsIPV6Enabled,
-		CacheBehaviors:   &CacheBehaviorsXML{Quantity: 0},
+		ID:                   d.ID,
+		ARN:                  d.ARN,
+		Status:               d.Status,
+		LastModifiedTime:     d.LastModifiedTime.Format(time.RFC3339),
+		DomainName:           d.DomainName,
+		Enabled:              d.DistributionConfig.Enabled,
+		Comment:              d.DistributionConfig.Comment,
+		PriceClass:           d.DistributionConfig.PriceClass,
+		HTTPVersion:          d.DistributionConfig.HTTPVersion,
+		IsIPV6Enabled:        d.DistributionConfig.IsIPV6Enabled,
+		CacheBehaviors:       &CacheBehaviorsXML{Quantity: 0},
+		CustomErrorResponses: &CustomErrorResponsesXML{Quantity: 0},
+		Restrictions: &RestrictionsXML{
+			GeoRestriction: &GeoRestrictionXML{
+				RestrictionType: "none",
+				Quantity:        0,
+			},
+		},
+		WebACLId: "",
+		Staging:  false,
 	}
 
 	summary.Aliases = buildSummaryAliasesXML(d.DistributionConfig.Aliases)

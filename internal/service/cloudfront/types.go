@@ -400,6 +400,23 @@ type CacheBehaviorsXML struct {
 	Quantity int `xml:"Quantity"`
 }
 
+// RestrictionsXML represents restrictions in XML format.
+type RestrictionsXML struct {
+	GeoRestriction *GeoRestrictionXML `xml:"GeoRestriction"`
+}
+
+// GeoRestrictionXML represents geo restriction in XML format.
+type GeoRestrictionXML struct {
+	RestrictionType string   `xml:"RestrictionType"`
+	Quantity        int      `xml:"Quantity"`
+	Items           []string `xml:"Items>Location,omitempty"`
+}
+
+// CustomErrorResponsesXML represents custom error responses in XML format.
+type CustomErrorResponsesXML struct {
+	Quantity int `xml:"Quantity"`
+}
+
 // ViewerCertificateXML represents viewer certificate in XML format.
 type ViewerCertificateXML struct {
 	CloudFrontDefaultCertificate bool   `xml:"CloudFrontDefaultCertificate,omitempty"`
@@ -437,12 +454,16 @@ type DistributionSummaryXML struct {
 	Origins              *OriginsXML              `xml:"Origins"`
 	DefaultCacheBehavior *DefaultCacheBehaviorXML `xml:"DefaultCacheBehavior"`
 	CacheBehaviors       *CacheBehaviorsXML       `xml:"CacheBehaviors"`
+	CustomErrorResponses *CustomErrorResponsesXML `xml:"CustomErrorResponses"`
 	Comment              string                   `xml:"Comment"`
 	PriceClass           string                   `xml:"PriceClass"`
 	Enabled              bool                     `xml:"Enabled"`
 	ViewerCertificate    *ViewerCertificateXML    `xml:"ViewerCertificate"`
+	Restrictions         *RestrictionsXML         `xml:"Restrictions"`
+	WebACLId             string                   `xml:"WebACLId"`
 	HTTPVersion          string                   `xml:"HttpVersion"`
 	IsIPV6Enabled        bool                     `xml:"IsIPV6Enabled"`
+	Staging              bool                     `xml:"Staging"`
 }
 
 // GetDistributionResult is the response for GetDistribution.
