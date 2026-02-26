@@ -141,6 +141,13 @@ func (s *Service) ListClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate maxResults: must be between 1 and 100 if specified
+	if req.MaxResults != 0 && (req.MaxResults < 1 || req.MaxResults > 100) {
+		writeECSError(w, "InvalidParameterException", "maxResults must be between 1 and 100", http.StatusBadRequest)
+
+		return
+	}
+
 	clusterArns, nextToken, err := s.storage.ListClusters(r.Context(), req.MaxResults, req.NextToken)
 	if err != nil {
 		writeECSError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
