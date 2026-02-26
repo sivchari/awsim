@@ -206,6 +206,8 @@ type CertificateSummary struct {
 	RenewalEligibility      string        `json:"RenewalEligibility,omitempty"`
 	Exported                bool          `json:"Exported,omitempty"`
 	InUse                   bool          `json:"InUse,omitempty"`
+	KeyUsages               []string      `json:"KeyUsages,omitempty"`
+	ExtendedKeyUsages       []string      `json:"ExtendedKeyUsages,omitempty"`
 }
 
 // DeleteCertificateInput is the request for DeleteCertificate.
