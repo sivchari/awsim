@@ -421,7 +421,7 @@ func TestRoute53_ListHostedZones_Pagination(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, firstPage)
-	assert.Equal(t, "1", *firstPage.MaxItems)
+	assert.Equal(t, int32(1), *firstPage.MaxItems)
 	assert.Len(t, firstPage.HostedZones, 1)
 
 	// If there are more results, IsTruncated should be true.
