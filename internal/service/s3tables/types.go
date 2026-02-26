@@ -6,7 +6,7 @@ import "time"
 // TableBucket represents an S3 table bucket.
 type TableBucket struct {
 	Arn       string    `json:"arn"`
-	ID        string    `json:"tableBucketId"` //nolint:tagliatelle // AWS API uses tableBucketId
+	ID        string    `json:"tableBucketId"`
 	Name      string    `json:"name"`
 	Type      string    `json:"type"`
 	OwnerID   string    `json:"ownerAccountId"`
@@ -15,10 +15,10 @@ type TableBucket struct {
 
 // Table represents an S3 table.
 type Table struct {
-	Arn               string    `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN //nolint:tagliatelle // AWS API uses tableARN
+	Arn               string    `json:"tableARN"` //nolint:tagliatelle // AWS API uses tableARN
 	Name              string    `json:"name"`
 	Namespace         string    `json:"namespace"`
-	TableBucketArn    string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
+	TableBucketArn    string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	Type              string    `json:"type"`
 	Format            string    `json:"format"`
 	VersionToken      string    `json:"versionToken"`
@@ -34,7 +34,7 @@ type Table struct {
 // Namespace represents an S3 Tables namespace.
 type Namespace struct {
 	Namespace      []string  `json:"namespace"`
-	TableBucketArn string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
+	TableBucketArn string    `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 	OwnerID        string    `json:"ownerAccountId"`
 	CreatedAt      time.Time `json:"createdAt"`
 	CreatedBy      string    `json:"createdBy"`
@@ -52,7 +52,7 @@ type CreateTableBucketResponse struct {
 
 // DeleteTableBucketRequest represents a DeleteTableBucket request.
 type DeleteTableBucketRequest struct {
-	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN //nolint:tagliatelle // AWS API uses tableBucketARN
+	TableBucketArn string `json:"tableBucketARN"` //nolint:tagliatelle // AWS API uses tableBucketARN
 }
 
 // GetTableBucketRequest represents a GetTableBucket request.
@@ -84,7 +84,7 @@ type ListTableBucketsResponse struct {
 // TableBucketSummary represents a summary of a table bucket.
 type TableBucketSummary struct {
 	Arn       string    `json:"arn"`
-	ID        string    `json:"tableBucketId,omitempty"` //nolint:tagliatelle // AWS API uses tableBucketId
+	ID        string    `json:"tableBucketId,omitempty"`
 	Name      string    `json:"name"`
 	Type      string    `json:"type,omitempty"`
 	OwnerID   string    `json:"ownerAccountId"`
