@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// defaultAccountID is the default AWS account ID used in the emulator.
+const defaultAccountID = "000000000000"
+
 // Storage defines the CloudWatch storage interface.
 type Storage interface {
 	PutMetricData(ctx context.Context, namespace string, metricData []MetricDatum) error
@@ -248,8 +251,16 @@ func (s *MemoryStorage) ListMetrics(_ context.Context, req *ListMetricsRequest) 
 		return metrics[i].MetricName < metrics[j].MetricName
 	})
 
+	// Build owning accounts list.
+	// In a single-account emulator, all metrics are owned by the default account.
+	var owningAccounts []string
+	if len(metrics) > 0 {
+		owningAccounts = []string{defaultAccountID}
+	}
+
 	return &ListMetricsResult{
-		Metrics: metrics,
+		Metrics:        metrics,
+		OwningAccounts: owningAccounts,
 	}, nil
 }
 
@@ -259,7 +270,7 @@ func (s *MemoryStorage) PutMetricAlarm(_ context.Context, req *PutMetricAlarmReq
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	alarmARN := fmt.Sprintf("arn:aws:cloudwatch:us-east-1:000000000000:alarm:%s", req.AlarmName)
+	alarmARN := fmt.Sprintf("arn:aws:cloudwatch:us-east-1:%s:alarm:%s", defaultAccountID, req.AlarmName)
 
 	actionsEnabled := true
 	if req.ActionsEnabled != nil {

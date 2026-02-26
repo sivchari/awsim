@@ -133,8 +133,9 @@ func (s *Service) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONResponse(w, ListMetricsResponse{
-		Metrics:   result.Metrics,
-		NextToken: result.NextToken,
+		Metrics:        result.Metrics,
+		NextToken:      result.NextToken,
+		OwningAccounts: result.OwningAccounts,
 	})
 }
 
@@ -478,8 +479,9 @@ func (s *Service) ListMetricsCBOR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.WriteCBORResponse(w, ListMetricsResponse{
-		Metrics:   result.Metrics,
-		NextToken: result.NextToken,
+		Metrics:        result.Metrics,
+		NextToken:      result.NextToken,
+		OwningAccounts: result.OwningAccounts,
 	})
 }
 

@@ -209,8 +209,9 @@ type Datapoint struct {
 
 // ListMetricsResponse is the response for ListMetrics.
 type ListMetricsResponse struct {
-	Metrics   []Metric `json:"Metrics"`
-	NextToken string   `json:"NextToken,omitempty"`
+	Metrics        []Metric `json:"Metrics"`
+	NextToken      string   `json:"NextToken,omitempty"`
+	OwningAccounts []string `json:"OwningAccounts,omitempty"`
 }
 
 // DescribeAlarmsResponse is the response for DescribeAlarms.
@@ -358,8 +359,9 @@ type GetMetricStatisticsResult struct {
 
 // ListMetricsResult is the result for ListMetrics storage operation.
 type ListMetricsResult struct {
-	Metrics   []Metric
-	NextToken string
+	Metrics        []Metric
+	NextToken      string
+	OwningAccounts []string
 }
 
 // DescribeAlarmsResult is the result for DescribeAlarms storage operation.
