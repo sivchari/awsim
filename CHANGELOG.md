@@ -1,5 +1,7 @@
 # Changelog
 
+## [v0.1.2](https://github.com/sivchari/awsim/compare/v0.1.1...v0.1.2) - 2026-02-26
+
 ## [v0.1.1](https://github.com/sivchari/awsim/compare/v0.1.0...v0.1.1) - 2026-02-26
 - fix(s3): align ListBuckets response format with AWS API by @sivchari in https://github.com/sivchari/awsim/pull/255
 
