@@ -168,6 +168,7 @@ func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, max
 
 	// Find the starting index based on nextToken (which is the image digest)
 	startIdx := 0
+
 	if nextToken != "" {
 		for i, img := range images {
 			if img.ImageDigest == nextToken {
