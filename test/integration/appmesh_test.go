@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/appmesh"
 	"github.com/aws/aws-sdk-go-v2/service/appmesh/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newAppMeshClient(t *testing.T) *appmesh.Client {
@@ -48,24 +49,27 @@ func TestAppMesh_CreateAndDescribeMesh(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.NotNil(t, createOutput.Mesh)
-	require.Equal(t, meshName, *createOutput.Mesh.MeshName)
-	require.NotEmpty(t, createOutput.Mesh.Metadata.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe mesh.
 	descOutput, err := client.DescribeMesh(ctx, &appmesh.DescribeMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, meshName, *descOutput.Mesh.MeshName)
-	require.Equal(t, types.MeshStatusCodeActive, descOutput.Mesh.Status.Status)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_describe", descOutput)
 }
 
 func TestAppMesh_ListMeshes(t *testing.T) {
@@ -78,10 +82,12 @@ func TestAppMesh_ListMeshes(t *testing.T) {
 		_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 			MeshName: aws.String(meshName),
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		t.Cleanup(func() {
-			_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+			_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 				MeshName: aws.String(meshName),
 			})
 		})
@@ -89,8 +95,13 @@ func TestAppMesh_ListMeshes(t *testing.T) {
 
 	// List meshes.
 	listOutput, err := client.ListMeshes(ctx, &appmesh.ListMeshesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Meshes), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.Meshes) < 3 {
+		t.Errorf("expected at least 3 meshes, got %d", len(listOutput.Meshes))
+	}
 }
 
 func TestAppMesh_UpdateMesh(t *testing.T) {
@@ -108,10 +119,12 @@ func TestAppMesh_UpdateMesh(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -125,8 +138,11 @@ func TestAppMesh_UpdateMesh(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.EgressFilterTypeDropAll, updateOutput.Mesh.Spec.EgressFilter.Type)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name(), updateOutput)
 }
 
 func TestAppMesh_DeleteMesh(t *testing.T) {
@@ -139,20 +155,27 @@ func TestAppMesh_DeleteMesh(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Delete mesh.
-	deleteOutput, err := client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+	deleteOutput, err := client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, meshName, *deleteOutput.Mesh.MeshName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name(), deleteOutput)
 
 	// Verify mesh is deleted.
 	_, err = client.DescribeMesh(ctx, &appmesh.DescribeMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 // --- Virtual Node Tests ---
@@ -168,14 +191,16 @@ func TestAppMesh_CreateAndDescribeVirtualNode(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+		_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 			MeshName:        aws.String(meshName),
 			VirtualNodeName: aws.String(virtualNodeName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -200,17 +225,22 @@ func TestAppMesh_CreateAndDescribeVirtualNode(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualNodeName, *createOutput.VirtualNode.VirtualNodeName)
-	require.NotEmpty(t, createOutput.VirtualNode.Metadata.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe virtual node.
 	descOutput, err := client.DescribeVirtualNode(ctx, &appmesh.DescribeVirtualNodeInput{
 		MeshName:        aws.String(meshName),
 		VirtualNodeName: aws.String(virtualNodeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualNodeName, *descOutput.VirtualNode.VirtualNodeName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_describe", descOutput)
 }
 
 func TestAppMesh_ListVirtualNodes(t *testing.T) {
@@ -223,17 +253,19 @@ func TestAppMesh_ListVirtualNodes(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
 		for i := 0; i < 3; i++ {
 			vnName := "vn-" + string(rune('a'+i))
-			_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+			_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 				MeshName:        aws.String(meshName),
 				VirtualNodeName: aws.String(vnName),
 			})
 		}
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -246,15 +278,22 @@ func TestAppMesh_ListVirtualNodes(t *testing.T) {
 			VirtualNodeName: aws.String(vnName),
 			Spec:            &types.VirtualNodeSpec{},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// List virtual nodes.
 	listOutput, err := client.ListVirtualNodes(ctx, &appmesh.ListVirtualNodesInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
-	require.Len(t, listOutput.VirtualNodes, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.VirtualNodes) != 3 {
+		t.Errorf("expected 3 virtual nodes, got %d", len(listOutput.VirtualNodes))
+	}
 }
 
 // --- Virtual Service Tests ---
@@ -271,7 +310,9 @@ func TestAppMesh_CreateAndDescribeVirtualService(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual node.
 	_, err = client.CreateVirtualNode(ctx, &appmesh.CreateVirtualNodeInput{
@@ -279,18 +320,20 @@ func TestAppMesh_CreateAndDescribeVirtualService(t *testing.T) {
 		VirtualNodeName: aws.String(virtualNodeName),
 		Spec:            &types.VirtualNodeSpec{},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVirtualService(ctx, &appmesh.DeleteVirtualServiceInput{
+		_, _ = client.DeleteVirtualService(context.Background(), &appmesh.DeleteVirtualServiceInput{
 			MeshName:           aws.String(meshName),
 			VirtualServiceName: aws.String(virtualServiceName),
 		})
-		_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+		_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 			MeshName:        aws.String(meshName),
 			VirtualNodeName: aws.String(virtualNodeName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -307,17 +350,22 @@ func TestAppMesh_CreateAndDescribeVirtualService(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualServiceName, *createOutput.VirtualService.VirtualServiceName)
-	require.NotEmpty(t, createOutput.VirtualService.Metadata.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe virtual service.
 	descOutput, err := client.DescribeVirtualService(ctx, &appmesh.DescribeVirtualServiceInput{
 		MeshName:           aws.String(meshName),
 		VirtualServiceName: aws.String(virtualServiceName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualServiceName, *descOutput.VirtualService.VirtualServiceName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_describe", descOutput)
 }
 
 // --- Virtual Router Tests ---
@@ -333,14 +381,16 @@ func TestAppMesh_CreateAndDescribeVirtualRouter(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVirtualRouter(ctx, &appmesh.DeleteVirtualRouterInput{
+		_, _ = client.DeleteVirtualRouter(context.Background(), &appmesh.DeleteVirtualRouterInput{
 			MeshName:          aws.String(meshName),
 			VirtualRouterName: aws.String(virtualRouterName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -360,17 +410,22 @@ func TestAppMesh_CreateAndDescribeVirtualRouter(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualRouterName, *createOutput.VirtualRouter.VirtualRouterName)
-	require.NotEmpty(t, createOutput.VirtualRouter.Metadata.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe virtual router.
 	descOutput, err := client.DescribeVirtualRouter(ctx, &appmesh.DescribeVirtualRouterInput{
 		MeshName:          aws.String(meshName),
 		VirtualRouterName: aws.String(virtualRouterName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, virtualRouterName, *descOutput.VirtualRouter.VirtualRouterName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_describe", descOutput)
 }
 
 // --- Route Tests ---
@@ -388,7 +443,9 @@ func TestAppMesh_CreateAndDescribeRoute(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual node.
 	_, err = client.CreateVirtualNode(ctx, &appmesh.CreateVirtualNodeInput{
@@ -396,7 +453,9 @@ func TestAppMesh_CreateAndDescribeRoute(t *testing.T) {
 		VirtualNodeName: aws.String(virtualNodeName),
 		Spec:            &types.VirtualNodeSpec{},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual router.
 	_, err = client.CreateVirtualRouter(ctx, &appmesh.CreateVirtualRouterInput{
@@ -413,23 +472,25 @@ func TestAppMesh_CreateAndDescribeRoute(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteRoute(ctx, &appmesh.DeleteRouteInput{
+		_, _ = client.DeleteRoute(context.Background(), &appmesh.DeleteRouteInput{
 			MeshName:          aws.String(meshName),
 			VirtualRouterName: aws.String(virtualRouterName),
 			RouteName:         aws.String(routeName),
 		})
-		_, _ = client.DeleteVirtualRouter(ctx, &appmesh.DeleteVirtualRouterInput{
+		_, _ = client.DeleteVirtualRouter(context.Background(), &appmesh.DeleteVirtualRouterInput{
 			MeshName:          aws.String(meshName),
 			VirtualRouterName: aws.String(virtualRouterName),
 		})
-		_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+		_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 			MeshName:        aws.String(meshName),
 			VirtualNodeName: aws.String(virtualNodeName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -455,9 +516,11 @@ func TestAppMesh_CreateAndDescribeRoute(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.Equal(t, routeName, *createOutput.Route.RouteName)
-	require.NotEmpty(t, createOutput.Route.Metadata.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe route.
 	descOutput, err := client.DescribeRoute(ctx, &appmesh.DescribeRouteInput{
@@ -465,8 +528,11 @@ func TestAppMesh_CreateAndDescribeRoute(t *testing.T) {
 		VirtualRouterName: aws.String(virtualRouterName),
 		RouteName:         aws.String(routeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, routeName, *descOutput.Route.RouteName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "LastUpdatedAt", "Uid", "Version", "ResultMetadata")).Assert(t.Name()+"_describe", descOutput)
 }
 
 func TestAppMesh_ListRoutes(t *testing.T) {
@@ -481,7 +547,9 @@ func TestAppMesh_ListRoutes(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual node.
 	_, err = client.CreateVirtualNode(ctx, &appmesh.CreateVirtualNodeInput{
@@ -489,7 +557,9 @@ func TestAppMesh_ListRoutes(t *testing.T) {
 		VirtualNodeName: aws.String(virtualNodeName),
 		Spec:            &types.VirtualNodeSpec{},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual router.
 	_, err = client.CreateVirtualRouter(ctx, &appmesh.CreateVirtualRouterInput{
@@ -506,26 +576,28 @@ func TestAppMesh_ListRoutes(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
 		for i := 0; i < 3; i++ {
 			rName := "route-" + string(rune('a'+i))
-			_, _ = client.DeleteRoute(ctx, &appmesh.DeleteRouteInput{
+			_, _ = client.DeleteRoute(context.Background(), &appmesh.DeleteRouteInput{
 				MeshName:          aws.String(meshName),
 				VirtualRouterName: aws.String(virtualRouterName),
 				RouteName:         aws.String(rName),
 			})
 		}
-		_, _ = client.DeleteVirtualRouter(ctx, &appmesh.DeleteVirtualRouterInput{
+		_, _ = client.DeleteVirtualRouter(context.Background(), &appmesh.DeleteVirtualRouterInput{
 			MeshName:          aws.String(meshName),
 			VirtualRouterName: aws.String(virtualRouterName),
 		})
-		_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+		_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 			MeshName:        aws.String(meshName),
 			VirtualNodeName: aws.String(virtualNodeName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -553,7 +625,9 @@ func TestAppMesh_ListRoutes(t *testing.T) {
 				},
 			},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// List routes.
@@ -561,8 +635,13 @@ func TestAppMesh_ListRoutes(t *testing.T) {
 		MeshName:          aws.String(meshName),
 		VirtualRouterName: aws.String(virtualRouterName),
 	})
-	require.NoError(t, err)
-	require.Len(t, listOutput.Routes, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.Routes) != 3 {
+		t.Errorf("expected 3 routes, got %d", len(listOutput.Routes))
+	}
 }
 
 // --- Error Cases ---
@@ -574,7 +653,9 @@ func TestAppMesh_MeshNotFound(t *testing.T) {
 	_, err := client.DescribeMesh(ctx, &appmesh.DescribeMeshInput{
 		MeshName: aws.String("non-existent-mesh"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestAppMesh_DuplicateMesh(t *testing.T) {
@@ -586,10 +667,12 @@ func TestAppMesh_DuplicateMesh(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
@@ -598,7 +681,9 @@ func TestAppMesh_DuplicateMesh(t *testing.T) {
 	_, err = client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestAppMesh_DeleteMeshWithResources(t *testing.T) {
@@ -612,7 +697,9 @@ func TestAppMesh_DeleteMeshWithResources(t *testing.T) {
 	_, err := client.CreateMesh(ctx, &appmesh.CreateMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create virtual node.
 	_, err = client.CreateVirtualNode(ctx, &appmesh.CreateVirtualNodeInput{
@@ -620,21 +707,25 @@ func TestAppMesh_DeleteMeshWithResources(t *testing.T) {
 		VirtualNodeName: aws.String(virtualNodeName),
 		Spec:            &types.VirtualNodeSpec{},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVirtualNode(ctx, &appmesh.DeleteVirtualNodeInput{
+		_, _ = client.DeleteVirtualNode(context.Background(), &appmesh.DeleteVirtualNodeInput{
 			MeshName:        aws.String(meshName),
 			VirtualNodeName: aws.String(virtualNodeName),
 		})
-		_, _ = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+		_, _ = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 			MeshName: aws.String(meshName),
 		})
 	})
 
 	// Try to delete mesh with virtual node - should fail.
-	_, err = client.DeleteMesh(ctx, &appmesh.DeleteMeshInput{
+	_, err = client.DeleteMesh(context.Background(), &appmesh.DeleteMeshInput{
 		MeshName: aws.String(meshName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

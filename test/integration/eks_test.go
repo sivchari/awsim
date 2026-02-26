@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -60,7 +61,7 @@ func TestEKS_CreateAndDeleteCluster(t *testing.T) {
 	}
 
 	// Delete cluster
-	deleteResult, err := client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+	deleteResult, err := client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
 	if err != nil {
@@ -94,7 +95,7 @@ func TestEKS_DescribeCluster(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})
@@ -142,7 +143,7 @@ func TestEKS_ListClusters(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})
@@ -186,11 +187,11 @@ func TestEKS_CreateAndDeleteNodegroup(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Delete nodegroup first, then cluster
-		_, _ = client.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+		_, _ = client.DeleteNodegroup(context.Background(), &eks.DeleteNodegroupInput{
 			ClusterName:   aws.String(clusterName),
 			NodegroupName: aws.String(nodegroupName),
 		})
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})
@@ -224,7 +225,7 @@ func TestEKS_CreateAndDeleteNodegroup(t *testing.T) {
 	}
 
 	// Delete nodegroup
-	deleteResult, err := client.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+	deleteResult, err := client.DeleteNodegroup(context.Background(), &eks.DeleteNodegroupInput{
 		ClusterName:   aws.String(clusterName),
 		NodegroupName: aws.String(nodegroupName),
 	})
@@ -260,11 +261,11 @@ func TestEKS_DescribeNodegroup(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+		_, _ = client.DeleteNodegroup(context.Background(), &eks.DeleteNodegroupInput{
 			ClusterName:   aws.String(clusterName),
 			NodegroupName: aws.String(nodegroupName),
 		})
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})
@@ -321,11 +322,11 @@ func TestEKS_ListNodegroups(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+		_, _ = client.DeleteNodegroup(context.Background(), &eks.DeleteNodegroupInput{
 			ClusterName:   aws.String(clusterName),
 			NodegroupName: aws.String(nodegroupName),
 		})
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})
@@ -393,7 +394,7 @@ func TestEKS_NodegroupNotFound(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &eks.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 			Name: aws.String(clusterName),
 		})
 	})

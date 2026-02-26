@@ -10,8 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	"github.com/aws/aws-sdk-go-v2/service/batch/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func TestBatch_CreateComputeEnvironment(t *testing.T) {
@@ -28,16 +27,18 @@ func TestBatch_CreateComputeEnvironment(t *testing.T) {
 		Type:                   types.CETypeManaged,
 		State:                  types.CEStateEnabled,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, ceName, *result.ComputeEnvironmentName)
-	assert.NotEmpty(t, *result.ComputeEnvironmentArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ComputeEnvironmentArn", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_DescribeComputeEnvironments(t *testing.T) {
@@ -53,22 +54,26 @@ func TestBatch_DescribeComputeEnvironments(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Describe compute environments.
 	result, err := client.DescribeComputeEnvironments(ctx, &batch.DescribeComputeEnvironmentsInput{
 		ComputeEnvironments: []string{ceName},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Len(t, result.ComputeEnvironments, 1)
-	assert.Equal(t, ceName, *result.ComputeEnvironments[0].ComputeEnvironmentName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ComputeEnvironmentArn", "EcsClusterArn", "Uuid", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_CreateJobQueue(t *testing.T) {
@@ -85,7 +90,9 @@ func TestBatch_CreateJobQueue(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create job queue.
 	jqResult, err := client.CreateJobQueue(ctx, &batch.CreateJobQueueInput{
@@ -98,21 +105,25 @@ func TestBatch_CreateJobQueue(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, jqResult)
-	assert.Equal(t, jqName, *jqResult.JobQueueName)
-	assert.NotEmpty(t, *jqResult.JobQueueArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobQueueArn", "ResultMetadata")).Assert(t.Name(), jqResult)
 
 	// Clean up.
 	_, err = client.DeleteJobQueue(ctx, &batch.DeleteJobQueueInput{
 		JobQueue: aws.String(jqName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_DescribeJobQueues(t *testing.T) {
@@ -129,7 +140,9 @@ func TestBatch_DescribeJobQueues(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create job queue.
 	_, err = client.CreateJobQueue(ctx, &batch.CreateJobQueueInput{
@@ -142,27 +155,33 @@ func TestBatch_DescribeJobQueues(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Describe job queues.
 	result, err := client.DescribeJobQueues(ctx, &batch.DescribeJobQueuesInput{
 		JobQueues: []string{jqName},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Len(t, result.JobQueues, 1)
-	assert.Equal(t, jqName, *result.JobQueues[0].JobQueueName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobQueueArn", "ComputeEnvironmentOrder", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteJobQueue(ctx, &batch.DeleteJobQueueInput{
 		JobQueue: aws.String(jqName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_RegisterJobDefinition(t *testing.T) {
@@ -183,11 +202,10 @@ func TestBatch_RegisterJobDefinition(t *testing.T) {
 			Memory: aws.Int32(512),
 		},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, jdName, *result.JobDefinitionName)
-	assert.NotEmpty(t, *result.JobDefinitionArn)
-	assert.Equal(t, int32(1), *result.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobDefinitionArn", "Revision", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBatch_SubmitJob(t *testing.T) {
@@ -205,7 +223,9 @@ func TestBatch_SubmitJob(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create job queue.
 	jqResult, err := client.CreateJobQueue(ctx, &batch.CreateJobQueueInput{
@@ -218,7 +238,9 @@ func TestBatch_SubmitJob(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Register job definition.
 	jdResult, err := client.RegisterJobDefinition(ctx, &batch.RegisterJobDefinitionInput{
@@ -230,7 +252,9 @@ func TestBatch_SubmitJob(t *testing.T) {
 			Memory: aws.Int32(512),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Submit job.
 	jobResult, err := client.SubmitJob(ctx, &batch.SubmitJobInput{
@@ -238,22 +262,25 @@ func TestBatch_SubmitJob(t *testing.T) {
 		JobQueue:      jqResult.JobQueueArn,
 		JobDefinition: jdResult.JobDefinitionArn,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, jobResult)
-	assert.Equal(t, "test-job", *jobResult.JobName)
-	assert.NotEmpty(t, *jobResult.JobId)
-	assert.NotEmpty(t, *jobResult.JobArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobArn", "JobId", "ResultMetadata")).Assert(t.Name(), jobResult)
 
 	// Clean up.
 	_, err = client.DeleteJobQueue(ctx, &batch.DeleteJobQueueInput{
 		JobQueue: aws.String(jqName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_DescribeJobs(t *testing.T) {
@@ -271,7 +298,9 @@ func TestBatch_DescribeJobs(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create job queue.
 	jqResult, err := client.CreateJobQueue(ctx, &batch.CreateJobQueueInput{
@@ -284,7 +313,9 @@ func TestBatch_DescribeJobs(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Register job definition.
 	jdResult, err := client.RegisterJobDefinition(ctx, &batch.RegisterJobDefinitionInput{
@@ -296,7 +327,9 @@ func TestBatch_DescribeJobs(t *testing.T) {
 			Memory: aws.Int32(512),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Submit job.
 	jobResult, err := client.SubmitJob(ctx, &batch.SubmitJobInput{
@@ -304,28 +337,33 @@ func TestBatch_DescribeJobs(t *testing.T) {
 		JobQueue:      jqResult.JobQueueArn,
 		JobDefinition: jdResult.JobDefinitionArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Describe job.
 	describeResult, err := client.DescribeJobs(ctx, &batch.DescribeJobsInput{
 		Jobs: []string{*jobResult.JobId},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, describeResult)
-	assert.Len(t, describeResult.Jobs, 1)
-	assert.Equal(t, *jobResult.JobId, *describeResult.Jobs[0].JobId)
-	assert.Equal(t, "describe-test-job", *describeResult.Jobs[0].JobName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobArn", "JobId", "JobDefinition", "JobQueue", "CreatedAt", "StartedAt", "StoppedAt", "ResultMetadata")).Assert(t.Name(), describeResult)
 
 	// Clean up.
 	_, err = client.DeleteJobQueue(ctx, &batch.DeleteJobQueueInput{
 		JobQueue: aws.String(jqName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatch_TerminateJob(t *testing.T) {
@@ -343,7 +381,9 @@ func TestBatch_TerminateJob(t *testing.T) {
 		ComputeEnvironmentName: aws.String(ceName),
 		Type:                   types.CETypeManaged,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create job queue.
 	jqResult, err := client.CreateJobQueue(ctx, &batch.CreateJobQueueInput{
@@ -356,7 +396,9 @@ func TestBatch_TerminateJob(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Register job definition.
 	jdResult, err := client.RegisterJobDefinition(ctx, &batch.RegisterJobDefinitionInput{
@@ -368,7 +410,9 @@ func TestBatch_TerminateJob(t *testing.T) {
 			Memory: aws.Int32(512),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Submit job.
 	jobResult, err := client.SubmitJob(ctx, &batch.SubmitJobInput{
@@ -376,33 +420,42 @@ func TestBatch_TerminateJob(t *testing.T) {
 		JobQueue:      jqResult.JobQueueArn,
 		JobDefinition: jdResult.JobDefinitionArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Terminate job.
 	_, err = client.TerminateJob(ctx, &batch.TerminateJobInput{
 		JobId:  jobResult.JobId,
 		Reason: aws.String("Test termination"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify job is terminated.
 	describeResult, err := client.DescribeJobs(ctx, &batch.DescribeJobsInput{
 		Jobs: []string{*jobResult.JobId},
 	})
-	require.NoError(t, err)
-	assert.Len(t, describeResult.Jobs, 1)
-	assert.Equal(t, types.JobStatusFailed, describeResult.Jobs[0].Status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("JobArn", "JobId", "JobDefinition", "JobQueue", "CreatedAt", "StartedAt", "StoppedAt", "StatusReason", "ResultMetadata")).Assert(t.Name(), describeResult)
 
 	// Clean up.
 	_, err = client.DeleteJobQueue(ctx, &batch.DeleteJobQueueInput{
 		JobQueue: aws.String(jqName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteComputeEnvironment(ctx, &batch.DeleteComputeEnvironmentInput{
 		ComputeEnvironment: aws.String(ceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func createBatchClient(t *testing.T) *batch.Client {

@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -89,11 +90,11 @@ func TestCloudWatchLogs_CreateAndDeleteLogStream(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLogStream(ctx, &cloudwatchlogs.DeleteLogStreamInput{
+		_, _ = client.DeleteLogStream(context.Background(), &cloudwatchlogs.DeleteLogStreamInput{
 			LogGroupName:  aws.String(logGroupName),
 			LogStreamName: aws.String(logStreamName),
 		})
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName),
 		})
 	})
@@ -154,11 +155,11 @@ func TestCloudWatchLogs_PutAndGetLogEvents(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLogStream(ctx, &cloudwatchlogs.DeleteLogStreamInput{
+		_, _ = client.DeleteLogStream(context.Background(), &cloudwatchlogs.DeleteLogStreamInput{
 			LogGroupName:  aws.String(logGroupName),
 			LogStreamName: aws.String(logStreamName),
 		})
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName),
 		})
 	})
@@ -226,11 +227,11 @@ func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLogStream(ctx, &cloudwatchlogs.DeleteLogStreamInput{
+		_, _ = client.DeleteLogStream(context.Background(), &cloudwatchlogs.DeleteLogStreamInput{
 			LogGroupName:  aws.String(logGroupName),
 			LogStreamName: aws.String(logStreamName),
 		})
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName),
 		})
 	})
@@ -305,10 +306,10 @@ func TestCloudWatchLogs_DescribeLogGroups(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName1),
 		})
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName2),
 		})
 	})
@@ -343,15 +344,15 @@ func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLogStream(ctx, &cloudwatchlogs.DeleteLogStreamInput{
+		_, _ = client.DeleteLogStream(context.Background(), &cloudwatchlogs.DeleteLogStreamInput{
 			LogGroupName:  aws.String(logGroupName),
 			LogStreamName: aws.String(logStreamName1),
 		})
-		_, _ = client.DeleteLogStream(ctx, &cloudwatchlogs.DeleteLogStreamInput{
+		_, _ = client.DeleteLogStream(context.Background(), &cloudwatchlogs.DeleteLogStreamInput{
 			LogGroupName:  aws.String(logGroupName),
 			LogStreamName: aws.String(logStreamName2),
 		})
-		_, _ = client.DeleteLogGroup(ctx, &cloudwatchlogs.DeleteLogGroupInput{
+		_, _ = client.DeleteLogGroup(context.Background(), &cloudwatchlogs.DeleteLogGroupInput{
 			LogGroupName: aws.String(logGroupName),
 		})
 	})

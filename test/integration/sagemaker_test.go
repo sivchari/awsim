@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newSageMakerClient(t *testing.T) *sagemaker.Client {
@@ -22,7 +23,9 @@ func newSageMakerClient(t *testing.T) *sagemaker.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return sagemaker.NewFromConfig(cfg, func(o *sagemaker.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -41,11 +44,13 @@ func TestSageMaker_CreateAndDeleteNotebookInstance(t *testing.T) {
 		InstanceType:         types.InstanceTypeMlT2Medium,
 		RoleArn:              aws.String("arn:aws:iam::123456789012:role/sagemaker-role"),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.NotebookInstanceArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("NotebookInstanceArn")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNotebookInstance(ctx, &sagemaker.DeleteNotebookInstanceInput{
+		_, _ = client.DeleteNotebookInstance(context.Background(), &sagemaker.DeleteNotebookInstanceInput{
 			NotebookInstanceName: aws.String(instanceName),
 		})
 	})
@@ -54,21 +59,26 @@ func TestSageMaker_CreateAndDeleteNotebookInstance(t *testing.T) {
 	descOutput, err := client.DescribeNotebookInstance(ctx, &sagemaker.DescribeNotebookInstanceInput{
 		NotebookInstanceName: aws.String(instanceName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, instanceName, *descOutput.NotebookInstanceName)
-	require.Equal(t, types.InstanceTypeMlT2Medium, descOutput.InstanceType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("NotebookInstanceArn", "CreationTime", "LastModifiedTime")).Assert(t.Name()+"_describe", descOutput)
 
 	// Delete notebook instance.
 	_, err = client.DeleteNotebookInstance(ctx, &sagemaker.DeleteNotebookInstanceInput{
 		NotebookInstanceName: aws.String(instanceName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify notebook instance is deleted.
 	_, err = client.DescribeNotebookInstance(ctx, &sagemaker.DescribeNotebookInstanceInput{
 		NotebookInstanceName: aws.String(instanceName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestSageMaker_ListNotebookInstances(t *testing.T) {
@@ -84,12 +94,14 @@ func TestSageMaker_ListNotebookInstances(t *testing.T) {
 			InstanceType:         types.InstanceTypeMlT2Medium,
 			RoleArn:              aws.String("arn:aws:iam::123456789012:role/sagemaker-role"),
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Cleanup(func() {
 		for _, name := range instanceNames {
-			_, _ = client.DeleteNotebookInstance(ctx, &sagemaker.DeleteNotebookInstanceInput{
+			_, _ = client.DeleteNotebookInstance(context.Background(), &sagemaker.DeleteNotebookInstanceInput{
 				NotebookInstanceName: aws.String(name),
 			})
 		}
@@ -97,8 +109,12 @@ func TestSageMaker_ListNotebookInstances(t *testing.T) {
 
 	// List notebook instances.
 	listOutput, err := client.ListNotebookInstances(ctx, &sagemaker.ListNotebookInstancesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.NotebookInstances), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.NotebookInstances) < 2 {
+		t.Errorf("expected at least 2 notebook instances, got %d", len(listOutput.NotebookInstances))
+	}
 }
 
 func TestSageMaker_CreateAndDescribeTrainingJob(t *testing.T) {
@@ -127,16 +143,19 @@ func TestSageMaker_CreateAndDescribeTrainingJob(t *testing.T) {
 			MaxRuntimeInSeconds: aws.Int32(3600),
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.TrainingJobArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("TrainingJobArn")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe training job.
 	descOutput, err := client.DescribeTrainingJob(ctx, &sagemaker.DescribeTrainingJobInput{
 		TrainingJobName: aws.String(jobName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, jobName, *descOutput.TrainingJobName)
-	require.Equal(t, types.TrainingJobStatusCompleted, descOutput.TrainingJobStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("TrainingJobArn", "CreationTime", "TrainingStartTime", "TrainingEndTime", "LastModifiedTime")).Assert(t.Name()+"_describe", descOutput)
 }
 
 func TestSageMaker_CreateAndDeleteModel(t *testing.T) {
@@ -153,11 +172,13 @@ func TestSageMaker_CreateAndDeleteModel(t *testing.T) {
 		},
 		ExecutionRoleArn: aws.String("arn:aws:iam::123456789012:role/sagemaker-role"),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.ModelArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ModelArn")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteModel(ctx, &sagemaker.DeleteModelInput{
+		_, _ = client.DeleteModel(context.Background(), &sagemaker.DeleteModelInput{
 			ModelName: aws.String(modelName),
 		})
 	})
@@ -166,13 +187,17 @@ func TestSageMaker_CreateAndDeleteModel(t *testing.T) {
 	_, err = client.DeleteModel(ctx, &sagemaker.DeleteModelInput{
 		ModelName: aws.String(modelName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Try to delete again (should fail).
 	_, err = client.DeleteModel(ctx, &sagemaker.DeleteModelInput{
 		ModelName: aws.String(modelName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestSageMaker_CreateAndDeleteEndpoint(t *testing.T) {
@@ -187,11 +212,13 @@ func TestSageMaker_CreateAndDeleteEndpoint(t *testing.T) {
 		EndpointName:       aws.String(endpointName),
 		EndpointConfigName: aws.String(endpointConfigName),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.EndpointArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("EndpointArn")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteEndpoint(ctx, &sagemaker.DeleteEndpointInput{
+		_, _ = client.DeleteEndpoint(context.Background(), &sagemaker.DeleteEndpointInput{
 			EndpointName: aws.String(endpointName),
 		})
 	})
@@ -200,22 +227,26 @@ func TestSageMaker_CreateAndDeleteEndpoint(t *testing.T) {
 	descOutput, err := client.DescribeEndpoint(ctx, &sagemaker.DescribeEndpointInput{
 		EndpointName: aws.String(endpointName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, endpointName, *descOutput.EndpointName)
-	require.Equal(t, endpointConfigName, *descOutput.EndpointConfigName)
-	require.Equal(t, types.EndpointStatusInService, descOutput.EndpointStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("EndpointArn", "CreationTime", "LastModifiedTime")).Assert(t.Name()+"_describe", descOutput)
 
 	// Delete endpoint.
 	_, err = client.DeleteEndpoint(ctx, &sagemaker.DeleteEndpointInput{
 		EndpointName: aws.String(endpointName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify endpoint is deleted.
 	_, err = client.DescribeEndpoint(ctx, &sagemaker.DescribeEndpointInput{
 		EndpointName: aws.String(endpointName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestSageMaker_NotebookInstanceNotFound(t *testing.T) {
@@ -226,11 +257,15 @@ func TestSageMaker_NotebookInstanceNotFound(t *testing.T) {
 	_, err := client.DescribeNotebookInstance(ctx, &sagemaker.DescribeNotebookInstanceInput{
 		NotebookInstanceName: aws.String("non-existent-notebook"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent notebook instance.
 	_, err = client.DeleteNotebookInstance(ctx, &sagemaker.DeleteNotebookInstanceInput{
 		NotebookInstanceName: aws.String("non-existent-notebook"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

@@ -1,0 +1,21 @@
+{
+  "Arn": "arn:aws:pipes:us-east-1:123456789012:pipe/test-pipe-update",
+  "CreationTime": "2026-02-26T15:21:04.968Z",
+  "CurrentState": "RUNNING",
+  "Description": "Updated description",
+  "DesiredState": "RUNNING",
+  "Enrichment": null,
+  "EnrichmentParameters": null,
+  "KmsKeyIdentifier": null,
+  "LastModifiedTime": "2026-02-26T15:21:04.969Z",
+  "LogConfiguration": null,
+  "Name": "test-pipe-update",
+  "RoleArn": "arn:aws:iam::123456789012:role/test-pipe-role-updated",
+  "Source": "arn:aws:sqs:us-east-1:123456789012:test-source-queue",
+  "SourceParameters": null,
+  "StateReason": null,
+  "Tags": null,
+  "Target": "arn:aws:lambda:us-east-1:123456789012:function:test-target",
+  "TargetParameters": null,
+  "ResultMetadata": {}
+}

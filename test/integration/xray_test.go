@@ -13,8 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/xray"
 	"github.com/aws/aws-sdk-go-v2/service/xray/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func TestXRay_PutTraceSegments(t *testing.T) {
@@ -44,15 +43,19 @@ func TestXRay_PutTraceSegments(t *testing.T) {
 	}
 
 	docBytes, err := json.Marshal(segmentDoc)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Put trace segments.
 	result, err := client.PutTraceSegments(ctx, &xray.PutTraceSegmentsInput{
 		TraceSegmentDocuments: []string{string(docBytes)},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Empty(t, result.UnprocessedTraceSegments)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestXRay_GetTraceSummaries(t *testing.T) {
@@ -72,12 +75,16 @@ func TestXRay_GetTraceSummaries(t *testing.T) {
 	}
 
 	docBytes, err := json.Marshal(segmentDoc)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.PutTraceSegments(ctx, &xray.PutTraceSegmentsInput{
 		TraceSegmentDocuments: []string{string(docBytes)},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get trace summaries.
 	startTime := time.Now().Add(-1 * time.Hour)
@@ -87,10 +94,27 @@ func TestXRay_GetTraceSummaries(t *testing.T) {
 		StartTime: &startTime,
 		EndTime:   &endTime,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	// There should be at least one trace summary.
-	assert.NotEmpty(t, result.TraceSummaries)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"TraceSummaries",
+		"TracesProcessedCount",
+		"ApproximateTime",
+		"Id",
+		"Duration",
+		"ResponseTime",
+		"Http",
+		"Annotations",
+		"Users",
+		"ServiceIds",
+		"EntryPoint",
+		"AvailabilityZones",
+		"InstanceIds",
+		"ResourceARNs",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 }
 
 func TestXRay_BatchGetTraces(t *testing.T) {
@@ -112,21 +136,30 @@ func TestXRay_BatchGetTraces(t *testing.T) {
 	}
 
 	docBytes, err := json.Marshal(segmentDoc)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.PutTraceSegments(ctx, &xray.PutTraceSegmentsInput{
 		TraceSegmentDocuments: []string{string(docBytes)},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Batch get traces.
 	result, err := client.BatchGetTraces(ctx, &xray.BatchGetTracesInput{
 		TraceIds: []string{traceID},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Len(t, result.Traces, 1)
-	assert.Equal(t, traceID, *result.Traces[0].Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Duration",
+		"Segments",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 }
 
 func TestXRay_GetServiceGraph(t *testing.T) {
@@ -147,12 +180,16 @@ func TestXRay_GetServiceGraph(t *testing.T) {
 	}
 
 	docBytes, err := json.Marshal(segmentDoc)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.PutTraceSegments(ctx, &xray.PutTraceSegmentsInput{
 		TraceSegmentDocuments: []string{string(docBytes)},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get service graph.
 	startTime := time.Now().Add(-1 * time.Hour)
@@ -162,10 +199,16 @@ func TestXRay_GetServiceGraph(t *testing.T) {
 		StartTime: &startTime,
 		EndTime:   &endTime,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.StartTime)
-	assert.NotNil(t, result.EndTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"StartTime",
+		"EndTime",
+		"Services",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 }
 
 func TestXRay_CreateGroup(t *testing.T) {
@@ -185,17 +228,23 @@ func TestXRay_CreateGroup(t *testing.T) {
 			NotificationsEnabled: aws.Bool(false),
 		},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.Group)
-	assert.Equal(t, groupName, *result.Group.GroupName)
-	assert.NotEmpty(t, *result.Group.GroupARN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"GroupARN",
+		"GroupName",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 
 	// Clean up: delete the group.
 	_, err = client.DeleteGroup(ctx, &xray.DeleteGroupInput{
 		GroupName: aws.String(groupName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestXRay_DeleteGroup(t *testing.T) {
@@ -210,19 +259,25 @@ func TestXRay_DeleteGroup(t *testing.T) {
 	_, err := client.CreateGroup(ctx, &xray.CreateGroupInput{
 		GroupName: aws.String(groupName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Delete the group.
 	_, err = client.DeleteGroup(ctx, &xray.DeleteGroupInput{
 		GroupName: aws.String(groupName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Try to delete again - should fail.
 	_, err = client.DeleteGroup(ctx, &xray.DeleteGroupInput{
 		GroupName: aws.String(groupName),
 	})
-	assert.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func createXRayClient(t *testing.T, _ context.Context) *xray.Client {

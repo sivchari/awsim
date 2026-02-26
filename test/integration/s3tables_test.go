@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,7 +50,7 @@ func TestS3Tables_CreateAndDeleteTableBucket(t *testing.T) {
 	arn := *createResult.Arn
 
 	// Delete table bucket
-	_, err = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+	_, err = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 		TableBucketARN: aws.String(arn),
 	})
 	if err != nil {
@@ -73,7 +74,7 @@ func TestS3Tables_GetTableBucket(t *testing.T) {
 	arn := *createResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -111,7 +112,7 @@ func TestS3Tables_ListTableBuckets(t *testing.T) {
 	arn := *createResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -152,11 +153,11 @@ func TestS3Tables_CreateAndDeleteNamespace(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -175,7 +176,7 @@ func TestS3Tables_CreateAndDeleteNamespace(t *testing.T) {
 	}
 
 	// Delete namespace
-	_, err = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+	_, err = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 		TableBucketARN: aws.String(arn),
 		Namespace:      aws.String(namespaceName),
 	})
@@ -201,11 +202,11 @@ func TestS3Tables_GetNamespace(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -250,11 +251,11 @@ func TestS3Tables_ListNamespaces(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -307,16 +308,16 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &s3tables.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &s3tables.DeleteTableInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 			Name:           aws.String(tableName),
 		})
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -350,7 +351,7 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 	}
 
 	// Delete table
-	_, err = client.DeleteTable(ctx, &s3tables.DeleteTableInput{
+	_, err = client.DeleteTable(context.Background(), &s3tables.DeleteTableInput{
 		TableBucketARN: aws.String(arn),
 		Namespace:      aws.String(namespaceName),
 		Name:           aws.String(tableName),
@@ -378,16 +379,16 @@ func TestS3Tables_GetTable(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &s3tables.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &s3tables.DeleteTableInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 			Name:           aws.String(tableName),
 		})
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -449,16 +450,16 @@ func TestS3Tables_ListTables(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &s3tables.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &s3tables.DeleteTableInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 			Name:           aws.String(tableName),
 		})
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -534,7 +535,7 @@ func TestS3Tables_NamespaceNotFound(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})
@@ -566,11 +567,11 @@ func TestS3Tables_TableNotFound(t *testing.T) {
 	arn := *createBucketResult.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteNamespace(ctx, &s3tables.DeleteNamespaceInput{
+		_, _ = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
 			TableBucketARN: aws.String(arn),
 			Namespace:      aws.String(namespaceName),
 		})
-		_, _ = client.DeleteTableBucket(ctx, &s3tables.DeleteTableBucketInput{
+		_, _ = client.DeleteTableBucket(context.Background(), &s3tables.DeleteTableBucketInput{
 			TableBucketARN: aws.String(arn),
 		})
 	})

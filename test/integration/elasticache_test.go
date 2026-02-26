@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -55,7 +56,7 @@ func TestElastiCache_CreateAndDescribeCacheCluster(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCacheCluster(ctx, &elasticache.DeleteCacheClusterInput{
+		_, _ = client.DeleteCacheCluster(context.Background(), &elasticache.DeleteCacheClusterInput{
 			CacheClusterId: aws.String(clusterID),
 		})
 	})
@@ -95,7 +96,7 @@ func TestElastiCache_ModifyCacheCluster(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCacheCluster(ctx, &elasticache.DeleteCacheClusterInput{
+		_, _ = client.DeleteCacheCluster(context.Background(), &elasticache.DeleteCacheClusterInput{
 			CacheClusterId: aws.String(clusterID),
 		})
 	})
@@ -180,7 +181,7 @@ func TestElastiCache_CreateAndDescribeReplicationGroup(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteReplicationGroup(ctx, &elasticache.DeleteReplicationGroupInput{
+		_, _ = client.DeleteReplicationGroup(context.Background(), &elasticache.DeleteReplicationGroupInput{
 			ReplicationGroupId: aws.String(groupID),
 		})
 	})
@@ -260,7 +261,7 @@ func TestElastiCache_DescribeCacheClusters_All(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, id := range clusterIDs {
-			_, _ = client.DeleteCacheCluster(ctx, &elasticache.DeleteCacheClusterInput{
+			_, _ = client.DeleteCacheCluster(context.Background(), &elasticache.DeleteCacheClusterInput{
 				CacheClusterId: aws.String(id),
 			})
 		}

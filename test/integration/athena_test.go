@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -217,7 +218,7 @@ func TestAthena_QueryExecutionWithWorkGroup(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteWorkGroup(ctx, &athena.DeleteWorkGroupInput{
+		_, _ = client.DeleteWorkGroup(context.Background(), &athena.DeleteWorkGroupInput{
 			WorkGroup:             aws.String(workGroupName),
 			RecursiveDeleteOption: aws.Bool(true),
 		})

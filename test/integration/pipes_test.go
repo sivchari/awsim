@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/pipes"
 	"github.com/aws/aws-sdk-go-v2/service/pipes/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newPipesClient(t *testing.T) *pipes.Client {
@@ -47,13 +48,13 @@ func TestPipes_CreateAndDescribePipe(t *testing.T) {
 		Target:  aws.String(target),
 		RoleArn: aws.String(roleArn),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.Arn)
-	require.Equal(t, pipeName, *createOutput.Name)
-	require.Equal(t, types.RequestedPipeStateRunning, createOutput.DesiredState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -62,11 +63,10 @@ func TestPipes_CreateAndDescribePipe(t *testing.T) {
 	descOutput, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, pipeName, *descOutput.Name)
-	require.Equal(t, source, *descOutput.Source)
-	require.Equal(t, target, *descOutput.Target)
-	require.Equal(t, roleArn, *descOutput.RoleArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe", descOutput)
 }
 
 func TestPipes_CreatePipeWithStoppedState(t *testing.T) {
@@ -86,11 +86,13 @@ func TestPipes_CreatePipeWithStoppedState(t *testing.T) {
 		RoleArn:      aws.String(roleArn),
 		DesiredState: types.RequestedPipeStateStopped,
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.RequestedPipeStateStopped, createOutput.DesiredState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -99,8 +101,10 @@ func TestPipes_CreatePipeWithStoppedState(t *testing.T) {
 	descOutput, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.PipeStateStopped, descOutput.CurrentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe", descOutput)
 }
 
 func TestPipes_UpdatePipe(t *testing.T) {
@@ -121,10 +125,12 @@ func TestPipes_UpdatePipe(t *testing.T) {
 		Target:  aws.String(target),
 		RoleArn: aws.String(roleArn),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -135,16 +141,19 @@ func TestPipes_UpdatePipe(t *testing.T) {
 		RoleArn:     aws.String(newRoleArn),
 		Description: aws.String(description),
 	})
-	require.NoError(t, err)
-	require.Equal(t, pipeName, *updateOutput.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/update", updateOutput)
 
 	// Verify update.
 	descOutput, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, newRoleArn, *descOutput.RoleArn)
-	require.Equal(t, description, *descOutput.Description)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe", descOutput)
 }
 
 func TestPipes_DeletePipe(t *testing.T) {
@@ -163,20 +172,26 @@ func TestPipes_DeletePipe(t *testing.T) {
 		Target:  aws.String(target),
 		RoleArn: aws.String(roleArn),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Delete pipe.
 	deleteOutput, err := client.DeletePipe(ctx, &pipes.DeletePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, pipeName, *deleteOutput.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/delete", deleteOutput)
 
 	// Verify pipe is deleted.
 	_, err = client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestPipes_ListPipes(t *testing.T) {
@@ -196,12 +211,14 @@ func TestPipes_ListPipes(t *testing.T) {
 			Target:  aws.String(target),
 			RoleArn: aws.String(roleArn),
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Cleanup(func() {
 		for _, name := range pipeNames {
-			_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+			_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 				Name: aws.String(name),
 			})
 		}
@@ -209,15 +226,21 @@ func TestPipes_ListPipes(t *testing.T) {
 
 	// List pipes.
 	listOutput, err := client.ListPipes(ctx, &pipes.ListPipesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Pipes), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Pipes) < 3 {
+		t.Errorf("expected at least 3 pipes, got %d", len(listOutput.Pipes))
+	}
 
 	// List pipes with name prefix filter.
 	listOutput, err = client.ListPipes(ctx, &pipes.ListPipesInput{
 		NamePrefix: aws.String("test-pipe-list-"),
 	})
-	require.NoError(t, err)
-	require.Len(t, listOutput.Pipes, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/list_with_prefix", listOutput)
 }
 
 func TestPipes_StartAndStopPipe(t *testing.T) {
@@ -237,10 +260,12 @@ func TestPipes_StartAndStopPipe(t *testing.T) {
 		RoleArn:      aws.String(roleArn),
 		DesiredState: types.RequestedPipeStateStopped,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -249,29 +274,37 @@ func TestPipes_StartAndStopPipe(t *testing.T) {
 	startOutput, err := client.StartPipe(ctx, &pipes.StartPipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.RequestedPipeStateRunning, startOutput.DesiredState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/start", startOutput)
 
 	// Verify pipe is running.
 	descOutput, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.PipeStateRunning, descOutput.CurrentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe_after_start", descOutput)
 
 	// Stop pipe.
 	stopOutput, err := client.StopPipe(ctx, &pipes.StopPipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.RequestedPipeStateStopped, stopOutput.DesiredState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/stop", stopOutput)
 
 	// Verify pipe is stopped.
 	descOutput, err = client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.PipeStateStopped, descOutput.CurrentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe_after_stop", descOutput)
 }
 
 func TestPipes_TagOperations(t *testing.T) {
@@ -295,12 +328,14 @@ func TestPipes_TagOperations(t *testing.T) {
 		RoleArn: aws.String(roleArn),
 		Tags:    initialTags,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	pipeArn := createOutput.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -309,9 +344,10 @@ func TestPipes_TagOperations(t *testing.T) {
 	listTagsOutput, err := client.ListTagsForResource(ctx, &pipes.ListTagsForResourceInput{
 		ResourceArn: pipeArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "test", listTagsOutput.Tags["Environment"])
-	require.Equal(t, "awsim", listTagsOutput.Tags["Project"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"/list_initial_tags", listTagsOutput)
 
 	// Add more tags.
 	_, err = client.TagResource(ctx, &pipes.TagResourceInput{
@@ -320,29 +356,36 @@ func TestPipes_TagOperations(t *testing.T) {
 			"NewTag": "newvalue",
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify tags were added.
 	listTagsOutput, err = client.ListTagsForResource(ctx, &pipes.ListTagsForResourceInput{
 		ResourceArn: pipeArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "newvalue", listTagsOutput.Tags["NewTag"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"/list_tags_after_add", listTagsOutput)
 
 	// Remove a tag.
 	_, err = client.UntagResource(ctx, &pipes.UntagResourceInput{
 		ResourceArn: pipeArn,
 		TagKeys:     []string{"NewTag"},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify tag was removed.
 	listTagsOutput, err = client.ListTagsForResource(ctx, &pipes.ListTagsForResourceInput{
 		ResourceArn: pipeArn,
 	})
-	require.NoError(t, err)
-	_, exists := listTagsOutput.Tags["NewTag"]
-	require.False(t, exists)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"/list_tags_after_remove", listTagsOutput)
 }
 
 func TestPipes_NotFoundErrors(t *testing.T) {
@@ -353,32 +396,42 @@ func TestPipes_NotFoundErrors(t *testing.T) {
 	_, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String("non-existent-pipe"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Update non-existent pipe.
 	_, err = client.UpdatePipe(ctx, &pipes.UpdatePipeInput{
 		Name:    aws.String("non-existent-pipe"),
 		RoleArn: aws.String("arn:aws:iam::123456789012:role/test-role"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent pipe.
 	_, err = client.DeletePipe(ctx, &pipes.DeletePipeInput{
 		Name: aws.String("non-existent-pipe"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Start non-existent pipe.
 	_, err = client.StartPipe(ctx, &pipes.StartPipeInput{
 		Name: aws.String("non-existent-pipe"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Stop non-existent pipe.
 	_, err = client.StopPipe(ctx, &pipes.StopPipeInput{
 		Name: aws.String("non-existent-pipe"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestPipes_ConflictErrors(t *testing.T) {
@@ -397,10 +450,12 @@ func TestPipes_ConflictErrors(t *testing.T) {
 		Target:  aws.String(target),
 		RoleArn: aws.String(roleArn),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -412,13 +467,17 @@ func TestPipes_ConflictErrors(t *testing.T) {
 		Target:  aws.String(target),
 		RoleArn: aws.String(roleArn),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Try to start a running pipe.
 	_, err = client.StartPipe(ctx, &pipes.StartPipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestPipes_CreatePipeWithDescription(t *testing.T) {
@@ -439,10 +498,12 @@ func TestPipes_CreatePipeWithDescription(t *testing.T) {
 		RoleArn:     aws.String(roleArn),
 		Description: aws.String(description),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePipe(ctx, &pipes.DeletePipeInput{
+		_, _ = client.DeletePipe(context.Background(), &pipes.DeletePipeInput{
 			Name: aws.String(pipeName),
 		})
 	})
@@ -451,6 +512,8 @@ func TestPipes_CreatePipeWithDescription(t *testing.T) {
 	descOutput, err := client.DescribePipe(ctx, &pipes.DescribePipeInput{
 		Name: aws.String(pipeName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, description, *descOutput.Description)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "LastModifiedTime", "ResultMetadata")).Assert(t.Name()+"/describe", descOutput)
 }

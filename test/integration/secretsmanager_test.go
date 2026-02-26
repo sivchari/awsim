@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestSecretsManager_GetSecretValue(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -121,7 +122,7 @@ func TestSecretsManager_PutSecretValue(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -168,7 +169,7 @@ func TestSecretsManager_ListSecrets(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -212,7 +213,7 @@ func TestSecretsManager_DescribeSecret(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -258,7 +259,7 @@ func TestSecretsManager_UpdateSecret(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -363,7 +364,7 @@ func TestSecretsManager_SecretWithBinary(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -408,7 +409,7 @@ func TestSecretsManager_SecretWithJSON(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})
@@ -452,7 +453,7 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
 			SecretId:                   aws.String(secretName),
 			ForceDeleteWithoutRecovery: aws.Bool(true),
 		})

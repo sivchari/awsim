@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/forecast"
 	"github.com/aws/aws-sdk-go-v2/service/forecast/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newForecastClient(t *testing.T) *forecast.Client {
@@ -22,7 +23,9 @@ func newForecastClient(t *testing.T) *forecast.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return forecast.NewFromConfig(cfg, func(o *forecast.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -57,13 +60,14 @@ func TestForecast_CreateAndDeleteDataset(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.DatasetArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := createOutput.DatasetArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
@@ -72,22 +76,26 @@ func TestForecast_CreateAndDeleteDataset(t *testing.T) {
 	descOutput, err := client.DescribeDataset(ctx, &forecast.DescribeDatasetInput{
 		DatasetArn: datasetArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, datasetName, *descOutput.DatasetName)
-	require.Equal(t, types.DatasetTypeTargetTimeSeries, descOutput.DatasetType)
-	require.Equal(t, types.DomainRetail, descOutput.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("DatasetArn", "CreationTime", "LastModificationTime")).Assert(t.Name()+"/DescribeDataset", descOutput)
 
 	// Delete dataset.
-	_, err = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+	_, err = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 		DatasetArn: datasetArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify dataset is deleted.
 	_, err = client.DescribeDataset(ctx, &forecast.DescribeDatasetInput{
 		DatasetArn: datasetArn,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_ListDatasets(t *testing.T) {
@@ -119,13 +127,15 @@ func TestForecast_ListDatasets(t *testing.T) {
 				},
 			},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		datasetArns = append(datasetArns, createOutput.DatasetArn)
 	}
 
 	t.Cleanup(func() {
 		for _, arn := range datasetArns {
-			_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+			_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 				DatasetArn: arn,
 			})
 		}
@@ -133,8 +143,12 @@ func TestForecast_ListDatasets(t *testing.T) {
 
 	// List datasets.
 	listOutput, err := client.ListDatasets(ctx, &forecast.ListDatasetsInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Datasets), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Datasets) < 2 {
+		t.Errorf("expected at least 2 datasets, got %d", len(listOutput.Datasets))
+	}
 }
 
 func TestForecast_CreateAndDeleteDatasetGroup(t *testing.T) {
@@ -148,13 +162,14 @@ func TestForecast_CreateAndDeleteDatasetGroup(t *testing.T) {
 		DatasetGroupName: aws.String(datasetGroupName),
 		Domain:           types.DomainRetail,
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.DatasetGroupArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetGroupArn := createOutput.DatasetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+		_, _ = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 			DatasetGroupArn: datasetGroupArn,
 		})
 	})
@@ -163,21 +178,26 @@ func TestForecast_CreateAndDeleteDatasetGroup(t *testing.T) {
 	descOutput, err := client.DescribeDatasetGroup(ctx, &forecast.DescribeDatasetGroupInput{
 		DatasetGroupArn: datasetGroupArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, datasetGroupName, *descOutput.DatasetGroupName)
-	require.Equal(t, types.DomainRetail, descOutput.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("DatasetGroupArn", "CreationTime", "LastModificationTime")).Assert(t.Name()+"/DescribeDatasetGroup", descOutput)
 
 	// Delete dataset group.
-	_, err = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+	_, err = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 		DatasetGroupArn: datasetGroupArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify dataset group is deleted.
 	_, err = client.DescribeDatasetGroup(ctx, &forecast.DescribeDatasetGroupInput{
 		DatasetGroupArn: datasetGroupArn,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_UpdateDatasetGroup(t *testing.T) {
@@ -206,12 +226,14 @@ func TestForecast_UpdateDatasetGroup(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := datasetOutput.DatasetArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
@@ -221,12 +243,14 @@ func TestForecast_UpdateDatasetGroup(t *testing.T) {
 		DatasetGroupName: aws.String("test-dataset-group-update"),
 		Domain:           types.DomainRetail,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetGroupArn := dgOutput.DatasetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+		_, _ = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 			DatasetGroupArn: datasetGroupArn,
 		})
 	})
@@ -236,15 +260,21 @@ func TestForecast_UpdateDatasetGroup(t *testing.T) {
 		DatasetGroupArn: datasetGroupArn,
 		DatasetArns:     []string{*datasetArn},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify the update.
 	descOutput, err := client.DescribeDatasetGroup(ctx, &forecast.DescribeDatasetGroupInput{
 		DatasetGroupArn: datasetGroupArn,
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.DatasetArns, 1)
-	require.Equal(t, *datasetArn, descOutput.DatasetArns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("DatasetGroupArn", "DatasetArns", "CreationTime", "LastModificationTime")).Assert(t.Name()+"/DescribeDatasetGroup", descOutput)
+	if len(descOutput.DatasetArns) != 1 {
+		t.Errorf("expected 1 dataset ARN, got %d", len(descOutput.DatasetArns))
+	}
 }
 
 func TestForecast_CreatePredictor(t *testing.T) {
@@ -273,12 +303,14 @@ func TestForecast_CreatePredictor(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := datasetOutput.DatasetArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
@@ -289,12 +321,14 @@ func TestForecast_CreatePredictor(t *testing.T) {
 		Domain:           types.DomainRetail,
 		DatasetArns:      []string{*datasetArn},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetGroupArn := dgOutput.DatasetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+		_, _ = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 			DatasetGroupArn: datasetGroupArn,
 		})
 	})
@@ -310,13 +344,14 @@ func TestForecast_CreatePredictor(t *testing.T) {
 			ForecastFrequency: aws.String("D"),
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, predictorOutput.PredictorArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	predictorArn := predictorOutput.PredictorArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePredictor(ctx, &forecast.DeletePredictorInput{
+		_, _ = client.DeletePredictor(context.Background(), &forecast.DeletePredictorInput{
 			PredictorArn: predictorArn,
 		})
 	})
@@ -325,15 +360,18 @@ func TestForecast_CreatePredictor(t *testing.T) {
 	descOutput, err := client.DescribePredictor(ctx, &forecast.DescribePredictorInput{
 		PredictorArn: predictorArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "test-predictor", *descOutput.PredictorName)
-	require.Equal(t, int32(30), *descOutput.ForecastHorizon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("PredictorArn", "DatasetImportJobArns", "CreationTime", "LastModificationTime", "InputDataConfig")).Assert(t.Name()+"/DescribePredictor", descOutput)
 
 	// Delete predictor.
-	_, err = client.DeletePredictor(ctx, &forecast.DeletePredictorInput{
+	_, err = client.DeletePredictor(context.Background(), &forecast.DeletePredictorInput{
 		PredictorArn: predictorArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestForecast_CreateForecast(t *testing.T) {
@@ -362,12 +400,14 @@ func TestForecast_CreateForecast(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := datasetOutput.DatasetArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
@@ -378,12 +418,14 @@ func TestForecast_CreateForecast(t *testing.T) {
 		Domain:           types.DomainRetail,
 		DatasetArns:      []string{*datasetArn},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetGroupArn := dgOutput.DatasetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+		_, _ = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 			DatasetGroupArn: datasetGroupArn,
 		})
 	})
@@ -399,12 +441,14 @@ func TestForecast_CreateForecast(t *testing.T) {
 			ForecastFrequency: aws.String("D"),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	predictorArn := predictorOutput.PredictorArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePredictor(ctx, &forecast.DeletePredictorInput{
+		_, _ = client.DeletePredictor(context.Background(), &forecast.DeletePredictorInput{
 			PredictorArn: predictorArn,
 		})
 	})
@@ -414,13 +458,14 @@ func TestForecast_CreateForecast(t *testing.T) {
 		ForecastName: aws.String("test-forecast"),
 		PredictorArn: predictorArn,
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, forecastOutput.ForecastArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	forecastArn := forecastOutput.ForecastArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteForecast(ctx, &forecast.DeleteForecastInput{
+		_, _ = client.DeleteForecast(context.Background(), &forecast.DeleteForecastInput{
 			ForecastArn: forecastArn,
 		})
 	})
@@ -429,15 +474,18 @@ func TestForecast_CreateForecast(t *testing.T) {
 	descOutput, err := client.DescribeForecast(ctx, &forecast.DescribeForecastInput{
 		ForecastArn: forecastArn,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "test-forecast", *descOutput.ForecastName)
-	require.Equal(t, *predictorArn, *descOutput.PredictorArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ForecastArn", "PredictorArn", "DatasetGroupArn", "CreationTime", "LastModificationTime")).Assert(t.Name()+"/DescribeForecast", descOutput)
 
 	// Delete forecast.
-	_, err = client.DeleteForecast(ctx, &forecast.DeleteForecastInput{
+	_, err = client.DeleteForecast(context.Background(), &forecast.DeleteForecastInput{
 		ForecastArn: forecastArn,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestForecast_DatasetNotFound(t *testing.T) {
@@ -448,13 +496,17 @@ func TestForecast_DatasetNotFound(t *testing.T) {
 	_, err := client.DescribeDataset(ctx, &forecast.DescribeDatasetInput{
 		DatasetArn: aws.String("arn:aws:forecast:us-east-1:123456789012:dataset/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent dataset.
-	_, err = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+	_, err = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 		DatasetArn: aws.String("arn:aws:forecast:us-east-1:123456789012:dataset/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_DatasetGroupNotFound(t *testing.T) {
@@ -465,13 +517,17 @@ func TestForecast_DatasetGroupNotFound(t *testing.T) {
 	_, err := client.DescribeDatasetGroup(ctx, &forecast.DescribeDatasetGroupInput{
 		DatasetGroupArn: aws.String("arn:aws:forecast:us-east-1:123456789012:dataset-group/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent dataset group.
-	_, err = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+	_, err = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 		DatasetGroupArn: aws.String("arn:aws:forecast:us-east-1:123456789012:dataset-group/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_PredictorNotFound(t *testing.T) {
@@ -482,13 +538,17 @@ func TestForecast_PredictorNotFound(t *testing.T) {
 	_, err := client.DescribePredictor(ctx, &forecast.DescribePredictorInput{
 		PredictorArn: aws.String("arn:aws:forecast:us-east-1:123456789012:predictor/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent predictor.
-	_, err = client.DeletePredictor(ctx, &forecast.DeletePredictorInput{
+	_, err = client.DeletePredictor(context.Background(), &forecast.DeletePredictorInput{
 		PredictorArn: aws.String("arn:aws:forecast:us-east-1:123456789012:predictor/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_ForecastNotFound(t *testing.T) {
@@ -499,13 +559,17 @@ func TestForecast_ForecastNotFound(t *testing.T) {
 	_, err := client.DescribeForecast(ctx, &forecast.DescribeForecastInput{
 		ForecastArn: aws.String("arn:aws:forecast:us-east-1:123456789012:forecast/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent forecast.
-	_, err = client.DeleteForecast(ctx, &forecast.DeleteForecastInput{
+	_, err = client.DeleteForecast(context.Background(), &forecast.DeleteForecastInput{
 		ForecastArn: aws.String("arn:aws:forecast:us-east-1:123456789012:forecast/non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_DuplicateDatasetName(t *testing.T) {
@@ -536,12 +600,14 @@ func TestForecast_DuplicateDatasetName(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := createOutput.DatasetArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
@@ -568,7 +634,9 @@ func TestForecast_DuplicateDatasetName(t *testing.T) {
 			},
 		},
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestForecast_ResourceInUse(t *testing.T) {
@@ -597,7 +665,9 @@ func TestForecast_ResourceInUse(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetArn := datasetOutput.DatasetArn
 
@@ -607,22 +677,26 @@ func TestForecast_ResourceInUse(t *testing.T) {
 		Domain:           types.DomainRetail,
 		DatasetArns:      []string{*datasetArn},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	datasetGroupArn := dgOutput.DatasetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDatasetGroup(ctx, &forecast.DeleteDatasetGroupInput{
+		_, _ = client.DeleteDatasetGroup(context.Background(), &forecast.DeleteDatasetGroupInput{
 			DatasetGroupArn: datasetGroupArn,
 		})
-		_, _ = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+		_, _ = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 			DatasetArn: datasetArn,
 		})
 	})
 
 	// Try to delete the dataset (should fail because it's in use).
-	_, err = client.DeleteDataset(ctx, &forecast.DeleteDatasetInput{
+	_, err = client.DeleteDataset(context.Background(), &forecast.DeleteDatasetInput{
 		DatasetArn: datasetArn,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

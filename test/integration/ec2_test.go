@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -55,7 +56,7 @@ func TestEC2_RunAndDescribeInstances(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+		_, _ = client.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
 			InstanceIds: instanceIDs,
 		})
 	})
@@ -96,7 +97,7 @@ func TestEC2_StartAndStopInstances(t *testing.T) {
 	instanceID := *runResult.Instances[0].InstanceId
 
 	t.Cleanup(func() {
-		_, _ = client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+		_, _ = client.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
 			InstanceIds: []string{instanceID},
 		})
 	})
@@ -152,7 +153,7 @@ func TestEC2_TerminateInstances(t *testing.T) {
 	instanceID := *runResult.Instances[0].InstanceId
 
 	// Terminate instance
-	termResult, err := client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+	termResult, err := client.TerminateInstances(context.Background(), &ec2.TerminateInstancesInput{
 		InstanceIds: []string{instanceID},
 	})
 	if err != nil {
@@ -214,7 +215,7 @@ func TestEC2_AuthorizeSecurityGroupIngress(t *testing.T) {
 	groupID := *createResult.GroupId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSecurityGroup(ctx, &ec2.DeleteSecurityGroupInput{
+		_, _ = client.DeleteSecurityGroup(context.Background(), &ec2.DeleteSecurityGroupInput{
 			GroupId: aws.String(groupID),
 		})
 	})
@@ -263,7 +264,7 @@ func TestEC2_CreateAndDeleteKeyPair(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteKeyPair(ctx, &ec2.DeleteKeyPairInput{
+		_, _ = client.DeleteKeyPair(context.Background(), &ec2.DeleteKeyPairInput{
 			KeyName: aws.String(keyName),
 		})
 	})
@@ -291,7 +292,7 @@ func TestEC2_DescribeKeyPairs(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteKeyPair(ctx, &ec2.DeleteKeyPairInput{
+		_, _ = client.DeleteKeyPair(context.Background(), &ec2.DeleteKeyPairInput{
 			KeyName: aws.String(keyName),
 		})
 	})
@@ -336,7 +337,7 @@ func TestEC2_CreateAndDeleteVpc(t *testing.T) {
 	vpcID := *createResult.Vpc.VpcId
 
 	// Delete VPC
-	_, err = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+	_, err = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 		VpcId: aws.String(vpcID),
 	})
 	if err != nil {
@@ -359,7 +360,7 @@ func TestEC2_DescribeVpcs(t *testing.T) {
 	vpcID := *createResult.Vpc.VpcId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})
@@ -396,7 +397,7 @@ func TestEC2_CreateAndDeleteSubnet(t *testing.T) {
 	vpcID := *vpcResult.Vpc.VpcId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})
@@ -452,14 +453,14 @@ func TestEC2_CreateInternetGatewayAndAttach(t *testing.T) {
 	igwID := *igwResult.InternetGateway.InternetGatewayId
 
 	t.Cleanup(func() {
-		_, _ = client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
+		_, _ = client.DetachInternetGateway(context.Background(), &ec2.DetachInternetGatewayInput{
 			InternetGatewayId: aws.String(igwID),
 			VpcId:             aws.String(vpcID),
 		})
-		_, _ = client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
+		_, _ = client.DeleteInternetGateway(context.Background(), &ec2.DeleteInternetGatewayInput{
 			InternetGatewayId: aws.String(igwID),
 		})
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})
@@ -520,10 +521,10 @@ func TestEC2_CreateRouteTableAndAssociate(t *testing.T) {
 	subnetID := *subnetResult.Subnet.SubnetId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+		_, _ = client.DeleteSubnet(context.Background(), &ec2.DeleteSubnetInput{
 			SubnetId: aws.String(subnetID),
 		})
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})
@@ -588,14 +589,14 @@ func TestEC2_CreateRoute(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
+		_, _ = client.DetachInternetGateway(context.Background(), &ec2.DetachInternetGatewayInput{
 			InternetGatewayId: aws.String(igwID),
 			VpcId:             aws.String(vpcID),
 		})
-		_, _ = client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
+		_, _ = client.DeleteInternetGateway(context.Background(), &ec2.DeleteInternetGatewayInput{
 			InternetGatewayId: aws.String(igwID),
 		})
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})
@@ -664,10 +665,10 @@ func TestEC2_CreateNatGateway(t *testing.T) {
 	subnetID := *subnetResult.Subnet.SubnetId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+		_, _ = client.DeleteSubnet(context.Background(), &ec2.DeleteSubnetInput{
 			SubnetId: aws.String(subnetID),
 		})
-		_, _ = client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		_, _ = client.DeleteVpc(context.Background(), &ec2.DeleteVpcInput{
 			VpcId: aws.String(vpcID),
 		})
 	})

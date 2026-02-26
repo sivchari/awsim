@@ -1,0 +1,32 @@
+{
+  "FleetAttributes": {
+    "AnywhereConfiguration": null,
+    "BuildArn": null,
+    "BuildId": "build-a831c194",
+    "CertificateConfiguration": null,
+    "ComputeType": "",
+    "CreationTime": "2026-02-26T16:00:39Z",
+    "Description": null,
+    "FleetArn": "arn:aws:gamelift:us-east-1:123456789012:fleet/fleet-b8d85022",
+    "FleetId": "fleet-b8d85022",
+    "FleetType": "ON_DEMAND",
+    "InstanceRoleArn": null,
+    "InstanceRoleCredentialsProvider": "",
+    "InstanceType": "c5.large",
+    "LogPaths": null,
+    "MetricGroups": null,
+    "Name": "test-fleet",
+    "NewGameSessionProtectionPolicy": "NoProtection",
+    "OperatingSystem": "",
+    "ResourceCreationLimitPolicy": null,
+    "ScriptArn": null,
+    "ScriptId": null,
+    "ServerLaunchParameters": null,
+    "ServerLaunchPath": null,
+    "Status": "ACTIVE",
+    "StoppedActions": null,
+    "TerminationTime": null
+  },
+  "LocationStates": null,
+  "ResultMetadata": {}
+}

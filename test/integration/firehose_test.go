@@ -10,8 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/firehose"
 	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func TestFirehose_CreateDeliveryStream(t *testing.T) {
@@ -27,15 +26,18 @@ func TestFirehose_CreateDeliveryStream(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotEmpty(t, *result.DeliveryStreamARN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("DeliveryStreamARN", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFirehose_DescribeDeliveryStream(t *testing.T) {
@@ -51,22 +53,33 @@ func TestFirehose_DescribeDeliveryStream(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Describe delivery stream.
 	result, err := client.DescribeDeliveryStream(ctx, &firehose.DescribeDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, streamName, *result.DeliveryStreamDescription.DeliveryStreamName)
-	assert.Equal(t, types.DeliveryStreamStatusActive, result.DeliveryStreamDescription.DeliveryStreamStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields(
+		"DeliveryStreamARN",
+		"CreateTimestamp",
+		"LastUpdateTimestamp",
+		"VersionId",
+		"Destinations",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFirehose_ListDeliveryStreams(t *testing.T) {
@@ -83,32 +96,41 @@ func TestFirehose_ListDeliveryStreams(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName1),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.CreateDeliveryStream(ctx, &firehose.CreateDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName2),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// List delivery streams.
 	result, err := client.ListDeliveryStreams(ctx, &firehose.ListDeliveryStreamsInput{
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.GreaterOrEqual(t, len(result.DeliveryStreamNames), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("DeliveryStreamNames", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName1),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName2),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFirehose_PutRecord(t *testing.T) {
@@ -124,7 +146,9 @@ func TestFirehose_PutRecord(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Put record.
 	result, err := client.PutRecord(ctx, &firehose.PutRecordInput{
@@ -133,15 +157,18 @@ func TestFirehose_PutRecord(t *testing.T) {
 			Data: []byte("test data"),
 		},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotEmpty(t, *result.RecordId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("RecordId", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFirehose_PutRecordBatch(t *testing.T) {
@@ -157,7 +184,9 @@ func TestFirehose_PutRecordBatch(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Put record batch.
 	result, err := client.PutRecordBatch(ctx, &firehose.PutRecordBatchInput{
@@ -168,20 +197,18 @@ func TestFirehose_PutRecordBatch(t *testing.T) {
 			{Data: []byte("test data 3")},
 		},
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, int32(0), *result.FailedPutCount)
-	assert.Len(t, result.RequestResponses, 3)
-
-	for _, resp := range result.RequestResponses {
-		assert.NotEmpty(t, *resp.RecordId)
+	if err != nil {
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("RequestResponses", "ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFirehose_UpdateDestination(t *testing.T) {
@@ -197,20 +224,26 @@ func TestFirehose_UpdateDestination(t *testing.T) {
 		DeliveryStreamName: aws.String(streamName),
 		DeliveryStreamType: types.DeliveryStreamTypeDirectPut,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get stream description to get destination ID.
 	descResult, err := client.DescribeDeliveryStream(ctx, &firehose.DescribeDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
-	require.Len(t, descResult.DeliveryStreamDescription.Destinations, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(descResult.DeliveryStreamDescription.Destinations) != 1 {
+		t.Fatalf("expected 1 destination, got %d", len(descResult.DeliveryStreamDescription.Destinations))
+	}
 
 	destID := descResult.DeliveryStreamDescription.Destinations[0].DestinationId
 	versionID := descResult.DeliveryStreamDescription.VersionId
 
 	// Update destination.
-	_, err = client.UpdateDestination(ctx, &firehose.UpdateDestinationInput{
+	result, err := client.UpdateDestination(ctx, &firehose.UpdateDestinationInput{
 		DeliveryStreamName:             aws.String(streamName),
 		CurrentDeliveryStreamVersionId: versionID,
 		DestinationId:                  destID,
@@ -219,13 +252,18 @@ func TestFirehose_UpdateDestination(t *testing.T) {
 			RoleARN:   aws.String("arn:aws:iam::000000000000:role/test-role"),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDeliveryStream(ctx, &firehose.DeleteDeliveryStreamInput{
 		DeliveryStreamName: aws.String(streamName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func createFirehoseClient(t *testing.T) *firehose.Client {

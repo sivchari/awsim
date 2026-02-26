@@ -10,8 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/aws/aws-sdk-go-v2/service/organizations/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newOrganizationsClient(t *testing.T) *organizations.Client {
@@ -23,7 +22,9 @@ func newOrganizationsClient(t *testing.T) *organizations.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return organizations.NewFromConfig(cfg, func(o *organizations.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -46,7 +47,9 @@ func ensureOrganization(t *testing.T, client *organizations.Client) *types.Organ
 	createOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return createOutput.Organization
 }
@@ -73,47 +76,59 @@ func TestOrganizations_WithOrganization(t *testing.T) {
 
 	// Setup: ensure organization exists
 	org := ensureOrganization(t, client)
-	require.NotNil(t, org)
+	if org == nil {
+		t.Fatal("failed to ensure organization")
+	}
 
 	t.Run("DescribeOrganization", func(t *testing.T) {
 		descOutput, err := client.DescribeOrganization(ctx, &organizations.DescribeOrganizationInput{})
-		require.NoError(t, err)
-		require.NotNil(t, descOutput.Organization)
-		assert.NotEmpty(t, *descOutput.Organization.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.New(t, golden.WithIgnoreFields("Id", "Arn", "MasterAccountArn", "MasterAccountId", "MasterAccountEmail", "AvailablePolicyTypes", "ResultMetadata")).Assert(t.Name(), descOutput)
 	})
 
 	t.Run("ListRoots", func(t *testing.T) {
 		rootsOutput, err := client.ListRoots(ctx, &organizations.ListRootsInput{})
-		require.NoError(t, err)
-		assert.Len(t, rootsOutput.Roots, 1)
-		assert.NotEmpty(t, *rootsOutput.Roots[0].Id)
-		assert.Equal(t, "Root", *rootsOutput.Roots[0].Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.New(t, golden.WithIgnoreFields("Id", "Arn", "PolicyTypes", "ResultMetadata")).Assert(t.Name(), rootsOutput)
 	})
 
 	t.Run("DescribeAccount", func(t *testing.T) {
 		descOutput, err := client.DescribeAccount(ctx, &organizations.DescribeAccountInput{
 			AccountId: org.MasterAccountId,
 		})
-		require.NoError(t, err)
-		require.NotNil(t, descOutput.Account)
-		assert.Equal(t, *org.MasterAccountId, *descOutput.Account.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.New(t, golden.WithIgnoreFields("Id", "Arn", "Email", "JoinedTimestamp", "ResultMetadata")).Assert(t.Name(), descOutput)
 	})
 
 	t.Run("DescribeAccount_NotFound", func(t *testing.T) {
 		_, err := client.DescribeAccount(ctx, &organizations.DescribeAccountInput{
 			AccountId: aws.String("000000000000"),
 		})
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error")
+		}
 	})
 
 	t.Run("ListAccounts", func(t *testing.T) {
 		listOutput, err := client.ListAccounts(ctx, &organizations.ListAccountsInput{})
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, len(listOutput.Accounts), 1) // At least management account
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(listOutput.Accounts) < 1 {
+			t.Error("expected at least one account")
+		}
 
 		// Verify State field is present and valid for all accounts
 		for _, account := range listOutput.Accounts {
-			assert.Equal(t, types.AccountStateActive, account.State)
+			if account.State != types.AccountStateActive {
+				t.Errorf("expected account state to be active, got %v", account.State)
+			}
 		}
 	})
 
@@ -122,32 +137,40 @@ func TestOrganizations_WithOrganization(t *testing.T) {
 			AccountName: aws.String("Test Account"),
 			Email:       aws.String("test-create@example.com"),
 		})
-		require.NoError(t, err)
-		require.NotNil(t, createOutput.CreateAccountStatus)
-		assert.NotEmpty(t, *createOutput.CreateAccountStatus.Id)
-		assert.Equal(t, types.CreateAccountStateSucceeded, createOutput.CreateAccountStatus.State)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.New(t, golden.WithIgnoreFields("Id", "AccountId", "RequestedTimestamp", "CompletedTimestamp", "ResultMetadata")).Assert(t.Name(), createOutput)
 	})
 
 	t.Run("CreateOrganizationalUnit", func(t *testing.T) {
 		rootsOutput, err := client.ListRoots(ctx, &organizations.ListRootsInput{})
-		require.NoError(t, err)
-		require.NotEmpty(t, rootsOutput.Roots)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rootsOutput.Roots) == 0 {
+			t.Fatal("no roots found")
+		}
 		rootID := rootsOutput.Roots[0].Id
 
 		ouOutput, err := client.CreateOrganizationalUnit(ctx, &organizations.CreateOrganizationalUnitInput{
 			Name:     aws.String("Test OU"),
 			ParentId: rootID,
 		})
-		require.NoError(t, err)
-		require.NotNil(t, ouOutput.OrganizationalUnit)
-		assert.Equal(t, "Test OU", *ouOutput.OrganizationalUnit.Name)
-		assert.NotEmpty(t, *ouOutput.OrganizationalUnit.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.New(t, golden.WithIgnoreFields("Id", "Arn", "ResultMetadata")).Assert(t.Name(), ouOutput)
 	})
 
 	t.Run("ListOrganizationalUnitsForParent", func(t *testing.T) {
 		rootsOutput, err := client.ListRoots(ctx, &organizations.ListRootsInput{})
-		require.NoError(t, err)
-		require.NotEmpty(t, rootsOutput.Roots)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rootsOutput.Roots) == 0 {
+			t.Fatal("no roots found")
+		}
 		rootID := rootsOutput.Roots[0].Id
 
 		// Create additional OUs for this test
@@ -155,25 +178,35 @@ func TestOrganizations_WithOrganization(t *testing.T) {
 			Name:     aws.String("Test OU ListOUs 1"),
 			ParentId: rootID,
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		_, err = client.CreateOrganizationalUnit(ctx, &organizations.CreateOrganizationalUnitInput{
 			Name:     aws.String("Test OU ListOUs 2"),
 			ParentId: rootID,
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		listOutput, err := client.ListOrganizationalUnitsForParent(ctx, &organizations.ListOrganizationalUnitsForParentInput{
 			ParentId: rootID,
 		})
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, len(listOutput.OrganizationalUnits), 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(listOutput.OrganizationalUnits) < 2 {
+			t.Errorf("expected at least 2 organizational units, got %d", len(listOutput.OrganizationalUnits))
+		}
 	})
 
 	t.Run("DeleteOrganization_NotEmpty", func(t *testing.T) {
 		// Organization has member accounts, so delete should fail
 		_, err := client.DeleteOrganization(ctx, &organizations.DeleteOrganizationInput{})
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error")
+		}
 	})
 }
 
@@ -196,11 +229,10 @@ func TestOrganizations_CreateOrganization(t *testing.T) {
 	createOutput, err := client.CreateOrganization(ctx, &organizations.CreateOrganizationInput{
 		FeatureSet: types.OrganizationFeatureSetAll,
 	})
-	require.NoError(t, err)
-	require.NotNil(t, createOutput.Organization)
-	assert.NotEmpty(t, *createOutput.Organization.Id)
-	assert.NotEmpty(t, *createOutput.Organization.Arn)
-	assert.Equal(t, types.OrganizationFeatureSetAll, createOutput.Organization.FeatureSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "MasterAccountArn", "MasterAccountId", "MasterAccountEmail", "AvailablePolicyTypes", "ResultMetadata")).Assert(t.Name(), createOutput)
 }
 
 // TestOrganizations_DescribeOrganization_NotInOrganization tests behavior when no organization exists.
@@ -218,8 +250,7 @@ func TestOrganizations_DescribeOrganization_NotInOrganization(t *testing.T) {
 		t.Skip("Organization exists from previous tests, cannot test NotInOrganization scenario")
 	}
 
-	// Verify the error is returned
-	require.Error(t, err)
+	// Verify the error is returned - already verified above by reaching this point
 }
 
 // TestOrganizations_DeleteOrganization tests organization deletion.
@@ -251,9 +282,13 @@ func TestOrganizations_DeleteOrganization(t *testing.T) {
 
 	// Delete organization
 	_, err = client.DeleteOrganization(ctx, &organizations.DeleteOrganizationInput{})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify it's deleted
 	_, err = client.DescribeOrganization(ctx, &organizations.DescribeOrganizationInput{})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

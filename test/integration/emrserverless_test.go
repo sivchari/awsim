@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/emrserverless"
 	"github.com/aws/aws-sdk-go-v2/service/emrserverless/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newEMRServerlessClient(t *testing.T) *emrserverless.Client {
@@ -41,14 +42,14 @@ func TestEMRServerless_CreateAndGetApplication(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.ApplicationId)
-	require.NotEmpty(t, createOutput.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	applicationID := createOutput.ApplicationId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: applicationID,
 		})
 	})
@@ -57,12 +58,17 @@ func TestEMRServerless_CreateAndGetApplication(t *testing.T) {
 	getOutput, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: applicationID,
 	})
-	require.NoError(t, err)
-	require.Equal(t, *applicationID, *getOutput.Application.ApplicationId)
-	require.Equal(t, "test-spark-app", *getOutput.Application.Name)
-	require.Equal(t, "Spark", *getOutput.Application.Type)
-	require.Equal(t, "emr-6.9.0", *getOutput.Application.ReleaseLabel)
-	require.Equal(t, types.ApplicationStateCreated, getOutput.Application.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"CreatedAt",
+		"UpdatedAt",
+		"ResultMetadata",
+	)).Assert(t.Name(), getOutput)
 }
 
 func TestEMRServerless_CreateHiveApplication(t *testing.T) {
@@ -75,11 +81,12 @@ func TestEMRServerless_CreateHiveApplication(t *testing.T) {
 		Type:         aws.String("Hive"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.ApplicationId)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -88,8 +95,17 @@ func TestEMRServerless_CreateHiveApplication(t *testing.T) {
 	getOutput, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "Hive", *getOutput.Application.Type)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"CreatedAt",
+		"UpdatedAt",
+		"ResultMetadata",
+	)).Assert(t.Name(), getOutput)
 }
 
 func TestEMRServerless_ListApplications(t *testing.T) {
@@ -104,13 +120,15 @@ func TestEMRServerless_ListApplications(t *testing.T) {
 			Type:         aws.String("Spark"),
 			ReleaseLabel: aws.String("emr-6.9.0"),
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		appIDs = append(appIDs, output.ApplicationId)
 	}
 
 	t.Cleanup(func() {
 		for _, id := range appIDs {
-			_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+			_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 				ApplicationId: id,
 			})
 		}
@@ -118,8 +136,12 @@ func TestEMRServerless_ListApplications(t *testing.T) {
 
 	// List applications.
 	listOutput, err := client.ListApplications(ctx, &emrserverless.ListApplicationsInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Applications), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Applications) < 3 {
+		t.Errorf("expected at least 3 applications, got %d", len(listOutput.Applications))
+	}
 }
 
 func TestEMRServerless_ListApplicationsWithStateFilter(t *testing.T) {
@@ -131,10 +153,12 @@ func TestEMRServerless_ListApplicationsWithStateFilter(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -143,14 +167,20 @@ func TestEMRServerless_ListApplicationsWithStateFilter(t *testing.T) {
 	listOutput, err := client.ListApplications(ctx, &emrserverless.ListApplicationsInput{
 		States: []types.ApplicationState{types.ApplicationStateCreated},
 	})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Applications), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Applications) < 1 {
+		t.Errorf("expected at least 1 application, got %d", len(listOutput.Applications))
+	}
 
 	// List with STARTED state filter (should not include new app).
-	listOutput, err = client.ListApplications(ctx, &emrserverless.ListApplicationsInput{
+	_, err = client.ListApplications(ctx, &emrserverless.ListApplicationsInput{
 		States: []types.ApplicationState{types.ApplicationStateStarted},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// May be empty or contain previously started apps.
 }
 
@@ -163,10 +193,12 @@ func TestEMRServerless_UpdateApplication(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -176,14 +208,25 @@ func TestEMRServerless_UpdateApplication(t *testing.T) {
 		ApplicationId: createOutput.ApplicationId,
 		ReleaseLabel:  aws.String("emr-7.0.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify update.
 	getOutput, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, "emr-7.0.0", *getOutput.Application.ReleaseLabel)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"CreatedAt",
+		"UpdatedAt",
+		"ResultMetadata",
+	)).Assert(t.Name(), getOutput)
 }
 
 func TestEMRServerless_DeleteApplication(t *testing.T) {
@@ -195,19 +238,25 @@ func TestEMRServerless_DeleteApplication(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Delete application.
-	_, err = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+	_, err = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify deletion.
 	_, err = client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestEMRServerless_StartAndStopApplication(t *testing.T) {
@@ -219,14 +268,16 @@ func TestEMRServerless_StartAndStopApplication(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
 		// Stop before delete if needed.
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -235,27 +286,39 @@ func TestEMRServerless_StartAndStopApplication(t *testing.T) {
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify application is started.
 	getOutput, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.ApplicationStateStarted, getOutput.Application.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getOutput.Application.State != types.ApplicationStateStarted {
+		t.Errorf("expected state %v, got %v", types.ApplicationStateStarted, getOutput.Application.State)
+	}
 
 	// Stop application.
-	_, err = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+	_, err = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify application is stopped.
 	getOutput, err = client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.ApplicationStateStopped, getOutput.Application.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getOutput.Application.State != types.ApplicationStateStopped {
+		t.Errorf("expected state %v, got %v", types.ApplicationStateStopped, getOutput.Application.State)
+	}
 }
 
 func TestEMRServerless_StartJobRun(t *testing.T) {
@@ -267,13 +330,15 @@ func TestEMRServerless_StartJobRun(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -282,7 +347,9 @@ func TestEMRServerless_StartJobRun(t *testing.T) {
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Start job run.
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
@@ -294,10 +361,16 @@ func TestEMRServerless_StartJobRun(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, jobOutput.JobRunId)
-	require.NotEmpty(t, jobOutput.Arn)
-	require.Equal(t, *createOutput.ApplicationId, *jobOutput.ApplicationId)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"JobRunId",
+		"ResultMetadata",
+	)).Assert(t.Name(), jobOutput)
 }
 
 func TestEMRServerless_GetJobRun(t *testing.T) {
@@ -309,13 +382,15 @@ func TestEMRServerless_GetJobRun(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -324,7 +399,9 @@ func TestEMRServerless_GetJobRun(t *testing.T) {
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Start job run.
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
@@ -337,17 +414,27 @@ func TestEMRServerless_GetJobRun(t *testing.T) {
 		},
 		Name: aws.String("test-job"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get job run.
 	getOutput, err := client.GetJobRun(ctx, &emrserverless.GetJobRunInput{
 		ApplicationId: createOutput.ApplicationId,
 		JobRunId:      jobOutput.JobRunId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, *jobOutput.JobRunId, *getOutput.JobRun.JobRunId)
-	require.Equal(t, "test-job", *getOutput.JobRun.Name)
-	require.Equal(t, types.JobRunStateRunning, getOutput.JobRun.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"JobRunId",
+		"CreatedAt",
+		"UpdatedAt",
+		"ResultMetadata",
+	)).Assert(t.Name(), getOutput)
 }
 
 func TestEMRServerless_ListJobRuns(t *testing.T) {
@@ -359,13 +446,15 @@ func TestEMRServerless_ListJobRuns(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -374,7 +463,9 @@ func TestEMRServerless_ListJobRuns(t *testing.T) {
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Start multiple job runs.
 	for i := 0; i < 3; i++ {
@@ -387,15 +478,21 @@ func TestEMRServerless_ListJobRuns(t *testing.T) {
 				},
 			},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// List job runs.
 	listOutput, err := client.ListJobRuns(ctx, &emrserverless.ListJobRunsInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.JobRuns), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.JobRuns) < 3 {
+		t.Errorf("expected at least 3 job runs, got %d", len(listOutput.JobRuns))
+	}
 }
 
 func TestEMRServerless_CancelJobRun(t *testing.T) {
@@ -407,13 +504,15 @@ func TestEMRServerless_CancelJobRun(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -422,7 +521,9 @@ func TestEMRServerless_CancelJobRun(t *testing.T) {
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Start job run.
 	jobOutput, err := client.StartJobRun(ctx, &emrserverless.StartJobRunInput{
@@ -434,23 +535,36 @@ func TestEMRServerless_CancelJobRun(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Cancel job run.
-	cancelOutput, err := client.CancelJobRun(ctx, &emrserverless.CancelJobRunInput{
+	_, err = client.CancelJobRun(ctx, &emrserverless.CancelJobRunInput{
 		ApplicationId: createOutput.ApplicationId,
 		JobRunId:      jobOutput.JobRunId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, *jobOutput.JobRunId, *cancelOutput.JobRunId)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify job is cancelled.
 	getOutput, err := client.GetJobRun(ctx, &emrserverless.GetJobRunInput{
 		ApplicationId: createOutput.ApplicationId,
 		JobRunId:      jobOutput.JobRunId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.JobRunStateCancelled, getOutput.JobRun.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ApplicationId",
+		"Arn",
+		"JobRunId",
+		"CreatedAt",
+		"UpdatedAt",
+		"ResultMetadata",
+	)).Assert(t.Name(), getOutput)
 }
 
 func TestEMRServerless_NotFoundErrors(t *testing.T) {
@@ -461,25 +575,33 @@ func TestEMRServerless_NotFoundErrors(t *testing.T) {
 	_, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: aws.String("nonexistent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent application.
-	_, err = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+	_, err = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 		ApplicationId: aws.String("nonexistent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Start non-existent application.
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: aws.String("nonexistent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Stop non-existent application.
-	_, err = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+	_, err = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 		ApplicationId: aws.String("nonexistent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestEMRServerless_ConflictErrors(t *testing.T) {
@@ -491,40 +613,50 @@ func TestEMRServerless_ConflictErrors(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
 
 	// Try to stop a CREATED application (should fail).
-	_, err = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+	_, err = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Start application.
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Try to start a STARTED application (should fail).
 	_, err = client.StartApplication(ctx, &emrserverless.StartApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Try to delete a STARTED application (should fail).
-	_, err = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+	_, err = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestEMRServerless_AutoStartApplication(t *testing.T) {
@@ -536,13 +668,15 @@ func TestEMRServerless_AutoStartApplication(t *testing.T) {
 		Type:         aws.String("Spark"),
 		ReleaseLabel: aws.String("emr-6.9.0"),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.StopApplication(ctx, &emrserverless.StopApplicationInput{
+		_, _ = client.StopApplication(context.Background(), &emrserverless.StopApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
-		_, _ = client.DeleteApplication(ctx, &emrserverless.DeleteApplicationInput{
+		_, _ = client.DeleteApplication(context.Background(), &emrserverless.DeleteApplicationInput{
 			ApplicationId: createOutput.ApplicationId,
 		})
 	})
@@ -557,12 +691,18 @@ func TestEMRServerless_AutoStartApplication(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify application is now STARTED.
 	getOutput, err := client.GetApplication(ctx, &emrserverless.GetApplicationInput{
 		ApplicationId: createOutput.ApplicationId,
 	})
-	require.NoError(t, err)
-	require.Equal(t, types.ApplicationStateStarted, getOutput.Application.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getOutput.Application.State != types.ApplicationStateStarted {
+		t.Errorf("expected state %v, got %v", types.ApplicationStateStarted, getOutput.Application.State)
+	}
 }

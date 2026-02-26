@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -67,7 +68,7 @@ func TestDynamoDB_CreateAndDeleteTable(t *testing.T) {
 	t.Logf("Created table: %s", *createOutput.TableDescription.TableName)
 
 	// Delete table.
-	_, err = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+	_, err = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 		TableName: aws.String(tableName),
 	})
 	if err != nil {
@@ -102,7 +103,7 @@ func TestDynamoDB_ListTables(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -155,7 +156,7 @@ func TestDynamoDB_DescribeTable(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -208,7 +209,7 @@ func TestDynamoDB_PutAndGetItem(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -277,7 +278,7 @@ func TestDynamoDB_DeleteItem(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -348,7 +349,7 @@ func TestDynamoDB_UpdateItem(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -439,7 +440,7 @@ func TestDynamoDB_Query(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -514,7 +515,7 @@ func TestDynamoDB_Scan(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})
@@ -581,7 +582,7 @@ func TestDynamoDB_CompositeKey(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTable(ctx, &dynamodb.DeleteTableInput{
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
 			TableName: aws.String(tableName),
 		})
 	})

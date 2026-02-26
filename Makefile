@@ -21,7 +21,7 @@ test-cover:
 	go tool cover -html=coverage.out -o coverage.html
 
 test-integration:
-	go test -v -tags=integration ./test/integration/...
+	go test -C test -v -tags=integration ./integration/...
 
 # Lint
 lint:

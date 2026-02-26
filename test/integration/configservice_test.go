@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/configservice"
 	"github.com/aws/aws-sdk-go-v2/service/configservice/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newConfigServiceClient(t *testing.T) *configservice.Client {
@@ -22,7 +23,9 @@ func newConfigServiceClient(t *testing.T) *configservice.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return configservice.NewFromConfig(cfg, func(o *configservice.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -42,7 +45,7 @@ func cleanupExistingRecorders(t *testing.T, client *configservice.Client) {
 
 	for _, recorder := range resp.ConfigurationRecorders {
 		if recorder.Name != nil {
-			_, _ = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+			_, _ = client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 				ConfigurationRecorderName: recorder.Name,
 			})
 		}
@@ -66,31 +69,37 @@ func TestConfigService_PutAndDeleteConfigurationRecorder(t *testing.T) {
 			RoleARN: aws.String(roleARN),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+		_, _ = client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 			ConfigurationRecorderName: aws.String(recorderName),
 		})
 	})
 
 	// Verify recorder was created.
 	descOutput, err := client.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{})
-	require.NoError(t, err)
-	require.Len(t, descOutput.ConfigurationRecorders, 1)
-	require.Equal(t, recorderName, *descOutput.ConfigurationRecorders[0].Name)
-	require.Equal(t, roleARN, *descOutput.ConfigurationRecorders[0].RoleARN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/created", descOutput)
 
 	// Delete recorder.
-	_, err = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+	_, err = client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String(recorderName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify recorder is deleted.
 	descOutput, err = client.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{})
-	require.NoError(t, err)
-	require.Empty(t, descOutput.ConfigurationRecorders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/deleted", descOutput)
 }
 
 func TestConfigService_DescribeConfigurationRecorders(t *testing.T) {
@@ -113,26 +122,31 @@ func TestConfigService_DescribeConfigurationRecorders(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+		_, _ = client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 			ConfigurationRecorderName: aws.String(recorderName),
 		})
 	})
 
 	// Describe all recorders.
 	descOutput, err := client.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(descOutput.ConfigurationRecorders), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/all", descOutput)
 
 	// Describe specific recorder.
 	descOutput, err = client.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{
 		ConfigurationRecorderNames: []string{recorderName},
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.ConfigurationRecorders, 1)
-	require.Equal(t, recorderName, *descOutput.ConfigurationRecorders[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/specific", descOutput)
 }
 
 func TestConfigService_StartAndStopConfigurationRecorder(t *testing.T) {
@@ -152,10 +166,12 @@ func TestConfigService_StartAndStopConfigurationRecorder(t *testing.T) {
 			RoleARN: aws.String(roleARN),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+		_, _ = client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 			ConfigurationRecorderName: aws.String(recorderName),
 		})
 	})
@@ -164,13 +180,17 @@ func TestConfigService_StartAndStopConfigurationRecorder(t *testing.T) {
 	_, err = client.StartConfigurationRecorder(ctx, &configservice.StartConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String(recorderName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Stop recording.
 	_, err = client.StopConfigurationRecorder(ctx, &configservice.StopConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String(recorderName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestConfigService_PutAndDeleteConfigRule(t *testing.T) {
@@ -189,10 +209,12 @@ func TestConfigService_PutAndDeleteConfigRule(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigRule(ctx, &configservice.DeleteConfigRuleInput{
+		_, _ = client.DeleteConfigRule(context.Background(), &configservice.DeleteConfigRuleInput{
 			ConfigRuleName: aws.String(ruleName),
 		})
 	})
@@ -201,22 +223,27 @@ func TestConfigService_PutAndDeleteConfigRule(t *testing.T) {
 	descOutput, err := client.DescribeConfigRules(ctx, &configservice.DescribeConfigRulesInput{
 		ConfigRuleNames: []string{ruleName},
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.ConfigRules, 1)
-	require.Equal(t, ruleName, *descOutput.ConfigRules[0].ConfigRuleName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/created", descOutput)
 
 	// Delete rule.
 	_, err = client.DeleteConfigRule(ctx, &configservice.DeleteConfigRuleInput{
 		ConfigRuleName: aws.String(ruleName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify rule is deleted.
 	descOutput, err = client.DescribeConfigRules(ctx, &configservice.DescribeConfigRulesInput{
 		ConfigRuleNames: []string{ruleName},
 	})
-	require.NoError(t, err)
-	require.Empty(t, descOutput.ConfigRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/deleted", descOutput)
 }
 
 func TestConfigService_DescribeConfigRules(t *testing.T) {
@@ -236,27 +263,31 @@ func TestConfigService_DescribeConfigRules(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigRule(ctx, &configservice.DeleteConfigRuleInput{
+		_, _ = client.DeleteConfigRule(context.Background(), &configservice.DeleteConfigRuleInput{
 			ConfigRuleName: aws.String(ruleName),
 		})
 	})
 
 	// Describe all rules.
 	descOutput, err := client.DescribeConfigRules(ctx, &configservice.DescribeConfigRulesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(descOutput.ConfigRules), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRules", "ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/all", descOutput)
 
 	// Describe specific rule.
 	descOutput, err = client.DescribeConfigRules(ctx, &configservice.DescribeConfigRulesInput{
 		ConfigRuleNames: []string{ruleName},
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.ConfigRules, 1)
-	require.Equal(t, ruleName, *descOutput.ConfigRules[0].ConfigRuleName)
-	require.Equal(t, "Test rule for describe", *descOutput.ConfigRules[0].Description)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name()+"/specific", descOutput)
 }
 
 func TestConfigService_GetComplianceDetailsByConfigRule(t *testing.T) {
@@ -275,10 +306,12 @@ func TestConfigService_GetComplianceDetailsByConfigRule(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConfigRule(ctx, &configservice.DeleteConfigRuleInput{
+		_, _ = client.DeleteConfigRule(context.Background(), &configservice.DeleteConfigRuleInput{
 			ConfigRuleName: aws.String(ruleName),
 		})
 	})
@@ -287,8 +320,10 @@ func TestConfigService_GetComplianceDetailsByConfigRule(t *testing.T) {
 	output, err := client.GetComplianceDetailsByConfigRule(ctx, &configservice.GetComplianceDetailsByConfigRuleInput{
 		ConfigRuleName: aws.String(ruleName),
 	})
-	require.NoError(t, err)
-	require.Empty(t, output.EvaluationResults)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ConfigRuleArn", "ConfigRuleId", "ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestConfigService_ConfigurationRecorderNotFound(t *testing.T) {
@@ -296,22 +331,28 @@ func TestConfigService_ConfigurationRecorderNotFound(t *testing.T) {
 	ctx := t.Context()
 
 	// Delete non-existent recorder.
-	_, err := client.DeleteConfigurationRecorder(ctx, &configservice.DeleteConfigurationRecorderInput{
+	_, err := client.DeleteConfigurationRecorder(context.Background(), &configservice.DeleteConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String("non-existent-recorder"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Start non-existent recorder.
 	_, err = client.StartConfigurationRecorder(ctx, &configservice.StartConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String("non-existent-recorder"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Stop non-existent recorder.
 	_, err = client.StopConfigurationRecorder(ctx, &configservice.StopConfigurationRecorderInput{
 		ConfigurationRecorderName: aws.String("non-existent-recorder"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestConfigService_ConfigRuleNotFound(t *testing.T) {
@@ -322,11 +363,15 @@ func TestConfigService_ConfigRuleNotFound(t *testing.T) {
 	_, err := client.DeleteConfigRule(ctx, &configservice.DeleteConfigRuleInput{
 		ConfigRuleName: aws.String("non-existent-rule"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Get compliance for non-existent rule.
 	_, err = client.GetComplianceDetailsByConfigRule(ctx, &configservice.GetComplianceDetailsByConfigRuleInput{
 		ConfigRuleName: aws.String("non-existent-rule"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

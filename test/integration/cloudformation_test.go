@@ -3,13 +3,14 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 const (
@@ -56,7 +57,9 @@ func newCloudFormationClient(t *testing.T) *cloudformation.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return cloudformation.NewFromConfig(cfg, func(o *cloudformation.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -74,11 +77,15 @@ func TestCloudFormation_CreateAndDeleteStack(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, createOutput.StackId)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t, golden.WithIgnoreFields("StackId"))
+	g.Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -87,22 +94,28 @@ func TestCloudFormation_CreateAndDeleteStack(t *testing.T) {
 	descOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.Stacks, 1)
-	require.Equal(t, stackName, *descOutput.Stacks[0].StackName)
-	require.Equal(t, "CREATE_COMPLETE", string(descOutput.Stacks[0].StackStatus))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g2 := golden.New(t, golden.WithIgnoreFields("StackId", "CreationTime", "LastUpdatedTime"))
+	g2.Assert(t.Name()+"_describe", descOutput)
 
 	// Delete stack.
 	_, err = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify stack is deleted (should return not found).
 	_, err = client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestCloudFormation_DescribeStacks(t *testing.T) {
@@ -116,10 +129,12 @@ func TestCloudFormation_DescribeStacks(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -128,15 +143,22 @@ func TestCloudFormation_DescribeStacks(t *testing.T) {
 	descOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.Stacks, 1)
-	require.Equal(t, stackName, *descOutput.Stacks[0].StackName)
-	require.NotNil(t, descOutput.Stacks[0].CreationTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t, golden.WithIgnoreFields("StackId", "CreationTime", "LastUpdatedTime"))
+	g.Assert(t.Name()+"_specific", descOutput)
 
 	// Describe all stacks (without filter).
 	allOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(allOutput.Stacks), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(allOutput.Stacks) < 1 {
+		t.Error("expected at least 1 stack")
+	}
 }
 
 func TestCloudFormation_ListStacks(t *testing.T) {
@@ -150,18 +172,25 @@ func TestCloudFormation_ListStacks(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
 
 	// List all stacks.
 	listOutput, err := client.ListStacks(ctx, &cloudformation.ListStacksInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.StackSummaries), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.StackSummaries) < 1 {
+		t.Error("expected at least 1 stack summary")
+	}
 
 	// Find our stack in the list.
 	found := false
@@ -169,13 +198,18 @@ func TestCloudFormation_ListStacks(t *testing.T) {
 	for _, summary := range listOutput.StackSummaries {
 		if *summary.StackName == stackName {
 			found = true
-			require.Equal(t, "CREATE_COMPLETE", string(summary.StackStatus))
+
+			if string(summary.StackStatus) != "CREATE_COMPLETE" {
+				t.Errorf("expected CREATE_COMPLETE, got %s", summary.StackStatus)
+			}
 
 			break
 		}
 	}
 
-	require.True(t, found, "Stack not found in ListStacks response")
+	if !found {
+		t.Error("Stack not found in ListStacks response")
+	}
 }
 
 func TestCloudFormation_UpdateStack(t *testing.T) {
@@ -189,10 +223,12 @@ func TestCloudFormation_UpdateStack(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -221,16 +257,23 @@ func TestCloudFormation_UpdateStack(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(updatedTemplate),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, updateOutput.StackId)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t, golden.WithIgnoreFields("StackId"))
+	g.Assert(t.Name()+"_update", updateOutput)
 
 	// Verify stack was updated.
 	descOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.Stacks, 1)
-	require.Equal(t, "UPDATE_COMPLETE", string(descOutput.Stacks[0].StackStatus))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g2 := golden.New(t, golden.WithIgnoreFields("StackId", "CreationTime", "LastUpdatedTime"))
+	g2.Assert(t.Name()+"_describe", descOutput)
 }
 
 func TestCloudFormation_DescribeStackResources(t *testing.T) {
@@ -244,10 +287,12 @@ func TestCloudFormation_DescribeStackResources(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -256,11 +301,12 @@ func TestCloudFormation_DescribeStackResources(t *testing.T) {
 	resourcesOutput, err := client.DescribeStackResources(ctx, &cloudformation.DescribeStackResourcesInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
-	require.Len(t, resourcesOutput.StackResources, 1)
-	require.Equal(t, "TestBucket", *resourcesOutput.StackResources[0].LogicalResourceId)
-	require.Equal(t, "AWS::S3::Bucket", *resourcesOutput.StackResources[0].ResourceType)
-	require.Equal(t, "CREATE_COMPLETE", string(resourcesOutput.StackResources[0].ResourceStatus))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t, golden.WithIgnoreFields("StackId", "PhysicalResourceId", "Timestamp"))
+	g.Assert(t.Name(), resourcesOutput)
 }
 
 func TestCloudFormation_GetTemplate(t *testing.T) {
@@ -274,10 +320,12 @@ func TestCloudFormation_GetTemplate(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -286,9 +334,12 @@ func TestCloudFormation_GetTemplate(t *testing.T) {
 	templateOutput, err := client.GetTemplate(ctx, &cloudformation.GetTemplateInput{
 		StackName: aws.String(stackName),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, templateOutput.TemplateBody)
-	require.Contains(t, *templateOutput.TemplateBody, "TestBucket")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t)
+	g.Assert(t.Name(), templateOutput)
 }
 
 func TestCloudFormation_ValidateTemplate(t *testing.T) {
@@ -299,18 +350,20 @@ func TestCloudFormation_ValidateTemplate(t *testing.T) {
 	validateOutput, err := client.ValidateTemplate(ctx, &cloudformation.ValidateTemplateInput{
 		TemplateBody: aws.String(testTemplateWithParams),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, validateOutput.Description)
-	require.Equal(t, "Test template with parameters", *validateOutput.Description)
-	require.Len(t, validateOutput.Parameters, 1)
-	require.Equal(t, "BucketName", *validateOutput.Parameters[0].ParameterKey)
-	require.Equal(t, "default-bucket", *validateOutput.Parameters[0].DefaultValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := golden.New(t)
+	g.Assert(t.Name()+"_valid", validateOutput)
 
 	// Validate invalid template.
 	_, err = client.ValidateTemplate(ctx, &cloudformation.ValidateTemplateInput{
 		TemplateBody: aws.String("invalid json"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestCloudFormation_StackNotFound(t *testing.T) {
@@ -321,20 +374,26 @@ func TestCloudFormation_StackNotFound(t *testing.T) {
 	_, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String("non-existent-stack"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent stack.
 	_, err = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String("non-existent-stack"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Update non-existent stack.
 	_, err = client.UpdateStack(ctx, &cloudformation.UpdateStackInput{
 		StackName:    aws.String("non-existent-stack"),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestCloudFormation_DuplicateStack(t *testing.T) {
@@ -348,10 +407,12 @@ func TestCloudFormation_DuplicateStack(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+		_, _ = client.DeleteStack(context.Background(), &cloudformation.DeleteStackInput{
 			StackName: aws.String(stackName),
 		})
 	})
@@ -361,5 +422,7 @@ func TestCloudFormation_DuplicateStack(t *testing.T) {
 		StackName:    aws.String(stackName),
 		TemplateBody: aws.String(testTemplate),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

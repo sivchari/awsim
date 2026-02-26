@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -51,7 +52,7 @@ func TestSSM_PutAndGetParameter(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteParameter(ctx, &ssm.DeleteParameterInput{
+		_, _ = client.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
 			Name: aws.String(paramName),
 		})
 	})
@@ -89,7 +90,7 @@ func TestSSM_PutParameter_Update(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteParameter(ctx, &ssm.DeleteParameterInput{
+		_, _ = client.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
 			Name: aws.String(paramName),
 		})
 	})
@@ -151,7 +152,7 @@ func TestSSM_GetParameters(t *testing.T) {
 			names[i] = p.name
 		}
 
-		_, _ = client.DeleteParameters(ctx, &ssm.DeleteParametersInput{
+		_, _ = client.DeleteParameters(context.Background(), &ssm.DeleteParametersInput{
 			Names: names,
 		})
 	})
@@ -209,7 +210,7 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 			names[i] = p.name
 		}
 
-		_, _ = client.DeleteParameters(ctx, &ssm.DeleteParametersInput{
+		_, _ = client.DeleteParameters(context.Background(), &ssm.DeleteParametersInput{
 			Names: names,
 		})
 	})
@@ -340,7 +341,7 @@ func TestSSM_DescribeParameters(t *testing.T) {
 			names[i] = p.name
 		}
 
-		_, _ = client.DeleteParameters(ctx, &ssm.DeleteParametersInput{
+		_, _ = client.DeleteParameters(context.Background(), &ssm.DeleteParametersInput{
 			Names: names,
 		})
 	})

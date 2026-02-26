@@ -1,0 +1,5 @@
+{
+  "ConfigRules": [],
+  "NextToken": null,
+  "ResultMetadata": {}
+}

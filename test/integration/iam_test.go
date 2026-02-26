@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestIAM_CreateAndDeleteUser(t *testing.T) {
 	}
 
 	// Delete user
-	_, err = client.DeleteUser(ctx, &iam.DeleteUserInput{
+	_, err = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 		UserName: aws.String(userName),
 	})
 	if err != nil {
@@ -76,7 +77,7 @@ func TestIAM_GetUser(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})
@@ -116,7 +117,7 @@ func TestIAM_ListUsers(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})
@@ -172,7 +173,7 @@ func TestIAM_CreateAndDeleteRole(t *testing.T) {
 	}
 
 	// Delete role
-	_, err = client.DeleteRole(ctx, &iam.DeleteRoleInput{
+	_, err = client.DeleteRole(context.Background(), &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
@@ -205,7 +206,7 @@ func TestIAM_GetRole(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteRole(ctx, &iam.DeleteRoleInput{
+		_, _ = client.DeleteRole(context.Background(), &iam.DeleteRoleInput{
 			RoleName: aws.String(roleName),
 		})
 	})
@@ -251,7 +252,7 @@ func TestIAM_ListRoles(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteRole(ctx, &iam.DeleteRoleInput{
+		_, _ = client.DeleteRole(context.Background(), &iam.DeleteRoleInput{
 			RoleName: aws.String(roleName),
 		})
 	})
@@ -309,7 +310,7 @@ func TestIAM_CreateAndDeletePolicy(t *testing.T) {
 	policyArn := createResult.Policy.Arn
 
 	// Delete policy
-	_, err = client.DeletePolicy(ctx, &iam.DeletePolicyInput{
+	_, err = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
 		PolicyArn: policyArn,
 	})
 	if err != nil {
@@ -344,7 +345,7 @@ func TestIAM_GetPolicy(t *testing.T) {
 	policyArn := createResult.Policy.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DeletePolicy(ctx, &iam.DeletePolicyInput{
+		_, _ = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
 			PolicyArn: policyArn,
 		})
 	})
@@ -393,14 +394,14 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 	policyArn := createPolicyResult.Policy.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DetachUserPolicy(ctx, &iam.DetachUserPolicyInput{
+		_, _ = client.DetachUserPolicy(context.Background(), &iam.DetachUserPolicyInput{
 			UserName:  aws.String(userName),
 			PolicyArn: policyArn,
 		})
-		_, _ = client.DeletePolicy(ctx, &iam.DeletePolicyInput{
+		_, _ = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
 			PolicyArn: policyArn,
 		})
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})
@@ -415,7 +416,7 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 	}
 
 	// Detach policy from user
-	_, err = client.DetachUserPolicy(ctx, &iam.DetachUserPolicyInput{
+	_, err = client.DetachUserPolicy(context.Background(), &iam.DetachUserPolicyInput{
 		UserName:  aws.String(userName),
 		PolicyArn: policyArn,
 	})
@@ -454,14 +455,14 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 	policyArn := createPolicyResult.Policy.Arn
 
 	t.Cleanup(func() {
-		_, _ = client.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
+		_, _ = client.DetachRolePolicy(context.Background(), &iam.DetachRolePolicyInput{
 			RoleName:  aws.String(roleName),
 			PolicyArn: policyArn,
 		})
-		_, _ = client.DeletePolicy(ctx, &iam.DeletePolicyInput{
+		_, _ = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
 			PolicyArn: policyArn,
 		})
-		_, _ = client.DeleteRole(ctx, &iam.DeleteRoleInput{
+		_, _ = client.DeleteRole(context.Background(), &iam.DeleteRoleInput{
 			RoleName: aws.String(roleName),
 		})
 	})
@@ -476,7 +477,7 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 	}
 
 	// Detach policy from role
-	_, err = client.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
+	_, err = client.DetachRolePolicy(context.Background(), &iam.DetachRolePolicyInput{
 		RoleName:  aws.String(roleName),
 		PolicyArn: policyArn,
 	})
@@ -500,18 +501,18 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 
 	t.Cleanup(func() {
 		// List and delete all access keys first
-		listResult, err := client.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
+		listResult, err := client.ListAccessKeys(context.Background(), &iam.ListAccessKeysInput{
 			UserName: aws.String(userName),
 		})
 		if err == nil && listResult != nil {
 			for _, key := range listResult.AccessKeyMetadata {
-				_, _ = client.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+				_, _ = client.DeleteAccessKey(context.Background(), &iam.DeleteAccessKeyInput{
 					UserName:    aws.String(userName),
 					AccessKeyId: key.AccessKeyId,
 				})
 			}
 		}
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})
@@ -541,7 +542,7 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 	}
 
 	// Delete access key
-	_, err = client.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+	_, err = client.DeleteAccessKey(context.Background(), &iam.DeleteAccessKeyInput{
 		UserName:    aws.String(userName),
 		AccessKeyId: createResult.AccessKey.AccessKeyId,
 	})
@@ -574,11 +575,11 @@ func TestIAM_ListAccessKeys(t *testing.T) {
 	accessKeyID := createResult.AccessKey.AccessKeyId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+		_, _ = client.DeleteAccessKey(context.Background(), &iam.DeleteAccessKeyInput{
 			UserName:    aws.String(userName),
 			AccessKeyId: accessKeyID,
 		})
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})
@@ -648,7 +649,7 @@ func TestIAM_CreateUserWithTags(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteUser(ctx, &iam.DeleteUserInput{
+		_, _ = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 			UserName: aws.String(userName),
 		})
 	})

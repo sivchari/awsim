@@ -3,13 +3,14 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newCloudTrailClient(t *testing.T) *cloudtrail.Client {
@@ -21,7 +22,9 @@ func newCloudTrailClient(t *testing.T) *cloudtrail.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return cloudtrail.NewFromConfig(cfg, func(o *cloudtrail.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566")
@@ -40,20 +43,27 @@ func TestCloudTrail_CreateAndDeleteTrail(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, createOutput.TrailARN)
-	require.Equal(t, trailName, *createOutput.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
 
+	golden.New(t, golden.WithIgnoreFields("TrailARN", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
+
 	// Verify trail was created.
 	descOutput, err := client.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(descOutput.TrailList), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(descOutput.TrailList) < 1 {
+		t.Fatal("expected at least one trail in DescribeTrails response")
+	}
 
 	found := false
 
@@ -65,20 +75,28 @@ func TestCloudTrail_CreateAndDeleteTrail(t *testing.T) {
 		}
 	}
 
-	require.True(t, found, "Trail not found in DescribeTrails response")
+	if !found {
+		t.Fatal("Trail not found in DescribeTrails response")
+	}
 
 	// Delete trail.
 	_, err = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify trail is deleted.
 	descOutput, err = client.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, trail := range descOutput.TrailList {
-		require.NotEqual(t, trailName, *trail.Name)
+		if *trail.Name == trailName {
+			t.Fatal("Trail should have been deleted")
+		}
 	}
 }
 
@@ -94,10 +112,12 @@ func TestCloudTrail_GetTrail(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
@@ -106,10 +126,11 @@ func TestCloudTrail_GetTrail(t *testing.T) {
 	getOutput, err := client.GetTrail(ctx, &cloudtrail.GetTrailInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, getOutput.Trail)
-	require.Equal(t, trailName, *getOutput.Trail.Name)
-	require.Equal(t, bucketName, *getOutput.Trail.S3BucketName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("TrailARN", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestCloudTrail_DescribeTrails(t *testing.T) {
@@ -124,26 +145,35 @@ func TestCloudTrail_DescribeTrails(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
 
 	// Describe all trails.
 	descOutput, err := client.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(descOutput.TrailList), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(descOutput.TrailList) < 1 {
+		t.Fatal("expected at least one trail in DescribeTrails response")
+	}
 
 	// Describe specific trail.
 	descOutput, err = client.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{
 		TrailNameList: []string{trailName},
 	})
-	require.NoError(t, err)
-	require.Len(t, descOutput.TrailList, 1)
-	require.Equal(t, trailName, *descOutput.TrailList[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("TrailARN", "ResultMetadata")).Assert(t.Name(), descOutput)
 }
 
 func TestCloudTrail_StartAndStopLogging(t *testing.T) {
@@ -158,10 +188,12 @@ func TestCloudTrail_StartAndStopLogging(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
@@ -170,29 +202,37 @@ func TestCloudTrail_StartAndStopLogging(t *testing.T) {
 	_, err = client.StartLogging(ctx, &cloudtrail.StartLoggingInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify logging started.
 	statusOutput, err := client.GetTrailStatus(ctx, &cloudtrail.GetTrailStatusInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, statusOutput.IsLogging)
-	require.True(t, *statusOutput.IsLogging)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("StartLoggingTime", "LatestDeliveryTime", "LatestNotificationTime", "LatestCloudWatchLogsDeliveryTime", "LatestDigestDeliveryTime", "ResultMetadata")).Assert(t.Name()+"_started", statusOutput)
 
 	// Stop logging.
 	_, err = client.StopLogging(ctx, &cloudtrail.StopLoggingInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify logging stopped.
 	statusOutput, err = client.GetTrailStatus(ctx, &cloudtrail.GetTrailStatusInput{
 		Name: aws.String(trailName),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, statusOutput.IsLogging)
-	require.False(t, *statusOutput.IsLogging)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("StartLoggingTime", "StopLoggingTime", "LatestDeliveryTime", "LatestNotificationTime", "LatestCloudWatchLogsDeliveryTime", "LatestDigestDeliveryTime", "ResultMetadata")).Assert(t.Name()+"_stopped", statusOutput)
 }
 
 func TestCloudTrail_LookupEvents(t *testing.T) {
@@ -201,8 +241,11 @@ func TestCloudTrail_LookupEvents(t *testing.T) {
 
 	// LookupEvents returns empty list for MVP.
 	output, err := client.LookupEvents(ctx, &cloudtrail.LookupEventsInput{})
-	require.NoError(t, err)
-	require.Empty(t, output.Events)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestCloudTrail_TrailNotFound(t *testing.T) {
@@ -213,25 +256,33 @@ func TestCloudTrail_TrailNotFound(t *testing.T) {
 	_, err := client.GetTrail(ctx, &cloudtrail.GetTrailInput{
 		Name: aws.String("non-existent-trail"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent trail.
 	_, err = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
 		Name: aws.String("non-existent-trail"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Start logging on non-existent trail.
 	_, err = client.StartLogging(ctx, &cloudtrail.StartLoggingInput{
 		Name: aws.String("non-existent-trail"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Stop logging on non-existent trail.
 	_, err = client.StopLogging(ctx, &cloudtrail.StopLoggingInput{
 		Name: aws.String("non-existent-trail"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestCloudTrail_DuplicateTrail(t *testing.T) {
@@ -246,10 +297,12 @@ func TestCloudTrail_DuplicateTrail(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
@@ -259,7 +312,9 @@ func TestCloudTrail_DuplicateTrail(t *testing.T) {
 		Name:         aws.String(trailName),
 		S3BucketName: aws.String(bucketName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestCloudTrail_CreateTrailWithOptions(t *testing.T) {
@@ -280,22 +335,15 @@ func TestCloudTrail_CreateTrailWithOptions(t *testing.T) {
 		EnableLogFileValidation:    aws.Bool(true),
 		IsOrganizationTrail:        aws.Bool(false),
 	})
-	require.NoError(t, err)
-	require.NotNil(t, createOutput.TrailARN)
-	require.Equal(t, trailName, *createOutput.Name)
-	require.Equal(t, s3Prefix, *createOutput.S3KeyPrefix)
-	require.NotNil(t, createOutput.IncludeGlobalServiceEvents)
-	require.False(t, *createOutput.IncludeGlobalServiceEvents)
-	require.NotNil(t, createOutput.IsMultiRegionTrail)
-	require.True(t, *createOutput.IsMultiRegionTrail)
-	require.NotNil(t, createOutput.LogFileValidationEnabled)
-	require.True(t, *createOutput.LogFileValidationEnabled)
-	require.NotNil(t, createOutput.IsOrganizationTrail)
-	require.False(t, *createOutput.IsOrganizationTrail)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTrail(ctx, &cloudtrail.DeleteTrailInput{
+		_, _ = client.DeleteTrail(context.Background(), &cloudtrail.DeleteTrailInput{
 			Name: aws.String(trailName),
 		})
 	})
+
+	golden.New(t, golden.WithIgnoreFields("TrailARN", "ResultMetadata")).Assert(t.Name(), createOutput)
 }

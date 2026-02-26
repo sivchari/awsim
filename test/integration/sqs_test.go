@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -72,7 +73,7 @@ func TestSQS_ListQueues(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -112,7 +113,7 @@ func TestSQS_GetQueueUrl(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -145,7 +146,7 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -206,7 +207,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -261,7 +262,7 @@ func TestSQS_GetQueueAttributes(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -300,7 +301,7 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -350,7 +351,7 @@ func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -394,7 +395,7 @@ func TestSQS_FIFOQueue_GetAttributes(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -437,7 +438,7 @@ func TestSQS_FIFOQueue_MissingMessageGroupId(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -469,7 +470,7 @@ func TestSQS_FIFOQueue_ExplicitDeduplicationId(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})
@@ -509,7 +510,7 @@ func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
 			QueueUrl: createOutput.QueueUrl,
 		})
 	})

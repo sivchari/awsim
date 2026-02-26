@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -193,7 +194,7 @@ func TestCloudWatch_PutMetricAlarm(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteAlarms(ctx, &cloudwatch.DeleteAlarmsInput{
+		_, _ = client.DeleteAlarms(context.Background(), &cloudwatch.DeleteAlarmsInput{
 			AlarmNames: []string{alarmName},
 		})
 	})
@@ -223,7 +224,7 @@ func TestCloudWatch_DescribeAlarms(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteAlarms(ctx, &cloudwatch.DeleteAlarmsInput{
+		_, _ = client.DeleteAlarms(context.Background(), &cloudwatch.DeleteAlarmsInput{
 			AlarmNames: []string{alarmName},
 		})
 	})

@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dlm"
 	"github.com/aws/aws-sdk-go-v2/service/dlm/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newDLMClient(t *testing.T) *dlm.Client {
@@ -22,7 +23,9 @@ func newDLMClient(t *testing.T) *dlm.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return dlm.NewFromConfig(cfg, func(o *dlm.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566/dlm")
@@ -61,13 +64,14 @@ func TestDLM_CreateAndDeleteLifecyclePolicy(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.PolicyId)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	policyID := *createOutput.PolicyId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+		_, _ = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 			PolicyId: aws.String(policyID),
 		})
 	})
@@ -76,22 +80,26 @@ func TestDLM_CreateAndDeleteLifecyclePolicy(t *testing.T) {
 	getOutput, err := client.GetLifecyclePolicy(ctx, &dlm.GetLifecyclePolicyInput{
 		PolicyId: aws.String(policyID),
 	})
-	require.NoError(t, err)
-	require.Equal(t, policyID, *getOutput.Policy.PolicyId)
-	require.Equal(t, "Test policy for EBS snapshots", *getOutput.Policy.Description)
-	require.Equal(t, types.GettablePolicyStateValuesEnabled, getOutput.Policy.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("PolicyArn", "PolicyId", "DateCreated", "DateModified")).Assert(t.Name()+"_get", getOutput)
 
 	// Delete lifecycle policy.
-	_, err = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+	_, err = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 		PolicyId: aws.String(policyID),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify policy is deleted.
 	_, err = client.GetLifecyclePolicy(ctx, &dlm.GetLifecyclePolicyInput{
 		PolicyId: aws.String(policyID),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestDLM_UpdateLifecyclePolicy(t *testing.T) {
@@ -125,12 +133,14 @@ func TestDLM_UpdateLifecyclePolicy(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	policyID := *createOutput.PolicyId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+		_, _ = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 			PolicyId: aws.String(policyID),
 		})
 	})
@@ -141,15 +151,18 @@ func TestDLM_UpdateLifecyclePolicy(t *testing.T) {
 		Description: aws.String("Updated test policy"),
 		State:       types.SettablePolicyStateValuesDisabled,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify update.
 	getOutput, err := client.GetLifecyclePolicy(ctx, &dlm.GetLifecyclePolicyInput{
 		PolicyId: aws.String(policyID),
 	})
-	require.NoError(t, err)
-	require.Equal(t, "Updated test policy", *getOutput.Policy.Description)
-	require.Equal(t, types.GettablePolicyStateValuesDisabled, getOutput.Policy.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("PolicyArn", "PolicyId", "DateCreated", "DateModified")).Assert(t.Name(), getOutput)
 }
 
 func TestDLM_GetLifecyclePolicies(t *testing.T) {
@@ -186,13 +199,15 @@ func TestDLM_GetLifecyclePolicies(t *testing.T) {
 				},
 			},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		policyIDs = append(policyIDs, *createOutput.PolicyId)
 	}
 
 	t.Cleanup(func() {
 		for _, id := range policyIDs {
-			_, _ = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+			_, _ = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 				PolicyId: aws.String(id),
 			})
 		}
@@ -200,8 +215,12 @@ func TestDLM_GetLifecyclePolicies(t *testing.T) {
 
 	// Get lifecycle policies.
 	listOutput, err := client.GetLifecyclePolicies(ctx, &dlm.GetLifecyclePoliciesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Policies), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Policies) < 2 {
+		t.Errorf("expected at least 2 policies, got %d", len(listOutput.Policies))
+	}
 }
 
 func TestDLM_PolicyNotFound(t *testing.T) {
@@ -212,20 +231,26 @@ func TestDLM_PolicyNotFound(t *testing.T) {
 	_, err := client.GetLifecyclePolicy(ctx, &dlm.GetLifecyclePolicyInput{
 		PolicyId: aws.String("policy-non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent policy.
-	_, err = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+	_, err = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 		PolicyId: aws.String("policy-non-existent"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Update non-existent policy.
 	_, err = client.UpdateLifecyclePolicy(ctx, &dlm.UpdateLifecyclePolicyInput{
 		PolicyId:    aws.String("policy-non-existent"),
 		Description: aws.String("Updated description"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestDLM_FilterPoliciesByState(t *testing.T) {
@@ -259,12 +284,14 @@ func TestDLM_FilterPoliciesByState(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	policyID := *createOutput.PolicyId
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLifecyclePolicy(ctx, &dlm.DeleteLifecyclePolicyInput{
+		_, _ = client.DeleteLifecyclePolicy(context.Background(), &dlm.DeleteLifecyclePolicyInput{
 			PolicyId: aws.String(policyID),
 		})
 	})
@@ -273,11 +300,17 @@ func TestDLM_FilterPoliciesByState(t *testing.T) {
 	listOutput, err := client.GetLifecyclePolicies(ctx, &dlm.GetLifecyclePoliciesInput{
 		State: types.GettablePolicyStateValuesEnabled,
 	})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Policies), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listOutput.Policies) < 1 {
+		t.Errorf("expected at least 1 policy, got %d", len(listOutput.Policies))
+	}
 
 	// Verify all returned policies are enabled.
 	for _, policy := range listOutput.Policies {
-		require.Equal(t, types.GettablePolicyStateValuesEnabled, policy.State)
+		if policy.State != types.GettablePolicyStateValuesEnabled {
+			t.Errorf("expected state ENABLED, got %v", policy.State)
+		}
 	}
 }

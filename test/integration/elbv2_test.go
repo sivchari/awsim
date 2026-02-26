@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -59,13 +60,13 @@ func TestELBv2_CreateAndDeleteLoadBalancer(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLoadBalancer(ctx, &elasticloadbalancingv2.DeleteLoadBalancerInput{
+		_, _ = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
 			LoadBalancerArn: lb.LoadBalancerArn,
 		})
 	})
 
 	// Delete load balancer
-	_, err = client.DeleteLoadBalancer(ctx, &elasticloadbalancingv2.DeleteLoadBalancerInput{
+	_, err = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
 		LoadBalancerArn: lb.LoadBalancerArn,
 	})
 	if err != nil {
@@ -90,7 +91,7 @@ func TestELBv2_DescribeLoadBalancers(t *testing.T) {
 	lbArn := createResult.LoadBalancers[0].LoadBalancerArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteLoadBalancer(ctx, &elasticloadbalancingv2.DeleteLoadBalancerInput{
+		_, _ = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
 			LoadBalancerArn: lbArn,
 		})
 	})
@@ -139,13 +140,13 @@ func TestELBv2_CreateAndDeleteTargetGroup(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 			TargetGroupArn: tg.TargetGroupArn,
 		})
 	})
 
 	// Delete target group
-	_, err = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+	_, err = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 		TargetGroupArn: tg.TargetGroupArn,
 	})
 	if err != nil {
@@ -173,7 +174,7 @@ func TestELBv2_DescribeTargetGroups(t *testing.T) {
 	tgArn := createResult.TargetGroups[0].TargetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 			TargetGroupArn: tgArn,
 		})
 	})
@@ -211,7 +212,7 @@ func TestELBv2_RegisterAndDeregisterTargets(t *testing.T) {
 	tgArn := createResult.TargetGroups[0].TargetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 			TargetGroupArn: tgArn,
 		})
 	})
@@ -272,10 +273,10 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 	tgArn := tgResult.TargetGroups[0].TargetGroupArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 			TargetGroupArn: tgArn,
 		})
-		_, _ = client.DeleteLoadBalancer(ctx, &elasticloadbalancingv2.DeleteLoadBalancerInput{
+		_, _ = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
 			LoadBalancerArn: lbArn,
 		})
 	})
@@ -303,7 +304,7 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 	listenerArn := listenerResult.Listeners[0].ListenerArn
 
 	// Delete listener
-	_, err = client.DeleteListener(ctx, &elasticloadbalancingv2.DeleteListenerInput{
+	_, err = client.DeleteListener(context.Background(), &elasticloadbalancingv2.DeleteListenerInput{
 		ListenerArn: listenerArn,
 	})
 	if err != nil {
@@ -372,13 +373,13 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 
 	// Cleanup in reverse order
 	t.Cleanup(func() {
-		_, _ = client.DeleteListener(ctx, &elasticloadbalancingv2.DeleteListenerInput{
+		_, _ = client.DeleteListener(context.Background(), &elasticloadbalancingv2.DeleteListenerInput{
 			ListenerArn: listenerArn,
 		})
-		_, _ = client.DeleteTargetGroup(ctx, &elasticloadbalancingv2.DeleteTargetGroupInput{
+		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
 			TargetGroupArn: tgArn,
 		})
-		_, _ = client.DeleteLoadBalancer(ctx, &elasticloadbalancingv2.DeleteLoadBalancerInput{
+		_, _ = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
 			LoadBalancerArn: lbArn,
 		})
 	})

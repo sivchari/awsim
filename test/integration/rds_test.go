@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -57,7 +58,7 @@ func TestRDS_CreateAndDescribeDBInstance(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+		_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 			SkipFinalSnapshot:    aws.Bool(true),
 		})
@@ -97,7 +98,7 @@ func TestRDS_ModifyDBInstance(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+		_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 			SkipFinalSnapshot:    aws.Bool(true),
 		})
@@ -135,7 +136,7 @@ func TestRDS_StartAndStopDBInstance(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+		_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 			SkipFinalSnapshot:    aws.Bool(true),
 		})
@@ -183,7 +184,7 @@ func TestRDS_DeleteDBInstance(t *testing.T) {
 	}
 
 	// Delete DB instance
-	deleteResult, err := client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+	deleteResult, err := client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 		DBInstanceIdentifier: aws.String(instanceID),
 		SkipFinalSnapshot:    aws.Bool(true),
 	})
@@ -230,7 +231,7 @@ func TestRDS_CreateAndDescribeDBCluster(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDBCluster(ctx, &rds.DeleteDBClusterInput{
+		_, _ = client.DeleteDBCluster(context.Background(), &rds.DeleteDBClusterInput{
 			DBClusterIdentifier: aws.String(clusterID),
 			SkipFinalSnapshot:   aws.Bool(true),
 		})
@@ -269,7 +270,7 @@ func TestRDS_DeleteDBCluster(t *testing.T) {
 	}
 
 	// Delete DB cluster
-	deleteResult, err := client.DeleteDBCluster(ctx, &rds.DeleteDBClusterInput{
+	deleteResult, err := client.DeleteDBCluster(context.Background(), &rds.DeleteDBClusterInput{
 		DBClusterIdentifier: aws.String(clusterID),
 		SkipFinalSnapshot:   aws.Bool(true),
 	})
@@ -308,10 +309,10 @@ func TestRDS_CreateAndDeleteDBSnapshot(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDBSnapshot(ctx, &rds.DeleteDBSnapshotInput{
+		_, _ = client.DeleteDBSnapshot(context.Background(), &rds.DeleteDBSnapshotInput{
 			DBSnapshotIdentifier: aws.String(snapshotID),
 		})
-		_, _ = client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+		_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 			SkipFinalSnapshot:    aws.Bool(true),
 		})
@@ -339,7 +340,7 @@ func TestRDS_CreateAndDeleteDBSnapshot(t *testing.T) {
 	}
 
 	// Delete DB snapshot
-	deleteResult, err := client.DeleteDBSnapshot(ctx, &rds.DeleteDBSnapshotInput{
+	deleteResult, err := client.DeleteDBSnapshot(context.Background(), &rds.DeleteDBSnapshotInput{
 		DBSnapshotIdentifier: aws.String(snapshotID),
 	})
 	if err != nil {
@@ -370,7 +371,7 @@ func TestRDS_DescribeDBInstances_All(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, id := range instanceIDs {
-			_, _ = client.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+			_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
 				DBInstanceIdentifier: aws.String(id),
 				SkipFinalSnapshot:    aws.Bool(true),
 			})

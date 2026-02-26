@@ -1,0 +1,4 @@
+{
+  "ConfigurationRecorders": [],
+  "ResultMetadata": {}
+}

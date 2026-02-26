@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -403,7 +404,7 @@ func TestKMS_EncryptWithAlias(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteAlias(ctx, &kms.DeleteAliasInput{
+		_, _ = client.DeleteAlias(context.Background(), &kms.DeleteAliasInput{
 			AliasName: aws.String(aliasName),
 		})
 	})

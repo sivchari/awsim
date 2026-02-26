@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,8 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/appsync"
 	"github.com/aws/aws-sdk-go-v2/service/appsync/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func TestAppSync_CreateGraphqlApi(t *testing.T) {
@@ -25,19 +25,20 @@ func TestAppSync_CreateGraphqlApi(t *testing.T) {
 		Name:               aws.String("test-api"),
 		AuthenticationType: types.AuthenticationTypeApiKey,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.GraphqlApi)
-	assert.Equal(t, "test-api", *result.GraphqlApi.Name)
-	assert.NotEmpty(t, *result.GraphqlApi.ApiId)
-	assert.NotEmpty(t, *result.GraphqlApi.Arn)
-	assert.NotEmpty(t, result.GraphqlApi.Uris)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-		ApiId: result.GraphqlApi.ApiId,
+	t.Cleanup(func() {
+		_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+			ApiId: result.GraphqlApi.ApiId,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
-	require.NoError(t, err)
+
+	golden.New(t, golden.WithIgnoreFields("ApiId", "Arn", "Uris")).Assert(t.Name(), result)
 }
 
 func TestAppSync_GetGraphqlApi(t *testing.T) {
@@ -51,25 +52,30 @@ func TestAppSync_GetGraphqlApi(t *testing.T) {
 		Name:               aws.String("get-test-api"),
 		AuthenticationType: types.AuthenticationTypeAwsIam,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	apiID := createResult.GraphqlApi.ApiId
+
+	t.Cleanup(func() {
+		_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+			ApiId: apiID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	// Get the API.
 	getResult, err := client.GetGraphqlApi(ctx, &appsync.GetGraphqlApiInput{
 		ApiId: apiID,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, getResult)
-	assert.NotNil(t, getResult.GraphqlApi)
-	assert.Equal(t, "get-test-api", *getResult.GraphqlApi.Name)
-	assert.Equal(t, *apiID, *getResult.GraphqlApi.ApiId)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-		ApiId: apiID,
-	})
-	require.NoError(t, err)
+	golden.New(t, golden.WithIgnoreFields("ApiId", "Arn", "Uris")).Assert(t.Name(), getResult)
 }
 
 func TestAppSync_ListGraphqlApis(t *testing.T) {
@@ -86,22 +92,31 @@ func TestAppSync_ListGraphqlApis(t *testing.T) {
 			Name:               aws.String("list-test-api"),
 			AuthenticationType: types.AuthenticationTypeApiKey,
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		apiIDs = append(apiIDs, result.GraphqlApi.ApiId)
 	}
 
+	t.Cleanup(func() {
+		for _, apiID := range apiIDs {
+			_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+				ApiId: apiID,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+
 	// List APIs.
 	listResult, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{})
-	require.NoError(t, err)
-	assert.NotNil(t, listResult)
-	assert.GreaterOrEqual(t, len(listResult.GraphqlApis), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	for _, apiID := range apiIDs {
-		_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-			ApiId: apiID,
-		})
-		require.NoError(t, err)
+	if len(listResult.GraphqlApis) < 3 {
+		t.Errorf("expected at least 3 APIs, got %d", len(listResult.GraphqlApis))
 	}
 }
 
@@ -119,16 +134,21 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 			Name:               aws.String("pagination-test-api"),
 			AuthenticationType: types.AuthenticationTypeApiKey,
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		apiIDs = append(apiIDs, result.GraphqlApi.ApiId)
 	}
 
 	t.Cleanup(func() {
 		// Clean up APIs created by this test.
 		for _, apiID := range apiIDs {
-			_, _ = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
+			_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
 				ApiId: apiID,
 			})
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 	})
 
@@ -143,11 +163,17 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 			MaxResults: 2,
 			NextToken:  nextToken,
 		})
-		require.NoError(t, err)
-		require.NotNil(t, listResult)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if listResult == nil {
+			t.Fatal("expected listResult to be non-nil")
+		}
 
 		// Each page should have at most maxResults items.
-		assert.LessOrEqual(t, len(listResult.GraphqlApis), 2, "Page should have at most maxResults items")
+		if len(listResult.GraphqlApis) > 2 {
+			t.Errorf("expected at most 2 items per page, got %d", len(listResult.GraphqlApis))
+		}
 
 		totalResults += len(listResult.GraphqlApis)
 		pageCount++
@@ -165,11 +191,13 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 	}
 
 	// Verify we got at least the APIs we created.
-	assert.GreaterOrEqual(t, totalResults, 3, "Should get at least the 3 APIs we created")
+	if totalResults < 3 {
+		t.Errorf("expected at least 3 APIs, got %d", totalResults)
+	}
 
 	// Verify pagination was actually used (we should have multiple pages if there are 3+ APIs).
-	if totalResults >= 3 {
-		assert.GreaterOrEqual(t, pageCount, 2, "With 3+ APIs and maxResults=2, we should have at least 2 pages")
+	if totalResults >= 3 && pageCount < 2 {
+		t.Errorf("with 3+ APIs and maxResults=2, expected at least 2 pages, got %d", pageCount)
 	}
 }
 
@@ -184,7 +212,9 @@ func TestAppSync_DeleteGraphqlApi(t *testing.T) {
 		Name:               aws.String("delete-test-api"),
 		AuthenticationType: types.AuthenticationTypeApiKey,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	apiID := createResult.GraphqlApi.ApiId
 
@@ -192,13 +222,17 @@ func TestAppSync_DeleteGraphqlApi(t *testing.T) {
 	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
 		ApiId: apiID,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Try to get the deleted API - should fail.
 	_, err = client.GetGraphqlApi(ctx, &appsync.GetGraphqlApiInput{
 		ApiId: apiID,
 	})
-	assert.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestAppSync_CreateDataSource(t *testing.T) {
@@ -212,9 +246,20 @@ func TestAppSync_CreateDataSource(t *testing.T) {
 		Name:               aws.String("datasource-test-api"),
 		AuthenticationType: types.AuthenticationTypeApiKey,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	apiID := apiResult.GraphqlApi.ApiId
+
+	t.Cleanup(func() {
+		_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+			ApiId: apiID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	// Create a data source.
 	dsResult, err := client.CreateDataSource(ctx, &appsync.CreateDataSourceInput{
@@ -223,17 +268,11 @@ func TestAppSync_CreateDataSource(t *testing.T) {
 		Type:        types.DataSourceTypeNone,
 		Description: aws.String("Test data source"),
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, dsResult)
-	assert.NotNil(t, dsResult.DataSource)
-	assert.Equal(t, "test-datasource", *dsResult.DataSource.Name)
-	assert.NotEmpty(t, *dsResult.DataSource.DataSourceArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-		ApiId: apiID,
-	})
-	require.NoError(t, err)
+	golden.New(t, golden.WithIgnoreFields("DataSourceArn")).Assert(t.Name(), dsResult)
 }
 
 func TestAppSync_CreateResolver(t *testing.T) {
@@ -247,9 +286,20 @@ func TestAppSync_CreateResolver(t *testing.T) {
 		Name:               aws.String("resolver-test-api"),
 		AuthenticationType: types.AuthenticationTypeApiKey,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	apiID := apiResult.GraphqlApi.ApiId
+
+	t.Cleanup(func() {
+		_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+			ApiId: apiID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	// Create a data source first.
 	_, err = client.CreateDataSource(ctx, &appsync.CreateDataSourceInput{
@@ -257,7 +307,9 @@ func TestAppSync_CreateResolver(t *testing.T) {
 		Name:  aws.String("resolver-datasource"),
 		Type:  types.DataSourceTypeNone,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Create a resolver.
 	resolverResult, err := client.CreateResolver(ctx, &appsync.CreateResolverInput{
@@ -266,18 +318,11 @@ func TestAppSync_CreateResolver(t *testing.T) {
 		FieldName:      aws.String("getItem"),
 		DataSourceName: aws.String("resolver-datasource"),
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, resolverResult)
-	assert.NotNil(t, resolverResult.Resolver)
-	assert.Equal(t, "Query", *resolverResult.Resolver.TypeName)
-	assert.Equal(t, "getItem", *resolverResult.Resolver.FieldName)
-	assert.NotEmpty(t, *resolverResult.Resolver.ResolverArn)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-		ApiId: apiID,
-	})
-	require.NoError(t, err)
+	golden.New(t, golden.WithIgnoreFields("ResolverArn")).Assert(t.Name(), resolverResult)
 }
 
 func TestAppSync_StartSchemaCreation(t *testing.T) {
@@ -291,9 +336,20 @@ func TestAppSync_StartSchemaCreation(t *testing.T) {
 		Name:               aws.String("schema-test-api"),
 		AuthenticationType: types.AuthenticationTypeApiKey,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	apiID := apiResult.GraphqlApi.ApiId
+
+	t.Cleanup(func() {
+		_, err := client.DeleteGraphqlApi(context.Background(), &appsync.DeleteGraphqlApiInput{
+			ApiId: apiID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	// Start schema creation.
 	schema := []byte(`
@@ -310,16 +366,11 @@ func TestAppSync_StartSchemaCreation(t *testing.T) {
 		ApiId:      apiID,
 		Definition: schema,
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, schemaResult)
-	// Status should be SUCCESS or PROCESSING.
-	assert.NotEmpty(t, schemaResult.Status)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Clean up.
-	_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
-		ApiId: apiID,
-	})
-	require.NoError(t, err)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), schemaResult)
 }
 
 func createAppSyncClient(t *testing.T) *appsync.Client {

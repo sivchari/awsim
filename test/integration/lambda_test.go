@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -61,7 +62,7 @@ func TestLambda_CreateAndDeleteFunction(t *testing.T) {
 	t.Logf("Created function: %s", *createOutput.FunctionArn)
 
 	// Delete function.
-	_, err = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+	_, err = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 		FunctionName: aws.String(functionName),
 	})
 	if err != nil {
@@ -89,7 +90,7 @@ func TestLambda_GetFunction(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -132,7 +133,7 @@ func TestLambda_ListFunctions(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -191,7 +192,7 @@ func TestLambda_Invoke(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -261,7 +262,7 @@ func TestLambda_InvokeWithEndpoint(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		delReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete,
+		delReq, _ := http.NewRequestWithContext(context.Background(), http.MethodDelete,
 			"http://localhost:4566/lambda/2015-03-31/functions/"+functionName, nil)
 		delResp, _ := http.DefaultClient.Do(delReq)
 		if delResp != nil {
@@ -320,7 +321,7 @@ func TestLambda_UpdateFunctionCode(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -363,7 +364,7 @@ func TestLambda_UpdateFunctionConfiguration(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -412,7 +413,7 @@ func TestLambda_CreateFunctionIdempotent(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -452,7 +453,7 @@ func TestLambda_EventSourceMapping_CreateAndDelete(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -475,7 +476,7 @@ func TestLambda_EventSourceMapping_CreateAndDelete(t *testing.T) {
 	t.Logf("Created event source mapping: %s", *createOutput.UUID)
 
 	// Delete event source mapping.
-	deleteOutput, err := client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+	deleteOutput, err := client.DeleteEventSourceMapping(context.Background(), &lambda.DeleteEventSourceMappingInput{
 		UUID: createOutput.UUID,
 	})
 	if err != nil {
@@ -507,7 +508,7 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -524,7 +525,7 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+		_, _ = client.DeleteEventSourceMapping(context.Background(), &lambda.DeleteEventSourceMappingInput{
 			UUID: createOutput.UUID,
 		})
 	})
@@ -580,7 +581,7 @@ func TestLambda_EventSourceMapping_List(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteFunction(ctx, &lambda.DeleteFunctionInput{
+		_, _ = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 			FunctionName: aws.String(functionName),
 		})
 	})
@@ -596,7 +597,7 @@ func TestLambda_EventSourceMapping_List(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+		_, _ = client.DeleteEventSourceMapping(context.Background(), &lambda.DeleteEventSourceMappingInput{
 			UUID: createOutput.UUID,
 		})
 	})

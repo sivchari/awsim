@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/scheduler"
 	"github.com/aws/aws-sdk-go-v2/service/scheduler/types"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newSchedulerClient(t *testing.T) *scheduler.Client {
@@ -22,7 +23,9 @@ func newSchedulerClient(t *testing.T) *scheduler.Client {
 			"test", "test", "",
 		)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return scheduler.NewFromConfig(cfg, func(o *scheduler.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:4566/scheduler")
@@ -47,11 +50,14 @@ func TestScheduler_CreateAndDeleteSchedule(t *testing.T) {
 			RoleArn: aws.String("arn:aws:iam::123456789012:role/scheduler-role"),
 		},
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.ScheduleArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ScheduleArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+		_, _ = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 			Name: aws.String(scheduleName),
 		})
 	})
@@ -60,21 +66,27 @@ func TestScheduler_CreateAndDeleteSchedule(t *testing.T) {
 	getOutput, err := client.GetSchedule(ctx, &scheduler.GetScheduleInput{
 		Name: aws.String(scheduleName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, scheduleName, *getOutput.Name)
-	require.Equal(t, "rate(1 hour)", *getOutput.ScheduleExpression)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationDate", "LastModificationDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 
 	// Delete schedule.
-	_, err = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+	_, err = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 		Name: aws.String(scheduleName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify schedule is deleted.
 	_, err = client.GetSchedule(ctx, &scheduler.GetScheduleInput{
 		Name: aws.String(scheduleName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestScheduler_UpdateSchedule(t *testing.T) {
@@ -95,10 +107,12 @@ func TestScheduler_UpdateSchedule(t *testing.T) {
 			RoleArn: aws.String("arn:aws:iam::123456789012:role/scheduler-role"),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+		_, _ = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 			Name: aws.String(scheduleName),
 		})
 	})
@@ -115,15 +129,19 @@ func TestScheduler_UpdateSchedule(t *testing.T) {
 			RoleArn: aws.String("arn:aws:iam::123456789012:role/scheduler-role"),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify update.
 	getOutput, err := client.GetSchedule(ctx, &scheduler.GetScheduleInput{
 		Name: aws.String(scheduleName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, "rate(2 hours)", *getOutput.ScheduleExpression)
-	require.Equal(t, "arn:aws:sqs:us-east-1:123456789012:my-queue-updated", *getOutput.Target.Arn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationDate", "LastModificationDate", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestScheduler_ListSchedules(t *testing.T) {
@@ -145,12 +163,14 @@ func TestScheduler_ListSchedules(t *testing.T) {
 				RoleArn: aws.String("arn:aws:iam::123456789012:role/scheduler-role"),
 			},
 		})
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Cleanup(func() {
 		for _, name := range scheduleNames {
-			_, _ = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+			_, _ = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 				Name: aws.String(name),
 			})
 		}
@@ -158,8 +178,13 @@ func TestScheduler_ListSchedules(t *testing.T) {
 
 	// List schedules.
 	listOutput, err := client.ListSchedules(ctx, &scheduler.ListSchedulesInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.Schedules), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.Schedules) < 2 {
+		t.Errorf("expected at least 2 schedules, got %d", len(listOutput.Schedules))
+	}
 }
 
 func TestScheduler_CreateAndDeleteScheduleGroup(t *testing.T) {
@@ -172,11 +197,14 @@ func TestScheduler_CreateAndDeleteScheduleGroup(t *testing.T) {
 	createOutput, err := client.CreateScheduleGroup(ctx, &scheduler.CreateScheduleGroupInput{
 		Name: aws.String(groupName),
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, createOutput.ScheduleGroupArn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ScheduleGroupArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+		_, _ = client.DeleteScheduleGroup(context.Background(), &scheduler.DeleteScheduleGroupInput{
 			Name: aws.String(groupName),
 		})
 	})
@@ -185,20 +213,27 @@ func TestScheduler_CreateAndDeleteScheduleGroup(t *testing.T) {
 	getOutput, err := client.GetScheduleGroup(ctx, &scheduler.GetScheduleGroupInput{
 		Name: aws.String(groupName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, groupName, *getOutput.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationDate", "LastModificationDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 
 	// Delete schedule group.
-	_, err = client.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+	_, err = client.DeleteScheduleGroup(context.Background(), &scheduler.DeleteScheduleGroupInput{
 		Name: aws.String(groupName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify schedule group is deleted.
 	_, err = client.GetScheduleGroup(ctx, &scheduler.GetScheduleGroupInput{
 		Name: aws.String(groupName),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestScheduler_ListScheduleGroups(t *testing.T) {
@@ -207,8 +242,13 @@ func TestScheduler_ListScheduleGroups(t *testing.T) {
 
 	// List schedule groups (should include default group).
 	listOutput, err := client.ListScheduleGroups(ctx, &scheduler.ListScheduleGroupsInput{})
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(listOutput.ScheduleGroups), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.ScheduleGroups) < 1 {
+		t.Errorf("expected at least 1 schedule group, got %d", len(listOutput.ScheduleGroups))
+	}
 
 	// Check that default group exists.
 	found := false
@@ -221,7 +261,9 @@ func TestScheduler_ListScheduleGroups(t *testing.T) {
 		}
 	}
 
-	require.True(t, found, "default schedule group should exist")
+	if !found {
+		t.Error("default schedule group should exist")
+	}
 }
 
 func TestScheduler_ScheduleWithGroup(t *testing.T) {
@@ -235,14 +277,16 @@ func TestScheduler_ScheduleWithGroup(t *testing.T) {
 	_, err := client.CreateScheduleGroup(ctx, &scheduler.CreateScheduleGroupInput{
 		Name: aws.String(groupName),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+		_, _ = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 			Name:      aws.String(scheduleName),
 			GroupName: aws.String(groupName),
 		})
-		_, _ = client.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+		_, _ = client.DeleteScheduleGroup(context.Background(), &scheduler.DeleteScheduleGroupInput{
 			Name: aws.String(groupName),
 		})
 	})
@@ -260,16 +304,20 @@ func TestScheduler_ScheduleWithGroup(t *testing.T) {
 			RoleArn: aws.String("arn:aws:iam::123456789012:role/scheduler-role"),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get schedule with group name.
 	getOutput, err := client.GetSchedule(ctx, &scheduler.GetScheduleInput{
 		Name:      aws.String(scheduleName),
 		GroupName: aws.String(groupName),
 	})
-	require.NoError(t, err)
-	require.Equal(t, scheduleName, *getOutput.Name)
-	require.Equal(t, groupName, *getOutput.GroupName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationDate", "LastModificationDate", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestScheduler_ScheduleNotFound(t *testing.T) {
@@ -280,13 +328,17 @@ func TestScheduler_ScheduleNotFound(t *testing.T) {
 	_, err := client.GetSchedule(ctx, &scheduler.GetScheduleInput{
 		Name: aws.String("non-existent-schedule"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent schedule.
-	_, err = client.DeleteSchedule(ctx, &scheduler.DeleteScheduleInput{
+	_, err = client.DeleteSchedule(context.Background(), &scheduler.DeleteScheduleInput{
 		Name: aws.String("non-existent-schedule"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }
 
 func TestScheduler_ScheduleGroupNotFound(t *testing.T) {
@@ -297,11 +349,15 @@ func TestScheduler_ScheduleGroupNotFound(t *testing.T) {
 	_, err := client.GetScheduleGroup(ctx, &scheduler.GetScheduleGroupInput{
 		Name: aws.String("non-existent-group"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 
 	// Delete non-existent schedule group.
-	_, err = client.DeleteScheduleGroup(ctx, &scheduler.DeleteScheduleGroupInput{
+	_, err = client.DeleteScheduleGroup(context.Background(), &scheduler.DeleteScheduleGroupInput{
 		Name: aws.String("non-existent-group"),
 	})
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error")
+	}
 }

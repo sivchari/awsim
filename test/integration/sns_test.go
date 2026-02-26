@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -71,7 +72,7 @@ func TestSNS_ListTopics(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput.TopicArn,
 		})
 	})
@@ -111,7 +112,7 @@ func TestSNS_SubscribeAndUnsubscribe(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput.TopicArn,
 		})
 	})
@@ -155,7 +156,7 @@ func TestSNS_ListSubscriptions(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput.TopicArn,
 		})
 	})
@@ -171,7 +172,7 @@ func TestSNS_ListSubscriptions(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.Unsubscribe(ctx, &sns.UnsubscribeInput{
+		_, _ = client.Unsubscribe(context.Background(), &sns.UnsubscribeInput{
 			SubscriptionArn: subscribeOutput.SubscriptionArn,
 		})
 	})
@@ -211,7 +212,7 @@ func TestSNS_ListSubscriptionsByTopic(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput.TopicArn,
 		})
 	})
@@ -227,7 +228,7 @@ func TestSNS_ListSubscriptionsByTopic(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.Unsubscribe(ctx, &sns.UnsubscribeInput{
+		_, _ = client.Unsubscribe(context.Background(), &sns.UnsubscribeInput{
 			SubscriptionArn: subscribeOutput.SubscriptionArn,
 		})
 	})
@@ -265,7 +266,7 @@ func TestSNS_Publish(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput.TopicArn,
 		})
 	})
@@ -301,7 +302,7 @@ func TestSNS_CreateTopicIdempotent(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{
 			TopicArn: createOutput1.TopicArn,
 		})
 	})

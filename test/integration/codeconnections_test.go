@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -77,7 +78,7 @@ func TestCodeConnections_GetConnection(t *testing.T) {
 	connectionArn := *createOutput.ConnectionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConnection(ctx, &codeconnections.DeleteConnectionInput{
+		_, _ = client.DeleteConnection(context.Background(), &codeconnections.DeleteConnectionInput{
 			ConnectionArn: aws.String(connectionArn),
 		})
 	})
@@ -128,7 +129,7 @@ func TestCodeConnections_ListConnections(t *testing.T) {
 
 	t.Cleanup(func() {
 		for _, arn := range createdArns {
-			_, _ = client.DeleteConnection(ctx, &codeconnections.DeleteConnectionInput{
+			_, _ = client.DeleteConnection(context.Background(), &codeconnections.DeleteConnectionInput{
 				ConnectionArn: aws.String(arn),
 			})
 		}
@@ -198,7 +199,7 @@ func TestCodeConnections_GetHost(t *testing.T) {
 	hostArn := *createOutput.HostArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteHost(ctx, &codeconnections.DeleteHostInput{
+		_, _ = client.DeleteHost(context.Background(), &codeconnections.DeleteHostInput{
 			HostArn: aws.String(hostArn),
 		})
 	})
@@ -239,7 +240,7 @@ func TestCodeConnections_ListHosts(t *testing.T) {
 	hostArn := *createOutput.HostArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteHost(ctx, &codeconnections.DeleteHostInput{
+		_, _ = client.DeleteHost(context.Background(), &codeconnections.DeleteHostInput{
 			HostArn: aws.String(hostArn),
 		})
 	})
@@ -276,7 +277,7 @@ func TestCodeConnections_UpdateHost(t *testing.T) {
 	hostArn := *createOutput.HostArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteHost(ctx, &codeconnections.DeleteHostInput{
+		_, _ = client.DeleteHost(context.Background(), &codeconnections.DeleteHostInput{
 			HostArn: aws.String(hostArn),
 		})
 	})
@@ -348,7 +349,7 @@ func TestCodeConnections_TagResource(t *testing.T) {
 	connectionArn := *createOutput.ConnectionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConnection(ctx, &codeconnections.DeleteConnectionInput{
+		_, _ = client.DeleteConnection(context.Background(), &codeconnections.DeleteConnectionInput{
 			ConnectionArn: aws.String(connectionArn),
 		})
 	})
@@ -400,7 +401,7 @@ func TestCodeConnections_UntagResource(t *testing.T) {
 	connectionArn := *createOutput.ConnectionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteConnection(ctx, &codeconnections.DeleteConnectionInput{
+		_, _ = client.DeleteConnection(context.Background(), &codeconnections.DeleteConnectionInput{
 			ConnectionArn: aws.String(connectionArn),
 		})
 	})

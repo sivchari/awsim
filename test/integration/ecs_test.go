@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -88,7 +89,7 @@ func TestECS_ListClusters(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -128,7 +129,7 @@ func TestECS_DescribeClusters(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -235,7 +236,7 @@ func TestECS_RunAndStopTask(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -261,7 +262,7 @@ func TestECS_RunAndStopTask(t *testing.T) {
 	taskDefArn := *registerOutput.TaskDefinition.TaskDefinitionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
+		_, _ = client.DeregisterTaskDefinition(context.Background(), &ecs.DeregisterTaskDefinitionInput{
 			TaskDefinition: aws.String(taskDefArn),
 		})
 	})
@@ -322,7 +323,7 @@ func TestECS_DescribeTasks(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -348,7 +349,7 @@ func TestECS_DescribeTasks(t *testing.T) {
 	taskDefArn := *registerOutput.TaskDefinition.TaskDefinitionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
+		_, _ = client.DeregisterTaskDefinition(context.Background(), &ecs.DeregisterTaskDefinitionInput{
 			TaskDefinition: aws.String(taskDefArn),
 		})
 	})
@@ -366,7 +367,7 @@ func TestECS_DescribeTasks(t *testing.T) {
 	taskArn := *runOutput.Tasks[0].TaskArn
 
 	t.Cleanup(func() {
-		_, _ = client.StopTask(ctx, &ecs.StopTaskInput{
+		_, _ = client.StopTask(context.Background(), &ecs.StopTaskInput{
 			Cluster: aws.String(clusterName),
 			Task:    aws.String(taskArn),
 		})
@@ -406,7 +407,7 @@ func TestECS_CreateAndDeleteService(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -432,7 +433,7 @@ func TestECS_CreateAndDeleteService(t *testing.T) {
 	taskDefArn := *registerOutput.TaskDefinition.TaskDefinitionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
+		_, _ = client.DeregisterTaskDefinition(context.Background(), &ecs.DeregisterTaskDefinitionInput{
 			TaskDefinition: aws.String(taskDefArn),
 		})
 	})
@@ -502,7 +503,7 @@ func TestECS_UpdateService(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		_, _ = client.DeleteCluster(context.Background(), &ecs.DeleteClusterInput{
 			Cluster: aws.String(clusterName),
 		})
 	})
@@ -528,7 +529,7 @@ func TestECS_UpdateService(t *testing.T) {
 	taskDefArn := *registerOutput.TaskDefinition.TaskDefinitionArn
 
 	t.Cleanup(func() {
-		_, _ = client.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
+		_, _ = client.DeregisterTaskDefinition(context.Background(), &ecs.DeregisterTaskDefinitionInput{
 			TaskDefinition: aws.String(taskDefArn),
 		})
 	})
@@ -545,7 +546,7 @@ func TestECS_UpdateService(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteService(ctx, &ecs.DeleteServiceInput{
+		_, _ = client.DeleteService(context.Background(), &ecs.DeleteServiceInput{
 			Cluster: aws.String(clusterName),
 			Service: aws.String(serviceName),
 			Force:   aws.Bool(true),

@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -58,7 +59,7 @@ func TestS3_CreateAndDeleteBucket(t *testing.T) {
 	}
 
 	// Delete bucket
-	_, err = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+	_, err = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
@@ -80,7 +81,7 @@ func TestS3_ListBuckets(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -121,11 +122,11 @@ func TestS3_PutAndGetObject(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -176,11 +177,11 @@ func TestS3_HeadObject(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -225,7 +226,7 @@ func TestS3_DeleteObject(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -241,7 +242,7 @@ func TestS3_DeleteObject(t *testing.T) {
 	}
 
 	// Delete object
-	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+	_, err = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(key),
 	})
@@ -275,12 +276,12 @@ func TestS3_ListObjects(t *testing.T) {
 	t.Cleanup(func() {
 		// Clean up objects
 		for _, key := range []string{"file1.txt", "file2.txt", "dir/file3.txt"} {
-			_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(key),
 			})
 		}
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -347,11 +348,11 @@ func TestS3_PresignedURL_GetObject(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -415,11 +416,11 @@ func TestS3_PresignedURL_PutObject(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -487,11 +488,11 @@ func TestS3_PresignedURL_Expired(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -551,11 +552,11 @@ func TestS3_MultipartUpload_BasicFlow(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(key),
 		})
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -652,7 +653,7 @@ func TestS3_MultipartUpload_AbortUpload(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -681,7 +682,7 @@ func TestS3_MultipartUpload_AbortUpload(t *testing.T) {
 	}
 
 	// Abort the upload
-	_, err = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+	_, err = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(bucketName),
 		Key:      aws.String(key),
 		UploadId: uploadID,
@@ -717,7 +718,7 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -797,26 +798,26 @@ func TestS3_Versioning_PutObjectWithVersioning(t *testing.T) {
 
 	t.Cleanup(func() {
 		// List and delete all versions
-		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+		versions, _ := client.ListObjectVersions(context.Background(), &s3.ListObjectVersionsInput{
 			Bucket: aws.String(bucketName),
 		})
 		if versions != nil {
 			for _, v := range versions.Versions {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       v.Key,
 					VersionId: v.VersionId,
 				})
 			}
 			for _, dm := range versions.DeleteMarkers {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       dm.Key,
 					VersionId: dm.VersionId,
 				})
 			}
 		}
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -912,26 +913,26 @@ func TestS3_Versioning_DeleteObjectCreatesDeleteMarker(t *testing.T) {
 
 	t.Cleanup(func() {
 		// List and delete all versions
-		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+		versions, _ := client.ListObjectVersions(context.Background(), &s3.ListObjectVersionsInput{
 			Bucket: aws.String(bucketName),
 		})
 		if versions != nil {
 			for _, v := range versions.Versions {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       v.Key,
 					VersionId: v.VersionId,
 				})
 			}
 			for _, dm := range versions.DeleteMarkers {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       dm.Key,
 					VersionId: dm.VersionId,
 				})
 			}
 		}
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -958,7 +959,7 @@ func TestS3_Versioning_DeleteObjectCreatesDeleteMarker(t *testing.T) {
 	}
 
 	// Delete object (should create delete marker)
-	deleteResult, err := client.DeleteObject(ctx, &s3.DeleteObjectInput{
+	deleteResult, err := client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(key),
 	})
@@ -1017,19 +1018,19 @@ func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
 
 	t.Cleanup(func() {
 		// Abort any in-progress uploads
-		uploads, _ := client.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{
+		uploads, _ := client.ListMultipartUploads(context.Background(), &s3.ListMultipartUploadsInput{
 			Bucket: aws.String(bucketName),
 		})
 		if uploads != nil {
 			for _, u := range uploads.Uploads {
-				_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+				_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 					Bucket:   aws.String(bucketName),
 					Key:      u.Key,
 					UploadId: u.UploadId,
 				})
 			}
 		}
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -1064,12 +1065,12 @@ func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
 	}
 
 	// Cleanup
-	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+	_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(bucketName),
 		Key:      aws.String(key1),
 		UploadId: upload1.UploadId,
 	})
-	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+	_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(bucketName),
 		Key:      aws.String(key2),
 		UploadId: upload2.UploadId,
@@ -1091,7 +1092,7 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -1145,7 +1146,7 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 	}
 
 	// Cleanup
-	_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+	_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(bucketName),
 		Key:      aws.String(key),
 		UploadId: uploadID,
@@ -1168,26 +1169,26 @@ func TestS3_Versioning_ListObjectVersions(t *testing.T) {
 
 	t.Cleanup(func() {
 		// List and delete all versions
-		versions, _ := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+		versions, _ := client.ListObjectVersions(context.Background(), &s3.ListObjectVersionsInput{
 			Bucket: aws.String(bucketName),
 		})
 		if versions != nil {
 			for _, v := range versions.Versions {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       v.Key,
 					VersionId: v.VersionId,
 				})
 			}
 			for _, dm := range versions.DeleteMarkers {
-				_, _ = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 					Bucket:    aws.String(bucketName),
 					Key:       dm.Key,
 					VersionId: dm.VersionId,
 				})
 			}
 		}
-		_, _ = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 	})
@@ -1216,7 +1217,7 @@ func TestS3_Versioning_ListObjectVersions(t *testing.T) {
 	}
 
 	// Delete object (creates delete marker)
-	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
+	_, err = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(key),
 	})

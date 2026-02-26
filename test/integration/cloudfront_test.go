@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,8 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/sivchari/golden"
 )
 
 func newCloudFrontClient(t *testing.T) *cloudfront.Client {
@@ -62,20 +62,28 @@ func TestCloudFront_CreateDistribution(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.NotEmpty(t, result.Distribution.Id)
-	assert.NotEmpty(t, result.Distribution.ARN)
-	assert.Equal(t, "InProgress", *result.Distribution.Status)
-	assert.NotEmpty(t, result.Distribution.DomainName)
-	assert.NotEmpty(t, result.ETag)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id",
+		"ARN",
+		"DomainName",
+		"LastModifiedTime",
+		"ETag",
+		"Location",
+		"ResultMetadata",
+	)).Assert(t.Name(), result)
 
 	// Clean up.
 	_, err = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
 		Id:      result.Distribution.Id,
 		IfMatch: result.ETag,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCloudFront_GetDistribution(t *testing.T) {
@@ -109,10 +117,12 @@ func TestCloudFront_GetDistribution(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
+		_, _ = client.DeleteDistribution(context.Background(), &cloudfront.DeleteDistributionInput{
 			Id:      createResult.Distribution.Id,
 			IfMatch: createResult.ETag,
 		})
@@ -122,10 +132,19 @@ func TestCloudFront_GetDistribution(t *testing.T) {
 	getResult, err := client.GetDistribution(ctx, &cloudfront.GetDistributionInput{
 		Id: createResult.Distribution.Id,
 	})
-	require.NoError(t, err)
-	assert.Equal(t, *createResult.Distribution.Id, *getResult.Distribution.Id)
-	assert.Equal(t, *createResult.Distribution.ARN, *getResult.Distribution.ARN)
-	assert.NotEmpty(t, getResult.ETag)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id",
+		"ARN",
+		"DomainName",
+		"LastModifiedTime",
+		"ETag",
+		"Location",
+		"ResultMetadata",
+	)).Assert(t.Name(), getResult)
 }
 
 func TestCloudFront_ListDistributions(t *testing.T) {
@@ -159,10 +178,12 @@ func TestCloudFront_ListDistributions(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
+		_, _ = client.DeleteDistribution(context.Background(), &cloudfront.DeleteDistributionInput{
 			Id:      createResult.Distribution.Id,
 			IfMatch: createResult.ETag,
 		})
@@ -170,9 +191,15 @@ func TestCloudFront_ListDistributions(t *testing.T) {
 
 	// List distributions.
 	listResult, err := client.ListDistributions(ctx, &cloudfront.ListDistributionsInput{})
-	require.NoError(t, err)
-	require.NotNil(t, listResult)
-	require.NotNil(t, listResult.DistributionList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if listResult == nil {
+		t.Fatal("listResult is nil")
+	}
+	if listResult.DistributionList == nil {
+		t.Fatal("listResult.DistributionList is nil")
+	}
 
 	// Find our distribution.
 	found := false
@@ -183,7 +210,9 @@ func TestCloudFront_ListDistributions(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found, "Distribution should be in list")
+	if !found {
+		t.Error("Distribution should be in list")
+	}
 }
 
 func TestCloudFront_UpdateDistribution(t *testing.T) {
@@ -217,7 +246,9 @@ func TestCloudFront_UpdateDistribution(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Update distribution.
 	updateResult, err := client.UpdateDistribution(ctx, &cloudfront.UpdateDistributionInput{
@@ -246,16 +277,28 @@ func TestCloudFront_UpdateDistribution(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
-	require.NotNil(t, updateResult)
-	assert.NotEqual(t, *createResult.ETag, *updateResult.ETag, "ETag should change after update")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id",
+		"ARN",
+		"DomainName",
+		"LastModifiedTime",
+		"ETag",
+		"Location",
+		"ResultMetadata",
+	)).Assert(t.Name(), updateResult)
 
 	// Clean up with new ETag.
 	_, err = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
 		Id:      createResult.Distribution.Id,
 		IfMatch: updateResult.ETag,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCloudFront_CreateInvalidation(t *testing.T) {
@@ -289,10 +332,12 @@ func TestCloudFront_CreateInvalidation(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
+		_, _ = client.DeleteDistribution(context.Background(), &cloudfront.DeleteDistributionInput{
 			Id:      createResult.Distribution.Id,
 			IfMatch: createResult.ETag,
 		})
@@ -309,10 +354,16 @@ func TestCloudFront_CreateInvalidation(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
-	require.NotNil(t, invResult)
-	assert.NotEmpty(t, invResult.Invalidation.Id)
-	assert.Equal(t, "InProgress", *invResult.Invalidation.Status)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id",
+		"CreateTime",
+		"Location",
+		"ResultMetadata",
+	)).Assert(t.Name(), invResult)
 }
 
 func TestCloudFront_GetInvalidation(t *testing.T) {
@@ -346,10 +397,12 @@ func TestCloudFront_GetInvalidation(t *testing.T) {
 			Enabled: aws.Bool(true),
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
-		_, _ = client.DeleteDistribution(ctx, &cloudfront.DeleteDistributionInput{
+		_, _ = client.DeleteDistribution(context.Background(), &cloudfront.DeleteDistributionInput{
 			Id:      createResult.Distribution.Id,
 			IfMatch: createResult.ETag,
 		})
@@ -366,14 +419,22 @@ func TestCloudFront_GetInvalidation(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Get invalidation.
 	getResult, err := client.GetInvalidation(ctx, &cloudfront.GetInvalidationInput{
 		DistributionId: createResult.Distribution.Id,
 		Id:             invResult.Invalidation.Id,
 	})
-	require.NoError(t, err)
-	assert.Equal(t, *invResult.Invalidation.Id, *getResult.Invalidation.Id)
-	assert.Equal(t, "InProgress", *getResult.Invalidation.Status)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id",
+		"CreateTime",
+		"ResultMetadata",
+	)).Assert(t.Name(), getResult)
 }
