@@ -6,7 +6,9 @@ import "time"
 // TableBucket represents an S3 table bucket.
 type TableBucket struct {
 	Arn       string    `json:"arn"`
+	ID        string    `json:"tableBucketId"` //nolint:tagliatelle // AWS API uses tableBucketId
 	Name      string    `json:"name"`
+	Type      string    `json:"type"`
 	OwnerID   string    `json:"ownerAccountId"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -82,7 +84,9 @@ type ListTableBucketsResponse struct {
 // TableBucketSummary represents a summary of a table bucket.
 type TableBucketSummary struct {
 	Arn       string    `json:"arn"`
+	ID        string    `json:"tableBucketId,omitempty"` //nolint:tagliatelle // AWS API uses tableBucketId
 	Name      string    `json:"name"`
+	Type      string    `json:"type,omitempty"`
 	OwnerID   string    `json:"ownerAccountId"`
 	CreatedAt time.Time `json:"createdAt"`
 }

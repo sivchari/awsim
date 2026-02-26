@@ -22,7 +22,7 @@ type Storage interface {
 	CreateTableBucket(ctx context.Context, name string) (*TableBucket, error)
 	DeleteTableBucket(ctx context.Context, arn string) error
 	GetTableBucket(ctx context.Context, arn string) (*TableBucket, error)
-	ListTableBuckets(ctx context.Context, prefix string, maxBuckets int) ([]TableBucketSummary, error)
+	ListTableBuckets(ctx context.Context, prefix, continuationToken string, maxBuckets int) ([]TableBucketSummary, string, error)
 
 	// Namespace operations
 	CreateNamespace(ctx context.Context, tableBucketArn string, namespace []string) (*Namespace, error)
@@ -69,11 +69,14 @@ func (s *MemoryStorage) CreateTableBucket(_ context.Context, name string) (*Tabl
 		}
 	}
 
+	bucketID := uuid.New().String()
 	arn := fmt.Sprintf("arn:aws:s3tables:%s:%s:bucket/%s", defaultRegion, defaultAccountID, name)
 
 	bucket := &TableBucket{
 		Arn:       arn,
+		ID:        bucketID,
 		Name:      name,
+		Type:      "customer",
 		OwnerID:   defaultAccountID,
 		CreatedAt: time.Now().UTC(),
 	}
@@ -126,8 +129,8 @@ func (s *MemoryStorage) GetTableBucket(_ context.Context, arn string) (*TableBuc
 	return bucket, nil
 }
 
-// ListTableBuckets lists all table buckets.
-func (s *MemoryStorage) ListTableBuckets(_ context.Context, prefix string, maxBuckets int) ([]TableBucketSummary, error) {
+// ListTableBuckets lists all table buckets with pagination support.
+func (s *MemoryStorage) ListTableBuckets(_ context.Context, prefix, continuationToken string, maxBuckets int) ([]TableBucketSummary, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -135,26 +138,60 @@ func (s *MemoryStorage) ListTableBuckets(_ context.Context, prefix string, maxBu
 		maxBuckets = defaultMaxItems
 	}
 
-	buckets := make([]TableBucketSummary, 0)
+	// Collect all matching buckets sorted by name for consistent pagination
+	allBuckets := make([]TableBucketSummary, 0)
 
 	for _, bucket := range s.tableBuckets {
 		if prefix != "" && !strings.HasPrefix(bucket.Name, prefix) {
 			continue
 		}
 
-		buckets = append(buckets, TableBucketSummary{
+		allBuckets = append(allBuckets, TableBucketSummary{
 			Arn:       bucket.Arn,
+			ID:        bucket.ID,
 			Name:      bucket.Name,
+			Type:      bucket.Type,
 			OwnerID:   bucket.OwnerID,
 			CreatedAt: bucket.CreatedAt,
 		})
+	}
 
-		if len(buckets) >= maxBuckets {
-			break
+	// Sort by name for consistent ordering
+	sortTableBucketSummaries(allBuckets)
+
+	// Apply continuation token (skip buckets until we find the marker)
+	startIdx := 0
+
+	if continuationToken != "" {
+		for i, bucket := range allBuckets {
+			if bucket.Name == continuationToken {
+				startIdx = i + 1
+
+				break
+			}
 		}
 	}
 
-	return buckets, nil
+	// Apply pagination
+	if startIdx >= len(allBuckets) {
+		return []TableBucketSummary{}, "", nil
+	}
+
+	endIdx := startIdx + maxBuckets
+	if endIdx > len(allBuckets) {
+		endIdx = len(allBuckets)
+	}
+
+	result := allBuckets[startIdx:endIdx]
+
+	// Set next continuation token if there are more results
+	var nextToken string
+
+	if endIdx < len(allBuckets) {
+		nextToken = result[len(result)-1].Name
+	}
+
+	return result, nextToken, nil
 }
 
 // CreateNamespace creates a new namespace.
@@ -488,4 +525,15 @@ func extractBucketNameFromArn(arn string) string {
 	}
 
 	return ""
+}
+
+// sortTableBucketSummaries sorts table bucket summaries by name in ascending order.
+func sortTableBucketSummaries(buckets []TableBucketSummary) {
+	for i := range len(buckets) {
+		for j := i + 1; j < len(buckets); j++ {
+			if buckets[i].Name > buckets[j].Name {
+				buckets[i], buckets[j] = buckets[j], buckets[i]
+			}
+		}
+	}
 }

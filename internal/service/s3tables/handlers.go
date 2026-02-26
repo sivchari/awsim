@@ -94,8 +94,9 @@ func (s *Service) ListTableBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prefix := r.URL.Query().Get("prefix")
+	continuationToken := r.URL.Query().Get("continuationToken")
 
-	buckets, err := s.storage.ListTableBuckets(r.Context(), prefix, maxBuckets)
+	buckets, nextToken, err := s.storage.ListTableBuckets(r.Context(), prefix, continuationToken, maxBuckets)
 	if err != nil {
 		handleError(w, err)
 
@@ -103,7 +104,8 @@ func (s *Service) ListTableBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, &ListTableBucketsResponse{
-		TableBuckets: buckets,
+		TableBuckets:      buckets,
+		ContinuationToken: nextToken,
 	})
 }
 
