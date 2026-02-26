@@ -228,16 +228,19 @@ func convertSecretsToListEntries(secrets []*Secret) []SecretListEntry {
 
 	for _, secret := range secrets {
 		entry := SecretListEntry{
-			ARN:             secret.ARN,
-			Name:            secret.Name,
-			Description:     secret.Description,
-			KmsKeyID:        secret.KmsKeyID,
-			RotationEnabled: secret.RotationEnabled,
-			RotationRules:   secret.RotationRules,
-			Tags:            secret.Tags,
-			CreatedDate:     float64(secret.CreatedDate.Unix()),
-			PrimaryRegion:   secret.PrimaryRegion,
-			OwningService:   secret.OwningService,
+			ARN:                            secret.ARN,
+			Name:                           secret.Name,
+			Description:                    secret.Description,
+			KmsKeyID:                       secret.KmsKeyID,
+			RotationEnabled:                secret.RotationEnabled,
+			RotationRules:                  secret.RotationRules,
+			Tags:                           secret.Tags,
+			CreatedDate:                    float64(secret.CreatedDate.Unix()),
+			PrimaryRegion:                  secret.PrimaryRegion,
+			OwningService:                  secret.OwningService,
+			Type:                           secret.Type,
+			ExternalSecretRotationMetadata: secret.ExternalSecretRotationMetadata,
+			ExternalSecretRotationRoleArn:  secret.ExternalSecretRotationRoleArn,
 		}
 
 		if secret.LastChangedDate.Unix() > 0 {

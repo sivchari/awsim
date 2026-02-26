@@ -7,29 +7,32 @@ import (
 
 // Secret represents a secret in Secrets Manager.
 type Secret struct {
-	ARN                   string
-	Name                  string
-	Description           string
-	KmsKeyID              string
-	VersionID             string
-	SecretString          string
-	SecretBinary          []byte
-	CreatedDate           time.Time
-	LastChangedDate       time.Time
-	LastAccessedDate      *time.Time
-	DeletedDate           *time.Time
-	Tags                  []Tag
-	VersionIDs            map[string]*SecretVersion
-	RotationEnabled       bool
-	RotationLambdaARN     string
-	RotationRules         *RotationRules
-	PrimaryRegion         string
-	ReplicationStatus     []ReplicationStatus
-	OwningService         string
-	NextRotationDate      *time.Time
-	LastRotationDate      *time.Time
-	RecoveryWindowInDays  int64
-	ScheduledDeletionDate *time.Time
+	ARN                            string
+	Name                           string
+	Description                    string
+	KmsKeyID                       string
+	VersionID                      string
+	SecretString                   string
+	SecretBinary                   []byte
+	CreatedDate                    time.Time
+	LastChangedDate                time.Time
+	LastAccessedDate               *time.Time
+	DeletedDate                    *time.Time
+	Tags                           []Tag
+	VersionIDs                     map[string]*SecretVersion
+	RotationEnabled                bool
+	RotationLambdaARN              string
+	RotationRules                  *RotationRules
+	PrimaryRegion                  string
+	ReplicationStatus              []ReplicationStatus
+	OwningService                  string
+	NextRotationDate               *time.Time
+	LastRotationDate               *time.Time
+	RecoveryWindowInDays           int64
+	ScheduledDeletionDate          *time.Time
+	Type                           string
+	ExternalSecretRotationMetadata []ExternalSecretRotationMetadataItem
+	ExternalSecretRotationRoleArn  string
 }
 
 // SecretVersion represents a version of a secret.
@@ -163,23 +166,26 @@ type ListSecretsResponse struct {
 
 // SecretListEntry represents a secret in list response.
 type SecretListEntry struct {
-	ARN                    string              `json:"ARN"`
-	Name                   string              `json:"Name"`
-	Description            string              `json:"Description,omitempty"`
-	KmsKeyID               string              `json:"KmsKeyId,omitempty"`
-	RotationEnabled        bool                `json:"RotationEnabled"`
-	RotationLambdaARN      string              `json:"RotationLambdaARN,omitempty"`
-	RotationRules          *RotationRules      `json:"RotationRules,omitempty"`
-	LastRotatedDate        *float64            `json:"LastRotatedDate,omitempty"`
-	LastChangedDate        *float64            `json:"LastChangedDate,omitempty"`
-	LastAccessedDate       *float64            `json:"LastAccessedDate,omitempty"`
-	DeletedDate            *float64            `json:"DeletedDate,omitempty"`
-	NextRotationDate       *float64            `json:"NextRotationDate,omitempty"`
-	Tags                   []Tag               `json:"Tags,omitempty"`
-	SecretVersionsToStages map[string][]string `json:"SecretVersionsToStages,omitempty"`
-	OwningService          string              `json:"OwningService,omitempty"`
-	CreatedDate            float64             `json:"CreatedDate"`
-	PrimaryRegion          string              `json:"PrimaryRegion,omitempty"`
+	ARN                            string                               `json:"ARN"`
+	Name                           string                               `json:"Name"`
+	Description                    string                               `json:"Description,omitempty"`
+	KmsKeyID                       string                               `json:"KmsKeyId,omitempty"`
+	RotationEnabled                bool                                 `json:"RotationEnabled"`
+	RotationLambdaARN              string                               `json:"RotationLambdaARN,omitempty"`
+	RotationRules                  *RotationRules                       `json:"RotationRules,omitempty"`
+	LastRotatedDate                *float64                             `json:"LastRotatedDate,omitempty"`
+	LastChangedDate                *float64                             `json:"LastChangedDate,omitempty"`
+	LastAccessedDate               *float64                             `json:"LastAccessedDate,omitempty"`
+	DeletedDate                    *float64                             `json:"DeletedDate,omitempty"`
+	NextRotationDate               *float64                             `json:"NextRotationDate,omitempty"`
+	Tags                           []Tag                                `json:"Tags,omitempty"`
+	SecretVersionsToStages         map[string][]string                  `json:"SecretVersionsToStages,omitempty"`
+	OwningService                  string                               `json:"OwningService,omitempty"`
+	CreatedDate                    float64                              `json:"CreatedDate"`
+	PrimaryRegion                  string                               `json:"PrimaryRegion,omitempty"`
+	Type                           string                               `json:"Type,omitempty"`
+	ExternalSecretRotationMetadata []ExternalSecretRotationMetadataItem `json:"ExternalSecretRotationMetadata,omitempty"`
+	ExternalSecretRotationRoleArn  string                               `json:"ExternalSecretRotationRoleArn,omitempty"`
 }
 
 // DescribeSecretRequest is the request for DescribeSecret.
@@ -241,4 +247,10 @@ type SecretError struct {
 // Error implements the error interface.
 func (e *SecretError) Error() string {
 	return e.Message
+}
+
+// ExternalSecretRotationMetadataItem represents the metadata for external secret rotation.
+type ExternalSecretRotationMetadataItem struct {
+	Key   string `json:"Key,omitempty"`
+	Value string `json:"Value,omitempty"`
 }
