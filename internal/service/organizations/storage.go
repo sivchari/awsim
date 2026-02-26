@@ -39,6 +39,11 @@ const (
 	accountStatusActive = "ACTIVE"
 )
 
+// Account state values.
+const (
+	accountStateActive = "ACTIVE"
+)
+
 // Joined method values.
 const (
 	joinedMethodCreated = "CREATED"
@@ -182,6 +187,7 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 		JoinedMethod:    joinedMethodCreated,
 		JoinedTimestamp: ToAWSTimestamp(time.Now()),
 		Name:            "Management Account",
+		State:           accountStateActive,
 		Status:          accountStatusActive,
 	}
 
@@ -259,6 +265,7 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 		JoinedMethod:    joinedMethodCreated,
 		JoinedTimestamp: ToAWSTimestamp(now),
 		Name:            req.AccountName,
+		State:           accountStateActive,
 		Status:          accountStatusActive,
 	}
 

@@ -110,6 +110,11 @@ func TestOrganizations_WithOrganization(t *testing.T) {
 		listOutput, err := client.ListAccounts(ctx, &organizations.ListAccountsInput{})
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(listOutput.Accounts), 1) // At least management account
+
+		// Verify State field is present and valid for all accounts
+		for _, account := range listOutput.Accounts {
+			assert.Equal(t, types.AccountStateActive, account.State)
+		}
 	})
 
 	t.Run("CreateAccount", func(t *testing.T) {

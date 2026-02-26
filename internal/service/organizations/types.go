@@ -52,6 +52,7 @@ type Account struct {
 	JoinedMethod    string       `json:"JoinedMethod,omitempty"`
 	JoinedTimestamp AWSTimestamp `json:"JoinedTimestamp,omitempty"`
 	Name            string       `json:"Name,omitempty"`
+	State           string       `json:"State,omitempty"`
 	Status          string       `json:"Status,omitempty"`
 }
 
