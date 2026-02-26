@@ -3,7 +3,9 @@
 package integration
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -386,4 +388,57 @@ func TestRoute53_UpsertResourceRecordSet(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "Updated record set should be in list")
+}
+
+func TestRoute53_ListHostedZones_Pagination(t *testing.T) {
+	t.Parallel()
+
+	client := newRoute53Client(t)
+	ctx := t.Context()
+
+	// Create multiple hosted zones for pagination test.
+	var createdZones []*route53.CreateHostedZoneOutput
+	for i := 0; i < 3; i++ {
+		result, err := client.CreateHostedZone(ctx, &route53.CreateHostedZoneInput{
+			Name:            aws.String(fmt.Sprintf("pagination-test-%d.example.com", i)),
+			CallerReference: aws.String(fmt.Sprintf("test-pagination-%d-%d", i, time.Now().UnixNano())),
+		})
+		require.NoError(t, err)
+		createdZones = append(createdZones, result)
+	}
+
+	t.Cleanup(func() {
+		for _, zone := range createdZones {
+			_, _ = client.DeleteHostedZone(ctx, &route53.DeleteHostedZoneInput{
+				Id: zone.HostedZone.Id,
+			})
+		}
+	})
+
+	// Test with MaxItems=1 to force pagination.
+	firstPage, err := client.ListHostedZones(ctx, &route53.ListHostedZonesInput{
+		MaxItems: aws.Int32(1),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, firstPage)
+	assert.Equal(t, "1", *firstPage.MaxItems)
+	assert.Len(t, firstPage.HostedZones, 1)
+
+	// If there are more results, IsTruncated should be true.
+	if firstPage.IsTruncated {
+		assert.NotEmpty(t, *firstPage.NextMarker)
+
+		// Get the next page using the marker.
+		secondPage, err := client.ListHostedZones(ctx, &route53.ListHostedZonesInput{
+			MaxItems: aws.Int32(1),
+			Marker:   firstPage.NextMarker,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, secondPage)
+		assert.Equal(t, *firstPage.NextMarker, *secondPage.Marker)
+		assert.Len(t, secondPage.HostedZones, 1)
+
+		// The second page should have a different zone.
+		assert.NotEqual(t, *firstPage.HostedZones[0].Id, *secondPage.HostedZones[0].Id)
+	}
 }

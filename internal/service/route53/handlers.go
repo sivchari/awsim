@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,7 +135,21 @@ func (s *Service) GetHostedZone(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListHostedZones handles the ListHostedZones API.
-func (s *Service) ListHostedZones(w http.ResponseWriter, _ *http.Request) {
+//
+//nolint:funlen // Handler includes pagination logic
+func (s *Service) ListHostedZones(w http.ResponseWriter, r *http.Request) {
+	// Parse pagination parameters
+	marker := r.URL.Query().Get("marker")
+	maxItemsStr := r.URL.Query().Get("maxitems")
+
+	maxItems := 100 // Default value
+
+	if maxItemsStr != "" {
+		if parsed, err := strconv.Atoi(maxItemsStr); err == nil && parsed > 0 && parsed <= 100 {
+			maxItems = parsed
+		}
+	}
+
 	zones, err := s.storage.ListHostedZones()
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
@@ -141,16 +157,57 @@ func (s *Service) ListHostedZones(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	hostedZones := make([]HostedZone, 0, len(zones))
-	for _, z := range zones {
-		hostedZones = append(hostedZones, *z)
+	// Sort zones by ID for consistent pagination
+	sort.Slice(zones, func(i, j int) bool {
+		return zones[i].ID < zones[j].ID
+	})
+
+	// Find starting position based on marker
+	startIdx := 0
+
+	if marker != "" {
+		markerID := "/hostedzone/" + marker
+		for i, z := range zones {
+			if z.ID == markerID {
+				startIdx = i + 1
+
+				break
+			}
+		}
+	}
+
+	// Calculate pagination
+	endIdx := startIdx + maxItems
+	isTruncated := false
+	nextMarker := ""
+
+	if endIdx < len(zones) {
+		isTruncated = true
+		// Extract zone ID without "/hostedzone/" prefix
+		nextMarker = strings.TrimPrefix(zones[endIdx].ID, "/hostedzone/")
+	} else {
+		endIdx = len(zones)
+	}
+
+	// Build response with paginated results
+	hostedZones := make([]HostedZone, 0, endIdx-startIdx)
+	for i := startIdx; i < endIdx; i++ {
+		hostedZones = append(hostedZones, *zones[i])
 	}
 
 	resp := ListHostedZonesResponse{
 		XMLNS:       xmlns,
 		HostedZones: hostedZones,
-		IsTruncated: false,
-		MaxItems:    "100",
+		IsTruncated: isTruncated,
+		MaxItems:    strconv.Itoa(maxItems),
+	}
+
+	if marker != "" {
+		resp.Marker = marker
+	}
+
+	if isTruncated {
+		resp.NextMarker = nextMarker
 	}
 
 	writeXMLResponse(w, http.StatusOK, resp)
