@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 )
@@ -84,9 +85,25 @@ func (s *Service) GetGraphqlAPI(w http.ResponseWriter, r *http.Request) {
 
 // ListGraphqlAPIs handles the ListGraphqlAPIs operation.
 func (s *Service) ListGraphqlAPIs(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	var maxResults int32
+	if maxResultsStr := query.Get("maxResults"); maxResultsStr != "" {
+		val, err := strconv.ParseInt(maxResultsStr, 10, 32)
+		if err != nil {
+			writeError(w, errInvalidRequest, "Invalid maxResults parameter", http.StatusBadRequest)
+
+			return
+		}
+
+		maxResults = int32(val)
+	}
+
 	input := &ListGraphqlAPIsInput{
-		APIType: r.URL.Query().Get("apiType"),
-		Owner:   r.URL.Query().Get("owner"),
+		NextToken:  query.Get("nextToken"),
+		MaxResults: maxResults,
+		APIType:    query.Get("apiType"),
+		Owner:      query.Get("owner"),
 	}
 
 	apis, nextToken, err := s.storage.ListGraphqlAPIs(r.Context(), input)

@@ -105,6 +105,63 @@ func TestAppSync_ListGraphqlApis(t *testing.T) {
 	}
 }
 
+func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	client := createAppSyncClient(t)
+
+	// Create 5 APIs.
+	var apiIDs []*string
+
+	for i := 0; i < 5; i++ {
+		result, err := client.CreateGraphqlApi(ctx, &appsync.CreateGraphqlApiInput{
+			Name:               aws.String("pagination-test-api"),
+			AuthenticationType: types.AuthenticationTypeApiKey,
+		})
+		require.NoError(t, err)
+		apiIDs = append(apiIDs, result.GraphqlApi.ApiId)
+	}
+
+	// List with maxResults = 2.
+	listResult, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
+		MaxResults: aws.Int32(2),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, listResult)
+	assert.Len(t, listResult.GraphqlApis, 2)
+	assert.NotNil(t, listResult.NextToken)
+
+	// List next page using nextToken.
+	listResult2, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
+		MaxResults: aws.Int32(2),
+		NextToken:  listResult.NextToken,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, listResult2)
+	assert.Len(t, listResult2.GraphqlApis, 2)
+	assert.NotNil(t, listResult2.NextToken)
+
+	// List last page.
+	listResult3, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
+		MaxResults: aws.Int32(2),
+		NextToken:  listResult2.NextToken,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, listResult3)
+	assert.Len(t, listResult3.GraphqlApis, 1)
+	// No more pages.
+	assert.Nil(t, listResult3.NextToken)
+
+	// Clean up.
+	for _, apiID := range apiIDs {
+		_, err = client.DeleteGraphqlApi(ctx, &appsync.DeleteGraphqlApiInput{
+			ApiId: apiID,
+		})
+		require.NoError(t, err)
+	}
+}
+
 func TestAppSync_DeleteGraphqlApi(t *testing.T) {
 	t.Parallel()
 

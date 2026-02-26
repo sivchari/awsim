@@ -2,7 +2,10 @@ package appsync
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/google/uuid"
@@ -137,12 +140,16 @@ func (s *MemoryStorage) GetGraphqlAPI(_ context.Context, apiID string) (*Graphql
 	return data.api, nil
 }
 
-// ListGraphqlAPIs lists all GraphQL APIs.
+// defaultMaxResults is the default number of results to return.
+const defaultMaxResults = 25
+
+// ListGraphqlAPIs lists all GraphQL APIs with pagination support.
 func (s *MemoryStorage) ListGraphqlAPIs(_ context.Context, input *ListGraphqlAPIsInput) ([]GraphqlAPI, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	apis := make([]GraphqlAPI, 0, len(s.apis))
+	// Collect all matching APIs.
+	allAPIs := make([]GraphqlAPI, 0, len(s.apis))
 
 	for _, data := range s.apis {
 		// Filter by API type if specified.
@@ -155,11 +162,46 @@ func (s *MemoryStorage) ListGraphqlAPIs(_ context.Context, input *ListGraphqlAPI
 			continue
 		}
 
-		apis = append(apis, *data.api)
+		allAPIs = append(allAPIs, *data.api)
 	}
 
-	// Note: Pagination is not implemented in this basic version.
-	return apis, "", nil
+	// Sort by API ID for consistent pagination.
+	sort.Slice(allAPIs, func(i, j int) bool {
+		return allAPIs[i].APIId < allAPIs[j].APIId
+	})
+
+	// Determine start index from nextToken.
+	startIndex := 0
+	if input.NextToken != "" {
+		decoded, err := base64.StdEncoding.DecodeString(input.NextToken)
+		if err == nil {
+			if idx, err := strconv.Atoi(string(decoded)); err == nil && idx >= 0 && idx < len(allAPIs) {
+				startIndex = idx
+			}
+		}
+	}
+
+	// Determine max results.
+	maxResults := int(input.MaxResults)
+	if maxResults <= 0 {
+		maxResults = defaultMaxResults
+	}
+
+	// Apply pagination.
+	endIndex := startIndex + maxResults
+	if endIndex > len(allAPIs) {
+		endIndex = len(allAPIs)
+	}
+
+	result := allAPIs[startIndex:endIndex]
+
+	// Generate next token if there are more results.
+	var nextToken string
+	if endIndex < len(allAPIs) {
+		nextToken = base64.StdEncoding.EncodeToString([]byte(strconv.Itoa(endIndex)))
+	}
+
+	return result, nextToken, nil
 }
 
 // CreateDataSource creates a new data source for a GraphQL API.
