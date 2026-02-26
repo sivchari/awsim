@@ -153,7 +153,14 @@ func (s *Service) ListStreams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streams, hasMoreStreams, err := s.storage.ListStreams(r.Context(), req.ExclusiveStartStreamName, req.Limit)
+	// Use NextToken as ExclusiveStartStreamName if provided.
+	// NextToken takes precedence over ExclusiveStartStreamName per AWS API behavior.
+	exclusiveStartStreamName := req.ExclusiveStartStreamName
+	if req.NextToken != "" {
+		exclusiveStartStreamName = req.NextToken
+	}
+
+	streams, hasMoreStreams, err := s.storage.ListStreams(r.Context(), exclusiveStartStreamName, req.Limit)
 	if err != nil {
 		handleError(w, err)
 
@@ -178,6 +185,11 @@ func (s *Service) ListStreams(w http.ResponseWriter, r *http.Request) {
 		StreamNames:     streamNames,
 		HasMoreStreams:  hasMoreStreams,
 		StreamSummaries: streamSummaries,
+	}
+
+	// Set NextToken for pagination if there are more streams.
+	if hasMoreStreams && len(streamNames) > 0 {
+		resp.NextToken = streamNames[len(streamNames)-1]
 	}
 
 	writeResponse(w, resp)
