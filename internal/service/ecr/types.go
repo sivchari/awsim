@@ -32,6 +32,7 @@ type Image struct {
 	ImageID        *ImageIdentifier
 	ImageManifest  string
 	ImageDigest    string
+	PushedAt       time.Time
 }
 
 // ImageIdentifier identifies an image.

@@ -142,7 +142,7 @@ func (s *MemoryStorage) DescribeRepositories(_ context.Context, names []string, 
 }
 
 // ListImages lists images in a repository.
-func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, maxResults int32, _ string) ([]*ImageIdentifier, string, error) {
+func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, maxResults int32, nextToken string) ([]*ImageIdentifier, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -155,20 +155,49 @@ func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, max
 		maxResults = 100
 	}
 
+	// Collect all images into a slice for sorting
+	images := make([]*Image, 0, len(rd.images))
+	for _, img := range rd.images {
+		images = append(images, img)
+	}
+
+	// Sort by push date (descending - newest first)
+	sort.Slice(images, func(i, j int) bool {
+		return images[i].PushedAt.After(images[j].PushedAt)
+	})
+
+	// Find the starting index based on nextToken (which is the image digest)
+	startIdx := 0
+	if nextToken != "" {
+		for i, img := range images {
+			if img.ImageDigest == nextToken {
+				startIdx = i + 1
+
+				break
+			}
+		}
+	}
+
+	// Build the result slice with pagination
 	var imageIDs []*ImageIdentifier
 
-	for _, img := range rd.images {
+	var newNextToken string
+
+	for i := startIdx; i < len(images); i++ {
+		if int32(len(imageIDs)) >= maxResults { //nolint:gosec // slice length bounded by maxResults parameter
+			newNextToken = images[i-1].ImageDigest
+
+			break
+		}
+
+		img := images[i]
 		imageIDs = append(imageIDs, &ImageIdentifier{
 			ImageDigest: img.ImageDigest,
 			ImageTag:    img.ImageID.ImageTag,
 		})
 	}
 
-	if int32(len(imageIDs)) > maxResults { //nolint:gosec // slice length bounded by maxResults parameter
-		imageIDs = imageIDs[:maxResults]
-	}
-
-	return imageIDs, "", nil
+	return imageIDs, newNextToken, nil
 }
 
 // PutImage puts an image into a repository.
@@ -192,6 +221,7 @@ func (s *MemoryStorage) PutImage(_ context.Context, repositoryName, imageManifes
 			ImageDigest: digest,
 			ImageTag:    imageTag,
 		},
+		PushedAt: time.Now(),
 	}
 
 	rd.images[digest] = img
