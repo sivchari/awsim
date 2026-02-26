@@ -134,6 +134,7 @@ func (s *Service) ListEventBuses(w http.ResponseWriter, r *http.Request) {
 			Name:        eb.Name,
 			Arn:         eb.Arn,
 			Description: eb.Description,
+			ManagedBy:   eb.ManagedBy,
 		}
 	}
 

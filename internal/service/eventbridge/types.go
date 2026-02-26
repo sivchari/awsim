@@ -27,6 +27,7 @@ type EventBus struct {
 	Name         string
 	Arn          string
 	Description  string
+	ManagedBy    string
 	CreationTime time.Time
 	LastModified time.Time
 }
@@ -114,6 +115,7 @@ type EventBusOutput struct {
 	Name        string `json:"Name,omitempty"`
 	Arn         string `json:"Arn,omitempty"`
 	Description string `json:"Description,omitempty"`
+	ManagedBy   string `json:"ManagedBy,omitempty"`
 }
 
 // ListEventBusesResponse is the response for ListEventBuses.
