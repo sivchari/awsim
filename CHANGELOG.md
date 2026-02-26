@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.1.3](https://github.com/sivchari/awsim/compare/v0.1.2...v0.1.3) - 2026-02-26
+- fix(kinesis): use NextToken parameter in ListStreams by @sivchari in https://github.com/sivchari/awsim/pull/273
+- fix(eks): fix nextToken handling and add maxResults validation by @sivchari in https://github.com/sivchari/awsim/pull/274
+- fix(globalaccelerator): implement pagination in ListAccelerators by @sivchari in https://github.com/sivchari/awsim/pull/275
+- fix(route53): add pagination support to ListHostedZones by @sivchari in https://github.com/sivchari/awsim/pull/276
+- fix(appsync): read nextToken and maxResults parameters in ListGraphqlApis by @sivchari in https://github.com/sivchari/awsim/pull/277
+- fix(eventbridge): add ManagedBy field to ListEventBuses response by @sivchari in https://github.com/sivchari/awsim/pull/278
+- fix(cloudfront): add missing fields to ListDistributions response by @sivchari in https://github.com/sivchari/awsim/pull/279
+- fix(organizations): add State field to ListAccounts response by @sivchari in https://github.com/sivchari/awsim/pull/280
+- fix(ecs): add maxResults validation to ListClusters by @sivchari in https://github.com/sivchari/awsim/pull/281
+- fix(ecr): implement sorting and pagination in ListImages by @sivchari in https://github.com/sivchari/awsim/pull/282
+- fix(secretsmanager): add Type field and rotation metadata to ListSecrets response by @sivchari in https://github.com/sivchari/awsim/pull/283
+- fix(cognito): populate LambdaConfig in DescribeUserPool response by @sivchari in https://github.com/sivchari/awsim/pull/284
+- fix(acm): add missing fields to ListCertificates response by @sivchari in https://github.com/sivchari/awsim/pull/285
+- fix(cloudwatch): add OwningAccounts field to ListMetrics response by @sivchari in https://github.com/sivchari/awsim/pull/286
+- fix(s3tables): add missing fields and fix pagination by @sivchari in https://github.com/sivchari/awsim/pull/287
+- refactor(test): migrate from testify to golden and separate test dependencies by @sivchari in https://github.com/sivchari/awsim/pull/289
+
 ## [v0.1.2](https://github.com/sivchari/awsim/compare/v0.1.1...v0.1.2) - 2026-02-26
 
 ## [v0.1.1](https://github.com/sivchari/awsim/compare/v0.1.0...v0.1.1) - 2026-02-26
