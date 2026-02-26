@@ -10,6 +10,7 @@ import (
 type Bucket struct {
 	Name         string
 	CreationDate time.Time
+	Region       string
 }
 
 // Object represents an S3 object.
@@ -31,14 +32,13 @@ type Object struct {
 type ListAllMyBucketsResult struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult"`
 	Xmlns   string   `xml:"xmlns,attr"`
-	Owner   Owner    `xml:"Owner"`
 	Buckets Buckets  `xml:"Buckets"`
+	Owner   Owner    `xml:"Owner"`
 }
 
 // Owner represents the bucket owner.
 type Owner struct {
-	ID          string `xml:"ID"`
-	DisplayName string `xml:"DisplayName"`
+	ID string `xml:"ID"`
 }
 
 // Buckets is a list of buckets.
@@ -48,8 +48,9 @@ type Buckets struct {
 
 // BucketInfo represents bucket information in XML response.
 type BucketInfo struct {
-	Name         string `xml:"Name"`
 	CreationDate string `xml:"CreationDate"`
+	Name         string `xml:"Name"`
+	BucketRegion string `xml:"BucketRegion"`
 }
 
 // ListBucketResult is the response for ListObjectsV2.

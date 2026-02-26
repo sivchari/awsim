@@ -105,20 +105,24 @@ func (s *Service) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 	bucketInfos := make([]BucketInfo, len(buckets))
 	for i, b := range buckets {
+		region := b.Region
+		if region == "" {
+			region = "us-east-1"
+		}
 		bucketInfos[i] = BucketInfo{
-			Name:         b.Name,
 			CreationDate: b.CreationDate.Format(timeFormatISO),
+			Name:         b.Name,
+			BucketRegion: region,
 		}
 	}
 
 	result := ListAllMyBucketsResult{
 		Xmlns: s3Namespace,
-		Owner: Owner{
-			ID:          "owner-id",
-			DisplayName: "owner",
-		},
 		Buckets: Buckets{
 			Bucket: bucketInfos,
+		},
+		Owner: Owner{
+			ID: "owner-id",
 		},
 	}
 
@@ -675,7 +679,7 @@ func toObjectVersionInfo(obj *Object, isLatest bool) ObjectVersionInfo {
 		ETag:         obj.ETag,
 		Size:         obj.Size,
 		StorageClass: "STANDARD",
-		Owner:        Owner{ID: "owner-id", DisplayName: "owner"},
+		Owner:        Owner{ID: "owner-id"},
 	}
 }
 
@@ -686,7 +690,7 @@ func toDeleteMarkerInfo(obj *Object, isLatest bool) DeleteMarkerInfo {
 		VersionID:    obj.VersionID,
 		IsLatest:     isLatest,
 		LastModified: obj.LastModified.Format(timeFormatISO),
-		Owner:        Owner{ID: "owner-id", DisplayName: "owner"},
+		Owner:        Owner{ID: "owner-id"},
 	}
 }
 
