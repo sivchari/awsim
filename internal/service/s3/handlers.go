@@ -104,11 +104,13 @@ func (s *Service) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucketInfos := make([]BucketInfo, len(buckets))
+
 	for i, b := range buckets {
 		region := b.Region
 		if region == "" {
 			region = "us-east-1"
 		}
+
 		bucketInfos[i] = BucketInfo{
 			CreationDate: b.CreationDate.Format(timeFormatISO),
 			Name:         b.Name,
