@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.1.1](https://github.com/sivchari/awsim/compare/v0.1.0...v0.1.1) - 2026-02-26
+- fix(s3): align ListBuckets response format with AWS API by @sivchari in https://github.com/sivchari/awsim/pull/255
+
 ## [v0.1.0](https://github.com/sivchari/awsim/compare/v0.0.2...v0.1.0) - 2026-02-25
 - feat(rds): add RDS service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/233
 - feat(elasticache): add ElastiCache service basic implementation by @sivchari in https://github.com/sivchari/awsim/pull/235
