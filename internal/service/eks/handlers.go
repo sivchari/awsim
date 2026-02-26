@@ -94,11 +94,17 @@ func (s *Service) DescribeCluster(w http.ResponseWriter, r *http.Request) {
 
 // ListClusters handles the ListClusters operation.
 func (s *Service) ListClusters(w http.ResponseWriter, r *http.Request) {
-	maxResults := 100
+	const maxResultsLimit = 100
+
+	maxResults := maxResultsLimit
 
 	if v := r.URL.Query().Get("maxResults"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxResults = n
+			// Enforce upper limit per AWS API specification.
+			if maxResults > maxResultsLimit {
+				maxResults = maxResultsLimit
+			}
 		}
 	}
 
@@ -111,10 +117,14 @@ func (s *Service) ListClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &ListClustersResponse{
-		Clusters:  clusters,
-		NextToken: next,
-	})
+	resp := &ListClustersResponse{
+		Clusters: clusters,
+	}
+	if next != "" {
+		resp.NextToken = &next
+	}
+
+	writeJSON(w, resp)
 }
 
 // CreateNodegroup handles the CreateNodegroup operation.
@@ -210,11 +220,17 @@ func (s *Service) ListNodegroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxResults := 100
+	const maxResultsLimit = 100
+
+	maxResults := maxResultsLimit
 
 	if v := r.URL.Query().Get("maxResults"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxResults = n
+			// Enforce upper limit per AWS API specification.
+			if maxResults > maxResultsLimit {
+				maxResults = maxResultsLimit
+			}
 		}
 	}
 
@@ -227,10 +243,14 @@ func (s *Service) ListNodegroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &ListNodegroupsResponse{
+	resp := &ListNodegroupsResponse{
 		Nodegroups: nodegroups,
-		NextToken:  next,
-	})
+	}
+	if next != "" {
+		resp.NextToken = &next
+	}
+
+	writeJSON(w, resp)
 }
 
 // extractClusterName extracts the cluster name from the URL path.

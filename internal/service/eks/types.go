@@ -363,7 +363,7 @@ type DescribeClusterResponse struct {
 // ListClustersResponse represents a ListClusters response.
 type ListClustersResponse struct {
 	Clusters  []string `json:"clusters"`
-	NextToken string   `json:"nextToken,omitempty"`
+	NextToken *string  `json:"nextToken"`
 }
 
 // CreateNodegroupResponse represents a CreateNodegroup response.
@@ -384,7 +384,7 @@ type DescribeNodegroupResponse struct {
 // ListNodegroupsResponse represents a ListNodegroups response.
 type ListNodegroupsResponse struct {
 	Nodegroups []string `json:"nodegroups"`
-	NextToken  string   `json:"nextToken,omitempty"`
+	NextToken  *string  `json:"nextToken"`
 }
 
 // Error types.
