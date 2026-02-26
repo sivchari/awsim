@@ -172,6 +172,7 @@ func (s *MemoryStorage) ListGraphqlAPIs(_ context.Context, input *ListGraphqlAPI
 
 	// Determine start index from nextToken.
 	startIndex := 0
+
 	if input.NextToken != "" {
 		decoded, err := base64.StdEncoding.DecodeString(input.NextToken)
 		if err == nil {

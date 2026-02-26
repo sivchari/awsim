@@ -88,6 +88,7 @@ func (s *Service) ListGraphqlAPIs(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	var maxResults int32
+
 	if maxResultsStr := query.Get("maxResults"); maxResultsStr != "" {
 		val, err := strconv.ParseInt(maxResultsStr, 10, 32)
 		if err != nil {
