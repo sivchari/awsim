@@ -434,7 +434,39 @@ func userPoolToOutput(pool *UserPool) *UserPoolOutput {
 		}
 	}
 
+	if pool.LambdaConfig != nil {
+		output.LambdaConfig = convertLambdaConfigToOutput(pool.LambdaConfig)
+	}
+
+	if pool.EmailConfiguration != nil {
+		output.EmailConfiguration = &EmailConfigurationOutput{
+			SourceArn:           pool.EmailConfiguration.SourceArn,
+			ReplyToEmailAddress: pool.EmailConfiguration.ReplyToEmailAddress,
+			EmailSendingAccount: pool.EmailConfiguration.EmailSendingAccount,
+		}
+	}
+
 	return output
+}
+
+// convertLambdaConfigToOutput converts LambdaConfig to LambdaConfigOutput.
+func convertLambdaConfigToOutput(config *LambdaConfig) *LambdaConfigOutput {
+	if config == nil {
+		return nil
+	}
+
+	return &LambdaConfigOutput{
+		PreSignUp:               config.PreSignUp,
+		CustomMessage:           config.CustomMessage,
+		PostConfirmation:        config.PostConfirmation,
+		PreAuthentication:       config.PreAuthentication,
+		PostAuthentication:      config.PostAuthentication,
+		DefineAuthChallenge:     config.DefineAuthChallenge,
+		CreateAuthChallenge:     config.CreateAuthChallenge,
+		VerifyAuthChallengeResp: config.VerifyAuthChallengeResp,
+		PreTokenGeneration:      config.PreTokenGeneration,
+		UserMigration:           config.UserMigration,
+	}
 }
 
 // userPoolClientToOutput converts a UserPoolClient to UserPoolClientOutput.

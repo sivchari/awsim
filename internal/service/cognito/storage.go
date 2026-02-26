@@ -110,6 +110,18 @@ func (s *MemoryStorage) CreateUserPool(_ context.Context, req *CreateUserPoolReq
 		pool.UsernameAttributes = req.UsernameAttributes
 	}
 
+	if req.LambdaConfig != nil {
+		pool.LambdaConfig = convertLambdaConfigInputToLambdaConfig(req.LambdaConfig)
+	}
+
+	if req.EmailConfiguration != nil {
+		pool.EmailConfiguration = &EmailConfiguration{
+			SourceArn:           req.EmailConfiguration.SourceArn,
+			ReplyToEmailAddress: req.EmailConfiguration.ReplyToEmailAddress,
+			EmailSendingAccount: req.EmailConfiguration.EmailSendingAccount,
+		}
+	}
+
 	s.userPools[poolID] = pool
 	s.users[poolID] = make(map[string]*User)
 
@@ -567,4 +579,24 @@ func generateToken() string {
 	_, _ = rand.Read(b)
 
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// convertLambdaConfigInputToLambdaConfig converts LambdaConfigInput to LambdaConfig.
+func convertLambdaConfigInputToLambdaConfig(input *LambdaConfigInput) *LambdaConfig {
+	if input == nil {
+		return nil
+	}
+
+	return &LambdaConfig{
+		PreSignUp:               input.PreSignUp,
+		CustomMessage:           input.CustomMessage,
+		PostConfirmation:        input.PostConfirmation,
+		PreAuthentication:       input.PreAuthentication,
+		PostAuthentication:      input.PostAuthentication,
+		DefineAuthChallenge:     input.DefineAuthChallenge,
+		CreateAuthChallenge:     input.CreateAuthChallenge,
+		VerifyAuthChallengeResp: input.VerifyAuthChallengeResp,
+		PreTokenGeneration:      input.PreTokenGeneration,
+		UserMigration:           input.UserMigration,
+	}
 }
