@@ -3,6 +3,7 @@ package globalaccelerator
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -130,24 +131,47 @@ func (s *MemoryStorage) GetAccelerator(_ context.Context, arn string) (*Accelera
 	return accelerator, nil
 }
 
-// ListAccelerators lists all accelerators.
-func (s *MemoryStorage) ListAccelerators(_ context.Context, maxResults int32, _ string) ([]*Accelerator, string, error) {
+// ListAccelerators lists all accelerators with pagination support.
+func (s *MemoryStorage) ListAccelerators(_ context.Context, maxResults int32, nextToken string) ([]*Accelerator, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Default maxResults per AWS API documentation.
 	if maxResults <= 0 {
 		maxResults = 100
 	}
 
-	accelerators := make([]*Accelerator, 0, len(s.accelerators))
-	for _, acc := range s.accelerators {
-		accelerators = append(accelerators, acc)
-		if len(accelerators) >= int(maxResults) {
-			break
+	// Collect all ARNs and sort for consistent pagination.
+	arns := make([]string, 0, len(s.accelerators))
+	for arn := range s.accelerators {
+		arns = append(arns, arn)
+	}
+	sort.Strings(arns)
+
+	// Find starting index based on nextToken.
+	startIdx := 0
+	if nextToken != "" {
+		for i, arn := range arns {
+			if arn == nextToken {
+				startIdx = i
+				break
+			}
 		}
 	}
 
-	return accelerators, "", nil
+	// Collect accelerators from startIdx up to maxResults.
+	accelerators := make([]*Accelerator, 0, maxResults)
+	for i := startIdx; i < len(arns) && len(accelerators) < int(maxResults); i++ {
+		accelerators = append(accelerators, s.accelerators[arns[i]])
+	}
+
+	// Determine next token.
+	var newNextToken string
+	if startIdx+int(maxResults) < len(arns) {
+		newNextToken = arns[startIdx+int(maxResults)]
+	}
+
+	return accelerators, newNextToken, nil
 }
 
 // UpdateAccelerator updates an accelerator.
