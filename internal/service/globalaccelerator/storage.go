@@ -146,14 +146,17 @@ func (s *MemoryStorage) ListAccelerators(_ context.Context, maxResults int32, ne
 	for arn := range s.accelerators {
 		arns = append(arns, arn)
 	}
+
 	sort.Strings(arns)
 
 	// Find starting index based on nextToken.
 	startIdx := 0
+
 	if nextToken != "" {
 		for i, arn := range arns {
 			if arn == nextToken {
 				startIdx = i
+
 				break
 			}
 		}
