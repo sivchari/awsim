@@ -125,7 +125,7 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 
 	// List with maxResults = 2.
 	listResult, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: aws.Int32(2),
+		MaxResults: 2,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, listResult)
@@ -134,7 +134,7 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 
 	// List next page using nextToken.
 	listResult2, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: aws.Int32(2),
+		MaxResults: 2,
 		NextToken:  listResult.NextToken,
 	})
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestAppSync_ListGraphqlApis_Pagination(t *testing.T) {
 
 	// List last page.
 	listResult3, err := client.ListGraphqlApis(ctx, &appsync.ListGraphqlApisInput{
-		MaxResults: aws.Int32(2),
+		MaxResults: 2,
 		NextToken:  listResult2.NextToken,
 	})
 	require.NoError(t, err)
