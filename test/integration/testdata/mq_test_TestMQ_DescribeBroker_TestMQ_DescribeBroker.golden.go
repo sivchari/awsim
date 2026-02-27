@@ -2,11 +2,11 @@
   "ActionsRequired": null,
   "AuthenticationStrategy": "",
   "AutoMinorVersionUpgrade": false,
-  "BrokerArn": "arn:aws:mq:us-east-1:123456789012:broker:test-broker-describe:63b49eb5-e2f4-49db-9463-fbe5d5237dac",
-  "BrokerId": "63b49eb5-e2f4-49db-9463-fbe5d5237dac",
+  "BrokerArn": "arn:aws:mq:us-east-1:123456789012:broker:test-broker-describe:33f4f886-3b22-485c-b29e-49f7c519198a",
+  "BrokerId": "33f4f886-3b22-485c-b29e-49f7c519198a",
   "BrokerInstances": [
     {
-      "ConsoleURL": "https://localhost:8162",
+      "ConsoleURL": null,
       "Endpoints": [
         "ssl://localhost:61617"
       ],
@@ -16,7 +16,7 @@
   "BrokerName": "test-broker-describe",
   "BrokerState": "RUNNING",
   "Configurations": null,
-  "Created": "2026-02-27T05:32:59.408Z",
+  "Created": "2026-02-27T05:47:13.511Z",
   "DataReplicationMetadata": null,
   "DataReplicationMode": "",
   "DeploymentMode": "SINGLE_INSTANCE",
