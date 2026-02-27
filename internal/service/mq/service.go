@@ -2,7 +2,6 @@ package mq
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/sivchari/awsim/internal/service"
 )
@@ -30,20 +29,20 @@ func (s *Service) Name() string {
 
 // Prefix returns the URL prefix for this service.
 func (s *Service) Prefix() string {
-	return "/mq"
+	return ""
 }
 
 // RegisterRoutes registers the MQ routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Broker operations
-	r.Handle("POST", "/mq/v1/brokers", s.handleCreateBroker)
-	r.Handle("GET", "/mq/v1/brokers", s.handleListBrokers)
-	r.Handle("GET", "/mq/v1/brokers/{broker-id}", s.handleDescribeBroker)
-	r.Handle("DELETE", "/mq/v1/brokers/{broker-id}", s.handleDeleteBroker)
-	r.Handle("PUT", "/mq/v1/brokers/{broker-id}", s.handleUpdateBroker)
+	r.Handle("POST", "/v1/brokers", s.handleCreateBroker)
+	r.Handle("GET", "/v1/brokers", s.handleListBrokers)
+	r.Handle("GET", "/v1/brokers/{brokerId}", s.handleDescribeBroker)
+	r.Handle("DELETE", "/v1/brokers/{brokerId}", s.handleDeleteBroker)
+	r.Handle("PUT", "/v1/brokers/{brokerId}", s.handleUpdateBroker)
 
 	// Configuration operations
-	r.Handle("POST", "/mq/v1/configurations", s.handleCreateConfiguration)
+	r.Handle("POST", "/v1/configurations", s.handleCreateConfiguration)
 }
 
 // handleCreateBroker handles POST /v1/brokers.
@@ -56,36 +55,25 @@ func (s *Service) handleListBrokers(w http.ResponseWriter, r *http.Request) {
 	s.ListBrokers(w, r)
 }
 
-// handleDescribeBroker handles GET /v1/brokers/{broker-id}.
+// handleDescribeBroker handles GET /v1/brokers/{brokerId}.
 func (s *Service) handleDescribeBroker(w http.ResponseWriter, r *http.Request) {
-	brokerID := extractBrokerIDFromPath(r.URL.Path)
+	brokerID := r.PathValue("brokerId")
 	s.DescribeBroker(w, r, brokerID)
 }
 
-// handleDeleteBroker handles DELETE /v1/brokers/{broker-id}.
+// handleDeleteBroker handles DELETE /v1/brokers/{brokerId}.
 func (s *Service) handleDeleteBroker(w http.ResponseWriter, r *http.Request) {
-	brokerID := extractBrokerIDFromPath(r.URL.Path)
+	brokerID := r.PathValue("brokerId")
 	s.DeleteBroker(w, r, brokerID)
 }
 
-// handleUpdateBroker handles PUT /v1/brokers/{broker-id}.
+// handleUpdateBroker handles PUT /v1/brokers/{brokerId}.
 func (s *Service) handleUpdateBroker(w http.ResponseWriter, r *http.Request) {
-	brokerID := extractBrokerIDFromPath(r.URL.Path)
+	brokerID := r.PathValue("brokerId")
 	s.UpdateBroker(w, r, brokerID)
 }
 
 // handleCreateConfiguration handles POST /v1/configurations.
 func (s *Service) handleCreateConfiguration(w http.ResponseWriter, r *http.Request) {
 	s.CreateConfiguration(w, r)
-}
-
-// extractBrokerIDFromPath extracts broker ID from URL path.
-// Path format: /mq/v1/brokers/{broker-id}
-func extractBrokerIDFromPath(path string) string {
-	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) >= 4 && parts[0] == "mq" && parts[1] == "v1" && parts[2] == "brokers" {
-		return parts[3]
-	}
-
-	return ""
 }

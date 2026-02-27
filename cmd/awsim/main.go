@@ -39,6 +39,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/kinesis"
 	_ "github.com/sivchari/awsim/internal/service/kms"
 	_ "github.com/sivchari/awsim/internal/service/lambda"
+	_ "github.com/sivchari/awsim/internal/service/mq"
 	_ "github.com/sivchari/awsim/internal/service/organizations"
 	_ "github.com/sivchari/awsim/internal/service/pipes"
 	_ "github.com/sivchari/awsim/internal/service/rds"
