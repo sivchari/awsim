@@ -226,6 +226,10 @@ linters:
       - path: internal/service/route53resolver/types\.go
         linters:
           - tagliatelle
+      # AWS Security Lake API requires specific JSON field names.
+      - path: internal/service/securitylake/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

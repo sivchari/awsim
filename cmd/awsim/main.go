@@ -52,6 +52,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/sagemaker"
 	_ "github.com/sivchari/awsim/internal/service/scheduler"
 	_ "github.com/sivchari/awsim/internal/service/secretsmanager"
+	_ "github.com/sivchari/awsim/internal/service/securitylake"
 	_ "github.com/sivchari/awsim/internal/service/servicequotas"
 	_ "github.com/sivchari/awsim/internal/service/sesv2"
 	_ "github.com/sivchari/awsim/internal/service/sfn"
