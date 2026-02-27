@@ -12,31 +12,31 @@ import (
 func (s *Service) CreateBroker(w http.ResponseWriter, r *http.Request) {
 	var req CreateBrokerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMQError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.BrokerName == "" {
-		writeMQError(w, ErrBadRequest, "brokerName is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "brokerName is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.EngineType == "" {
-		writeMQError(w, ErrBadRequest, "engineType is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "engineType is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.EngineVersion == "" {
-		writeMQError(w, ErrBadRequest, "engineVersion is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "engineVersion is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.HostInstanceType == "" {
-		writeMQError(w, ErrBadRequest, "hostInstanceType is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "hostInstanceType is required", http.StatusBadRequest)
 
 		return
 	}
@@ -47,7 +47,7 @@ func (s *Service) CreateBroker(w http.ResponseWriter, r *http.Request) {
 
 	broker, err := s.storage.CreateBroker(r.Context(), &req)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -57,20 +57,20 @@ func (s *Service) CreateBroker(w http.ResponseWriter, r *http.Request) {
 		BrokerID:  broker.BrokerID,
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
 // DeleteBroker handles the DeleteBroker API.
 func (s *Service) DeleteBroker(w http.ResponseWriter, r *http.Request, brokerID string) {
 	if brokerID == "" {
-		writeMQError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	err := s.storage.DeleteBroker(r.Context(), brokerID)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -79,20 +79,20 @@ func (s *Service) DeleteBroker(w http.ResponseWriter, r *http.Request, brokerID 
 		BrokerID: brokerID,
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
 // DescribeBroker handles the DescribeBroker API.
 func (s *Service) DescribeBroker(w http.ResponseWriter, r *http.Request, brokerID string) {
 	if brokerID == "" {
-		writeMQError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	broker, err := s.storage.DescribeBroker(r.Context(), brokerID)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -135,7 +135,7 @@ func (s *Service) DescribeBroker(w http.ResponseWriter, r *http.Request, brokerI
 		}
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
 // ListBrokers handles the ListBrokers API.
@@ -145,7 +145,7 @@ func (s *Service) ListBrokers(w http.ResponseWriter, r *http.Request) {
 
 	brokers, newNextToken, err := s.storage.ListBrokers(r.Context(), maxResults, nextToken)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -169,20 +169,20 @@ func (s *Service) ListBrokers(w http.ResponseWriter, r *http.Request) {
 		NextToken:       newNextToken,
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
 // UpdateBroker handles the UpdateBroker API.
 func (s *Service) UpdateBroker(w http.ResponseWriter, r *http.Request, brokerID string) {
 	if brokerID == "" {
-		writeMQError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "brokerId is required", http.StatusBadRequest)
 
 		return
 	}
 
 	var req UpdateBrokerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMQError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
 
 		return
 	}
@@ -191,7 +191,7 @@ func (s *Service) UpdateBroker(w http.ResponseWriter, r *http.Request, brokerID 
 
 	broker, err := s.storage.UpdateBroker(r.Context(), brokerID, &req)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -210,39 +210,39 @@ func (s *Service) UpdateBroker(w http.ResponseWriter, r *http.Request, brokerID 
 		}
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
 // CreateConfiguration handles the CreateConfiguration API.
 func (s *Service) CreateConfiguration(w http.ResponseWriter, r *http.Request) {
 	var req CreateConfigurationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMQError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "Invalid request body", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.Name == "" {
-		writeMQError(w, ErrBadRequest, "name is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "name is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.EngineType == "" {
-		writeMQError(w, ErrBadRequest, "engineType is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "engineType is required", http.StatusBadRequest)
 
 		return
 	}
 
 	if req.EngineVersion == "" {
-		writeMQError(w, ErrBadRequest, "engineVersion is required", http.StatusBadRequest)
+		writeError(w, ErrBadRequest, "engineVersion is required", http.StatusBadRequest)
 
 		return
 	}
 
 	config, err := s.storage.CreateConfiguration(r.Context(), &req)
 	if err != nil {
-		handleMQError(w, err)
+		handleError(w, err)
 
 		return
 	}
@@ -259,12 +259,12 @@ func (s *Service) CreateConfiguration(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	writeJSONResponse(w, resp, http.StatusOK)
+	writeJSONResponse(w, resp)
 }
 
-// handleMQError handles MQError and writes appropriate response.
-func handleMQError(w http.ResponseWriter, err error) {
-	var mqErr *MQError
+// handleError handles Error and writes appropriate response.
+func handleError(w http.ResponseWriter, err error) {
+	var mqErr *Error
 	if errors.As(err, &mqErr) {
 		status := http.StatusBadRequest
 
@@ -279,29 +279,29 @@ func handleMQError(w http.ResponseWriter, err error) {
 			status = http.StatusInternalServerError
 		}
 
-		writeMQError(w, mqErr.Type, mqErr.Message, status)
+		writeError(w, mqErr.Type, mqErr.Message, status)
 
 		return
 	}
 
-	writeMQError(w, ErrInternalServer, "Internal server error", http.StatusInternalServerError)
+	writeError(w, ErrInternalServer, "Internal server error", http.StatusInternalServerError)
 }
 
-// writeJSONResponse writes a JSON response.
-func writeJSONResponse(w http.ResponseWriter, v any, status int) {
+// writeJSONResponse writes a JSON response with status 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Amzn-Requestid", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// writeMQError writes an MQ error response.
-func writeMQError(w http.ResponseWriter, errType, message string, status int) {
+// writeError writes an MQ error response.
+func writeError(w http.ResponseWriter, errType, message string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Amzn-Requestid", uuid.New().String())
 	w.Header().Set("X-Amzn-Errortype", errType)
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(&MQError{
+	_ = json.NewEncoder(w).Encode(&Error{
 		Type:    errType,
 		Message: message,
 	})

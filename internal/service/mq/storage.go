@@ -48,7 +48,7 @@ func (s *MemoryStorage) CreateBroker(_ context.Context, req *CreateBrokerRequest
 	// Check for duplicate broker name
 	for _, b := range s.brokers {
 		if b.BrokerName == req.BrokerName {
-			return nil, &MQError{
+			return nil, &Error{
 				Type:    ErrConflict,
 				Message: fmt.Sprintf("Broker with name %s already exists", req.BrokerName),
 			}
@@ -95,7 +95,7 @@ func (s *MemoryStorage) DeleteBroker(_ context.Context, brokerID string) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.brokers[brokerID]; !exists {
-		return &MQError{
+		return &Error{
 			Type:    ErrNotFound,
 			Message: fmt.Sprintf("Broker %s not found", brokerID),
 		}
@@ -113,7 +113,7 @@ func (s *MemoryStorage) DescribeBroker(_ context.Context, brokerID string) (*Bro
 
 	broker, exists := s.brokers[brokerID]
 	if !exists {
-		return nil, &MQError{
+		return nil, &Error{
 			Type:    ErrNotFound,
 			Message: fmt.Sprintf("Broker %s not found", brokerID),
 		}
@@ -174,7 +174,7 @@ func (s *MemoryStorage) UpdateBroker(_ context.Context, brokerID string, req *Up
 
 	broker, exists := s.brokers[brokerID]
 	if !exists {
-		return nil, &MQError{
+		return nil, &Error{
 			Type:    ErrNotFound,
 			Message: fmt.Sprintf("Broker %s not found", brokerID),
 		}
@@ -207,7 +207,7 @@ func (s *MemoryStorage) CreateConfiguration(_ context.Context, req *CreateConfig
 	// Check for duplicate configuration name
 	for _, c := range s.configurations {
 		if c.Name == req.Name {
-			return nil, &MQError{
+			return nil, &Error{
 				Type:    ErrConflict,
 				Message: fmt.Sprintf("Configuration with name %s already exists", req.Name),
 			}
@@ -248,7 +248,7 @@ func (s *MemoryStorage) GetConfiguration(_ context.Context, configID string) (*C
 
 	config, exists := s.configurations[configID]
 	if !exists {
-		return nil, &MQError{
+		return nil, &Error{
 			Type:    ErrNotFound,
 			Message: fmt.Sprintf("Configuration %s not found", configID),
 		}

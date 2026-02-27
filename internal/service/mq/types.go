@@ -163,7 +163,7 @@ type ConfigurationIDResponse struct {
 
 // BrokerInstance represents a broker instance.
 type BrokerInstance struct {
-	ConsoleURL string   `json:"consoleURL,omitempty"`
+	ConsoleURL string   `json:"consoleUrl,omitempty"`
 	Endpoints  []string `json:"endpoints,omitempty"`
 }
 
@@ -233,14 +233,14 @@ type UpdateBrokerResponse struct {
 	Configuration        *ConfigurationIDResponse `json:"configuration,omitempty"`
 }
 
-// MQError represents an MQ error.
-type MQError struct {
-	Type    string `json:"__type"`
+// Error represents an MQ error.
+type Error struct {
+	Type    string `json:"__type"` //nolint:tagliatelle // AWS MQ API uses __type
 	Message string `json:"message"`
 }
 
 // Error implements the error interface.
-func (e *MQError) Error() string {
+func (e *Error) Error() string {
 	return e.Message
 }
 
