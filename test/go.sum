@@ -104,6 +104,8 @@ github.com/aws/aws-sdk-go-v2/service/rds v1.115.0 h1:oNl6YghOtxu3MiFk1tQ86QlrYMI
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0/go.mod h1:JBRYWpz5oXQtHgQC+X8LX9lh0FBCwRHJlWEIT+TTLaE=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2 h1:zoD/SoiVQi8l8tuQn//VexrXS2yorg/+717JNA4Ble8=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2/go.mod h1:Ll1DCasPTBFtHK5t/U5WIwGIyRuY3xY+x8/LmqIlqpM=
+github.com/aws/aws-sdk-go-v2/service/route53resolver v1.42.2 h1:D54xyxi00fXBCTEzg/2HAZr4YeZS/aoif6FfRsCAFx8=
+github.com/aws/aws-sdk-go-v2/service/route53resolver v1.42.2/go.mod h1:kOKvnZVJ5Lwc0Cv7fDQb0gdKOJC+oRqZYXN5MbdWx54=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0 h1:oeu8VPlOre74lBA/PMhxa5vewaMIMmILM+RraSyB8KA=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0/go.mod h1:5jggDlZ2CLQhwJBiZJb4vfk4f0GxWdEDruWKEJ1xOdo=
 github.com/aws/aws-sdk-go-v2/service/s3control v1.68.1 h1:4QG80z0U97W4dQrZRgZlnMgLq/QC/eZegQct0aIjDso=
@@ -140,15 +142,5 @@ github.com/aws/aws-sdk-go-v2/service/xray v1.36.17 h1:b480fLepDHf9B7FXgcgB7XVDN3
 github.com/aws/aws-sdk-go-v2/service/xray v1.36.17/go.mod h1:ASKVut5pRPVm4bF9/P01ClCthnIopv1PjxWsLOTjKPU=
 github.com/aws/smithy-go v1.24.1 h1:VbyeNfmYkWoxMVpGUAbQumkODcYmfMRfZ8yQiH30SK0=
 github.com/aws/smithy-go v1.24.1/go.mod h1:LEj2LM3rBRQJxPZTB4KuzZkaZYnZPnvgIhb4pu07mx0=
-github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
-github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
-github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/sivchari/golden v0.3.0 h1:WUtMlhvqeH8mXcX4hsZwyfrA5jeNz5F9IL1w+u7Ew7w=
 github.com/sivchari/golden v0.3.0/go.mod h1:gddwjsjxPtLYRCq0M471x9WD9khQWty82Yn/PZ/2I8E=
-github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
-github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
-gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
-gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
-gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

@@ -222,6 +222,10 @@ linters:
       - path: internal/service/sagemaker/types\.go
         linters:
           - tagliatelle
+      # AWS Route 53 Resolver API requires PascalCase JSON field names.
+      - path: internal/service/route53resolver/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

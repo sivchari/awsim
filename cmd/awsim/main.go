@@ -45,6 +45,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/pipes"
 	_ "github.com/sivchari/awsim/internal/service/rds"
 	_ "github.com/sivchari/awsim/internal/service/route53"
+	_ "github.com/sivchari/awsim/internal/service/route53resolver"
 	_ "github.com/sivchari/awsim/internal/service/s3"
 	_ "github.com/sivchari/awsim/internal/service/s3control"
 	_ "github.com/sivchari/awsim/internal/service/s3tables"

@@ -45,6 +45,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17
 	github.com/aws/aws-sdk-go-v2/service/rds v1.115.0
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2
+	github.com/aws/aws-sdk-go-v2/service/route53resolver v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
 	github.com/aws/aws-sdk-go-v2/service/s3control v1.68.1
 	github.com/aws/aws-sdk-go-v2/service/s3tables v1.14.0
@@ -58,8 +59,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.21
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.67.8
 	github.com/aws/aws-sdk-go-v2/service/xray v1.36.17
+	github.com/aws/smithy-go v1.24.1
 	github.com/sivchari/golden v0.3.0
-	github.com/stretchr/testify v1.11.1
 )
 
 require (
@@ -78,10 +79,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.6 // indirect
-	github.com/aws/smithy-go v1.24.1 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/sivchari/awsim => ../
