@@ -66,6 +66,8 @@ github.com/aws/aws-sdk-go-v2/service/emrserverless v1.39.3 h1:VyyYx+0dPDLFPPTvUl
 github.com/aws/aws-sdk-go-v2/service/emrserverless v1.39.3/go.mod h1:JPM46oURtuLCuXENONKSnWfjOtJ8vzkHcoPlloi+eGI=
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18 h1:Zqe/Mbpjy3Vk0IKreW4cdxz2PBb0JNCeMwYAKbuBnvg=
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18/go.mod h1:oGNgLQOntNCt7Tl3d1NQu5QKFxdufg4huUAmyNECPDU=
+github.com/aws/aws-sdk-go-v2/service/finspace v1.33.18 h1:/O9FaWPzNe2KUClT0zcbfctDqt/byKmt9NZAKmuW0x4=
+github.com/aws/aws-sdk-go-v2/service/finspace v1.33.18/go.mod h1:If7C9aBO0LjTzEMOEp+Qh6RUdaJUXE1u2LRWf20yIwA=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9 h1:nFzEdq+y0lvgnSbYtRkgsSDFI7awmCrihWHFxWg8OQ0=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9/go.mod h1:rWQA39HYDLIx/K0Kdk5YXynPju527z3rXHrllkY1uTs=
 github.com/aws/aws-sdk-go-v2/service/forecast v1.41.18 h1:qnTIzASDu7VEzPhA8mH7CnbESv/pnYiIXL8bk3iNwOQ=
