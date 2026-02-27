@@ -22,11 +22,6 @@ func (s *Service) Name() string {
 	return "route53"
 }
 
-// Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Hosted Zones

@@ -26,11 +26,6 @@ func (s *Service) Name() string {
 	return "athena"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the Athena routes.
 // Note: Athena uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
 // so no direct routes are registered here.

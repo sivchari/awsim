@@ -20,11 +20,6 @@ func (s *Service) Name() string {
 	return "globalaccelerator"
 }
 
-// Prefix returns the URL prefix for routing.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // TargetPrefix returns the AWS JSON target prefix.
 func (s *Service) TargetPrefix() string {
 	return "GlobalAccelerator_V20180706"

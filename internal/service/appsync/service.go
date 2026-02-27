@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "appsync"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/appsync"
-}
-
 // RegisterRoutes registers the AppSync routes.
 // AppSync uses REST API protocol with /v1 prefix.
 // Note: Routes use /appsync prefix for internal routing to avoid S3 conflicts.

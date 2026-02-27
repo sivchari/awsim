@@ -25,12 +25,6 @@ func (s *Service) Name() string {
 	return "s3"
 }
 
-// Prefix returns the URL prefix for the service.
-// S3 uses path-style URLs, so no prefix is needed.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the S3 routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Bucket operations

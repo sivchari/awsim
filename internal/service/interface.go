@@ -10,10 +10,6 @@ type Service interface {
 	// Name returns the service name (e.g., "s3", "sqs", "dynamodb").
 	Name() string
 
-	// Prefix returns the URL prefix for path-based routing (e.g., "/s3").
-	// Returns empty string for host-based routing.
-	Prefix() string
-
 	// RegisterRoutes registers the service's routes with the router.
 	RegisterRoutes(r Router)
 }

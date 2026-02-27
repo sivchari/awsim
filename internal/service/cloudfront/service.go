@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "cloudfront"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the CloudFront routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Distribution operations.

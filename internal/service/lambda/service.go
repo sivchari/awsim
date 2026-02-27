@@ -29,11 +29,6 @@ func (s *Service) Name() string {
 	return "lambda"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/lambda"
-}
-
 // RegisterRoutes registers the Lambda routes.
 // Note: Routes use /lambda prefix to avoid conflicts with S3 wildcard routes.
 func (s *Service) RegisterRoutes(r service.Router) {

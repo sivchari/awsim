@@ -29,11 +29,6 @@ func (s *Service) Name() string {
 	return "sqs"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the SQS routes.
 // Note: SQS uses AWS JSON 1.0 protocol via the JSONProtocolService interface,
 // so no direct routes are registered here.

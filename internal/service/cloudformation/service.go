@@ -27,11 +27,6 @@ func (s *Service) Name() string {
 	return "cloudformation"
 }
 
-// Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // TargetPrefix returns the X-Amz-Target prefix for the service.
 func (s *Service) TargetPrefix() string {
 	return "CloudFormation"

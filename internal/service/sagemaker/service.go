@@ -26,11 +26,6 @@ func (s *Service) Name() string {
 	return "sagemaker"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the SageMaker routes.
 // Note: SageMaker uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
 // so no direct routes are registered here.

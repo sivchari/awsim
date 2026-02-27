@@ -28,11 +28,6 @@ func (s *Service) Name() string {
 	return "ds"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the Directory Service routes.
 // Directory Service uses AWS JSON 1.1 protocol with X-Amz-Target header.
 func (s *Service) RegisterRoutes(_ service.Router) {

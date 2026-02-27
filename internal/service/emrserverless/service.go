@@ -25,12 +25,6 @@ func (s *Service) Name() string {
 	return "emrserverless"
 }
 
-// Prefix returns the URL prefix for the service.
-// EMR Serverless uses /applications path without a service-specific prefix.
-func (s *Service) Prefix() string {
-	return "/applications"
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Application operations.

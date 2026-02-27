@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "sesv2"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/ses"
-}
-
 // RegisterRoutes registers the SES v2 routes.
 // SES v2 uses REST API with path-based routing.
 func (s *Service) RegisterRoutes(r service.Router) {

@@ -22,11 +22,6 @@ func (s *Service) Name() string {
 	return "kinesis"
 }
 
-// Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // TargetPrefix returns the X-Amz-Target prefix.
 func (s *Service) TargetPrefix() string {
 	return "Kinesis_20131202"

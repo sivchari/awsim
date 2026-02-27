@@ -18,11 +18,6 @@ func (s *Service) Name() string {
 	return "organizations"
 }
 
-// Prefix returns the URL prefix.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // TargetPrefix returns the target prefix for AWS JSON protocol.
 func (s *Service) TargetPrefix() string {
 	return "AWSOrganizationsV20161128"

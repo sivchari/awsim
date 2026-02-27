@@ -26,11 +26,6 @@ func (s *Service) Name() string {
 	return "elasticache"
 }
 
-// Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers routes with the router.
 // ElastiCache uses Query protocol, so routes are registered via DispatchAction.
 func (s *Service) RegisterRoutes(_ service.Router) {

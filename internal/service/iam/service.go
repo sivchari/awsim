@@ -62,11 +62,6 @@ func (s *Service) Name() string {
 	return "iam"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/iam"
-}
-
 // RegisterRoutes registers the IAM routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// IAM uses a single endpoint with Action parameter.

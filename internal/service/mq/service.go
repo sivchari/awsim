@@ -27,11 +27,6 @@ func (s *Service) Name() string {
 	return "mq"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the MQ routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Broker operations

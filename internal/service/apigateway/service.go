@@ -26,11 +26,6 @@ func (s *Service) Name() string {
 	return "apigateway"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/apigateway"
-}
-
 // RegisterRoutes registers the API Gateway routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// REST API routes.

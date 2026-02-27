@@ -23,11 +23,6 @@ func (s *Service) Name() string {
 	return "appmesh"
 }
 
-// Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return "/v20190125"
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Mesh operations.

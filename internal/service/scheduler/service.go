@@ -24,12 +24,6 @@ func (s *Service) Name() string {
 	return "scheduler"
 }
 
-// Prefix returns the URL prefix for the service.
-// Note: Scheduler uses /scheduler prefix to avoid conflicts with S3 wildcard routes.
-func (s *Service) Prefix() string {
-	return "/scheduler"
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Schedule operations

@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "pipes"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the Pipes routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Pipe CRUD operations.

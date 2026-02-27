@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "glue"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the Glue routes.
 // Note: Glue uses AWS JSON 1.1 protocol via the JSONProtocolService interface,
 // so no direct routes are registered here.

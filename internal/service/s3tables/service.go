@@ -24,13 +24,6 @@ func (s *Service) Name() string {
 	return "s3tables"
 }
 
-// Prefix returns the URL prefix for the service.
-// S3 Tables routes don't have a common prefix, so we return empty.
-// The router handles S3 Tables paths (/buckets, /namespaces, /tables, /get-table) explicitly.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Table bucket operations

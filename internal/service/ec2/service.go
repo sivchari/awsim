@@ -27,9 +27,6 @@ func (s *Service) Name() string {
 }
 
 // Prefix returns the URL prefix for the service.
-func (s *Service) Prefix() string {
-	return ""
-}
 
 // RegisterRoutes registers routes with the router.
 // EC2 uses Query protocol, so routes are registered via DispatchAction.

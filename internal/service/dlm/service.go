@@ -24,12 +24,6 @@ func (s *Service) Name() string {
 	return "dlm"
 }
 
-// Prefix returns the URL prefix for the service.
-// Note: DLM uses /dlm prefix to avoid conflicts with S3 wildcard routes.
-func (s *Service) Prefix() string {
-	return "/dlm"
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	r.HandleFunc("POST", "/dlm/policies", s.CreateLifecyclePolicy)

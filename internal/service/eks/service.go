@@ -26,12 +26,6 @@ func (s *Service) Name() string {
 	return "eks"
 }
 
-// Prefix returns the URL prefix for the service.
-// Note: EKS uses /eks prefix to avoid conflicts with S3 wildcard routes.
-func (s *Service) Prefix() string {
-	return "/eks"
-}
-
 // RegisterRoutes registers the service routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// Cluster operations

@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "xray"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return "/xray"
-}
-
 // RegisterRoutes registers the X-Ray routes.
 // X-Ray uses REST JSON protocol.
 func (s *Service) RegisterRoutes(r service.Router) {

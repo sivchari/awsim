@@ -21,11 +21,6 @@ func (s *Service) Name() string {
 	return "kms"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // TargetPrefix returns the X-Amz-Target prefix for JSON protocol dispatch.
 func (s *Service) TargetPrefix() string {
 	return "TrentService"

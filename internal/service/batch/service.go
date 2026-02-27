@@ -25,11 +25,6 @@ func (s *Service) Name() string {
 	return "batch"
 }
 
-// Prefix returns the URL prefix for this service.
-func (s *Service) Prefix() string {
-	return ""
-}
-
 // RegisterRoutes registers the Batch routes.
 // Batch uses REST JSON protocol with paths like /v1/createcomputeenvironment.
 func (s *Service) RegisterRoutes(r service.Router) {
