@@ -1,0 +1,10 @@
+{
+  "CreationTimestamp": "2026-02-27T16:08:41Z",
+  "Description": null,
+  "EnvironmentArn": "arn:aws:finspace:us-east-1:123456789012:kxEnvironment/83b4cc6d-6ea9-4b52-8a78-5fb94ca9aefd",
+  "EnvironmentId": "83b4cc6d-6ea9-4b52-8a78-5fb94ca9aefd",
+  "KmsKeyId": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+  "Name": "test-environment",
+  "Status": "CREATED",
+  "ResultMetadata": {}
+}

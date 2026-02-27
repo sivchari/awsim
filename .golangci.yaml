@@ -230,6 +230,10 @@ linters:
       - path: internal/service/securitylake/types\.go
         linters:
           - tagliatelle
+      # AWS FinSpace API requires specific JSON field names.
+      - path: internal/service/finspace/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
