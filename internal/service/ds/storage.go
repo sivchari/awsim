@@ -1,0 +1,277 @@
+package ds
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Storage defines the Directory Service storage interface.
+type Storage interface {
+	CreateDirectory(ctx context.Context, req *CreateDirectoryRequest) (*Directory, error)
+	DescribeDirectories(ctx context.Context, directoryIDs []string, limit int, nextToken string) ([]*Directory, string, error)
+	DeleteDirectory(ctx context.Context, directoryID string) error
+	CreateSnapshot(ctx context.Context, directoryID, name string) (*Snapshot, error)
+	DescribeSnapshots(ctx context.Context, directoryID string, snapshotIDs []string, limit int, nextToken string) ([]*Snapshot, string, error)
+	DeleteSnapshot(ctx context.Context, snapshotID string) error
+}
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu          sync.RWMutex
+	directories map[string]*Directory
+	snapshots   map[string]*Snapshot
+	region      string
+	accountID   string
+}
+
+// NewMemoryStorage creates a new in-memory storage.
+func NewMemoryStorage() *MemoryStorage {
+	return &MemoryStorage{
+		directories: make(map[string]*Directory),
+		snapshots:   make(map[string]*Snapshot),
+		region:      "us-east-1",
+		accountID:   "123456789012",
+	}
+}
+
+// CreateDirectory creates a new directory.
+func (s *MemoryStorage) CreateDirectory(_ context.Context, req *CreateDirectoryRequest) (*Directory, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check for duplicate directory name.
+	for _, d := range s.directories {
+		if d.Name == req.Name {
+			return nil, &Error{
+				Type:    ErrEntityAlreadyExists,
+				Message: fmt.Sprintf("Directory with name %s already exists", req.Name),
+			}
+		}
+	}
+
+	directoryID := "d-" + uuid.New().String()[:10]
+
+	var vpcSettings *DirectoryVPCSettings
+	if req.VPCSettings != nil {
+		vpcSettings = &DirectoryVPCSettings{
+			VPCID:             req.VPCSettings.VPCID,
+			SubnetIDs:         req.VPCSettings.SubnetIDs,
+			SecurityGroupID:   "sg-" + uuid.New().String()[:8],
+			AvailabilityZones: []string{"us-east-1a", "us-east-1b"},
+		}
+	}
+
+	shortName := req.ShortName
+	if shortName == "" {
+		shortName = req.Name
+	}
+
+	now := time.Now().UTC()
+	directory := &Directory{
+		DirectoryID:        directoryID,
+		Name:               req.Name,
+		ShortName:          shortName,
+		Password:           req.Password,
+		Description:        req.Description,
+		Size:               req.Size,
+		Type:               DirectoryTypeSimpleAD,
+		Stage:              DirectoryStateActive,
+		DNSIPAddrs:         []string{"10.0.0.1", "10.0.0.2"},
+		SSOEnabled:         false,
+		DesiredNumberOfDCs: 2,
+		VPCSettings:        vpcSettings,
+		LaunchTime:         now,
+		StageLastUpdatedAt: now,
+	}
+
+	s.directories[directoryID] = directory
+
+	return directory, nil
+}
+
+// DescribeDirectories returns directories matching the given IDs.
+func (s *MemoryStorage) DescribeDirectories(_ context.Context, directoryIDs []string, limit int, nextToken string) ([]*Directory, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit == 0 {
+		limit = 100
+	}
+
+	var directories []*Directory
+
+	if len(directoryIDs) > 0 {
+		// Return specific directories.
+		for _, id := range directoryIDs {
+			if d, exists := s.directories[id]; exists {
+				directories = append(directories, d)
+			}
+		}
+	} else {
+		// Return all directories.
+		for _, d := range s.directories {
+			directories = append(directories, d)
+		}
+	}
+
+	// Sort by directory ID for consistent pagination.
+	sort.Slice(directories, func(i, j int) bool {
+		return directories[i].DirectoryID < directories[j].DirectoryID
+	})
+
+	// Handle pagination.
+	start := 0
+
+	if nextToken != "" {
+		for i, d := range directories {
+			if d.DirectoryID == nextToken {
+				start = i
+
+				break
+			}
+		}
+	}
+
+	end := min(start+limit, len(directories))
+	result := directories[start:end]
+	newNextToken := ""
+
+	if end < len(directories) {
+		newNextToken = directories[end].DirectoryID
+	}
+
+	return result, newNextToken, nil
+}
+
+// DeleteDirectory deletes a directory.
+func (s *MemoryStorage) DeleteDirectory(_ context.Context, directoryID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.directories[directoryID]; !exists {
+		return &Error{
+			Type:    ErrEntityDoesNotExist,
+			Message: fmt.Sprintf("Directory %s does not exist", directoryID),
+		}
+	}
+
+	delete(s.directories, directoryID)
+
+	return nil
+}
+
+// CreateSnapshot creates a new snapshot for a directory.
+func (s *MemoryStorage) CreateSnapshot(_ context.Context, directoryID, name string) (*Snapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.directories[directoryID]; !exists {
+		return nil, &Error{
+			Type:    ErrEntityDoesNotExist,
+			Message: fmt.Sprintf("Directory %s does not exist", directoryID),
+		}
+	}
+
+	snapshotID := "s-" + uuid.New().String()[:10]
+	now := time.Now().UTC()
+
+	snapshot := &Snapshot{
+		SnapshotID:  snapshotID,
+		DirectoryID: directoryID,
+		Name:        name,
+		Type:        SnapshotTypeManual,
+		Status:      SnapshotStateCompleted,
+		StartTime:   now,
+	}
+
+	s.snapshots[snapshotID] = snapshot
+
+	return snapshot, nil
+}
+
+// DescribeSnapshots returns snapshots matching the given criteria.
+func (s *MemoryStorage) DescribeSnapshots(_ context.Context, directoryID string, snapshotIDs []string, limit int, nextToken string) ([]*Snapshot, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit == 0 {
+		limit = 100
+	}
+
+	var snapshots []*Snapshot
+
+	if len(snapshotIDs) > 0 {
+		// Return specific snapshots.
+		for _, id := range snapshotIDs {
+			snap, exists := s.snapshots[id]
+			if !exists {
+				continue
+			}
+
+			if directoryID != "" && snap.DirectoryID != directoryID {
+				continue
+			}
+
+			snapshots = append(snapshots, snap)
+		}
+	} else {
+		// Return all snapshots.
+		for _, snap := range s.snapshots {
+			if directoryID != "" && snap.DirectoryID != directoryID {
+				continue
+			}
+
+			snapshots = append(snapshots, snap)
+		}
+	}
+
+	// Sort by snapshot ID for consistent pagination.
+	sort.Slice(snapshots, func(i, j int) bool {
+		return snapshots[i].SnapshotID < snapshots[j].SnapshotID
+	})
+
+	// Handle pagination.
+	start := 0
+
+	if nextToken != "" {
+		for i, snap := range snapshots {
+			if snap.SnapshotID == nextToken {
+				start = i
+
+				break
+			}
+		}
+	}
+
+	end := min(start+limit, len(snapshots))
+	result := snapshots[start:end]
+	newNextToken := ""
+
+	if end < len(snapshots) {
+		newNextToken = snapshots[end].SnapshotID
+	}
+
+	return result, newNextToken, nil
+}
+
+// DeleteSnapshot deletes a snapshot.
+func (s *MemoryStorage) DeleteSnapshot(_ context.Context, snapshotID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.snapshots[snapshotID]; !exists {
+		return &Error{
+			Type:    ErrEntityDoesNotExist,
+			Message: fmt.Sprintf("Snapshot %s does not exist", snapshotID),
+		}
+	}
+
+	delete(s.snapshots, snapshotID)
+
+	return nil
+}
