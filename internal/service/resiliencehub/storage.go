@@ -190,6 +190,7 @@ func (s *MemoryStorage) ListApps(req *ListAppsRequest) ([]*AppSummary, string, e
 		if req.Name != "" && app.Name != req.Name {
 			continue
 		}
+
 		if req.AppARN != "" && app.AppARN != req.AppARN {
 			continue
 		}
@@ -285,15 +286,19 @@ func (s *MemoryStorage) UpdateResiliencyPolicy(req *UpdateResiliencyPolicyReques
 	if req.DataLocationConstraint != "" {
 		policy.DataLocationConstraint = req.DataLocationConstraint
 	}
+
 	if req.Policy != nil {
 		policy.Policy = req.Policy
 	}
+
 	if req.PolicyDescription != "" {
 		policy.PolicyDescription = req.PolicyDescription
 	}
+
 	if req.PolicyName != "" {
 		policy.PolicyName = req.PolicyName
 	}
+
 	if req.Tier != "" {
 		policy.Tier = req.Tier
 	}
