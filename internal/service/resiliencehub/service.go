@@ -29,29 +29,29 @@ func (s *Service) Name() string {
 // RegisterRoutes registers the Resilience Hub routes.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// App operations
-	r.Handle("POST", "/apps", s.CreateApp)
-	r.Handle("GET", "/apps/{appArn}", s.DescribeApp)
-	r.Handle("POST", "/apps/{appArn}", s.UpdateApp)
-	r.Handle("DELETE", "/apps/{appArn}", s.DeleteApp)
-	r.Handle("GET", "/apps", s.ListApps)
+	r.Handle("POST", "/resiliencehub/apps", s.CreateApp)
+	r.Handle("GET", "/resiliencehub/apps/{appArn}", s.DescribeApp)
+	r.Handle("POST", "/resiliencehub/apps/{appArn}", s.UpdateApp)
+	r.Handle("DELETE", "/resiliencehub/apps/{appArn}", s.DeleteApp)
+	r.Handle("GET", "/resiliencehub/apps", s.ListApps)
 
 	// ResiliencyPolicy operations
-	r.Handle("POST", "/resiliency-policies", s.CreateResiliencyPolicy)
-	r.Handle("GET", "/resiliency-policies/{policyArn}", s.DescribeResiliencyPolicy)
-	r.Handle("POST", "/resiliency-policies/{policyArn}", s.UpdateResiliencyPolicy)
-	r.Handle("DELETE", "/resiliency-policies/{policyArn}", s.DeleteResiliencyPolicy)
-	r.Handle("GET", "/resiliency-policies", s.ListResiliencyPolicies)
+	r.Handle("POST", "/resiliencehub/resiliency-policies", s.CreateResiliencyPolicy)
+	r.Handle("GET", "/resiliencehub/resiliency-policies/{policyArn}", s.DescribeResiliencyPolicy)
+	r.Handle("POST", "/resiliencehub/resiliency-policies/{policyArn}", s.UpdateResiliencyPolicy)
+	r.Handle("DELETE", "/resiliencehub/resiliency-policies/{policyArn}", s.DeleteResiliencyPolicy)
+	r.Handle("GET", "/resiliencehub/resiliency-policies", s.ListResiliencyPolicies)
 
 	// Assessment operations
-	r.Handle("POST", "/app-assessments", s.StartAppAssessment)
-	r.Handle("GET", "/app-assessments/{assessmentArn}", s.DescribeAppAssessment)
-	r.Handle("DELETE", "/app-assessments/{assessmentArn}", s.DeleteAppAssessment)
-	r.Handle("GET", "/app-assessments", s.ListAppAssessments)
+	r.Handle("POST", "/resiliencehub/app-assessments", s.StartAppAssessment)
+	r.Handle("GET", "/resiliencehub/app-assessments/{assessmentArn}", s.DescribeAppAssessment)
+	r.Handle("DELETE", "/resiliencehub/app-assessments/{assessmentArn}", s.DeleteAppAssessment)
+	r.Handle("GET", "/resiliencehub/app-assessments", s.ListAppAssessments)
 
 	// Tag operations
-	r.Handle("POST", "/tags/{resourceArn}", s.TagResource)
-	r.Handle("DELETE", "/tags/{resourceArn}", s.UntagResource)
-	r.Handle("GET", "/tags/{resourceArn}", s.ListTagsForResource)
+	r.Handle("POST", "/resiliencehub/tags/{resourceArn}", s.TagResource)
+	r.Handle("DELETE", "/resiliencehub/tags/{resourceArn}", s.UntagResource)
+	r.Handle("GET", "/resiliencehub/tags/{resourceArn}", s.ListTagsForResource)
 }
 
 // Prefix returns the URL prefix for Resilience Hub.

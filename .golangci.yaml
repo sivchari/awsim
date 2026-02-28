@@ -238,6 +238,10 @@ linters:
       - path: internal/service/comprehend/types\.go
         linters:
           - tagliatelle
+      # AWS Resilience Hub API requires specific JSON field names.
+      - path: internal/service/resiliencehub/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

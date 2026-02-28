@@ -35,7 +35,7 @@ func (s *Service) CreateApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &CreateAppResponse{App: app})
+	writeJSON(w, &CreateAppResponse{App: app})
 }
 
 // DescribeApp handles the DescribeApp API.
@@ -57,7 +57,7 @@ func (s *Service) DescribeApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DescribeAppResponse{App: app})
+	writeJSON(w, &DescribeAppResponse{App: app})
 }
 
 // UpdateApp handles the UpdateApp API.
@@ -88,7 +88,7 @@ func (s *Service) UpdateApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &UpdateAppResponse{App: app})
+	writeJSON(w, &UpdateAppResponse{App: app})
 }
 
 // DeleteApp handles the DeleteApp API.
@@ -109,7 +109,7 @@ func (s *Service) DeleteApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DeleteAppResponse{AppARN: appARN})
+	writeJSON(w, &DeleteAppResponse{AppARN: appARN})
 }
 
 // ListApps handles the ListApps API.
@@ -126,7 +126,7 @@ func (s *Service) ListApps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListAppsResponse{
+	writeJSON(w, &ListAppsResponse{
 		AppSummaries: apps,
 		NextToken:    nextToken,
 	})
@@ -169,7 +169,7 @@ func (s *Service) CreateResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &CreateResiliencyPolicyResponse{Policy: policy})
+	writeJSON(w, &CreateResiliencyPolicyResponse{Policy: policy})
 }
 
 // DescribeResiliencyPolicy handles the DescribeResiliencyPolicy API.
@@ -191,7 +191,7 @@ func (s *Service) DescribeResiliencyPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DescribeResiliencyPolicyResponse{Policy: policy})
+	writeJSON(w, &DescribeResiliencyPolicyResponse{Policy: policy})
 }
 
 // UpdateResiliencyPolicy handles the UpdateResiliencyPolicy API.
@@ -222,7 +222,7 @@ func (s *Service) UpdateResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &UpdateResiliencyPolicyResponse{Policy: policy})
+	writeJSON(w, &UpdateResiliencyPolicyResponse{Policy: policy})
 }
 
 // DeleteResiliencyPolicy handles the DeleteResiliencyPolicy API.
@@ -243,7 +243,7 @@ func (s *Service) DeleteResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DeleteResiliencyPolicyResponse{PolicyARN: policyARN})
+	writeJSON(w, &DeleteResiliencyPolicyResponse{PolicyARN: policyARN})
 }
 
 // ListResiliencyPolicies handles the ListResiliencyPolicies API.
@@ -259,7 +259,7 @@ func (s *Service) ListResiliencyPolicies(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListResiliencyPoliciesResponse{
+	writeJSON(w, &ListResiliencyPoliciesResponse{
 		ResiliencyPolicies: policies,
 		NextToken:          nextToken,
 	})
@@ -311,7 +311,7 @@ func (s *Service) StartAppAssessment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &StartAppAssessmentResponse{Assessment: assessment})
+	writeJSON(w, &StartAppAssessmentResponse{Assessment: assessment})
 }
 
 // DescribeAppAssessment handles the DescribeAppAssessment API.
@@ -333,7 +333,7 @@ func (s *Service) DescribeAppAssessment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DescribeAppAssessmentResponse{Assessment: assessment})
+	writeJSON(w, &DescribeAppAssessmentResponse{Assessment: assessment})
 }
 
 // DeleteAppAssessment handles the DeleteAppAssessment API.
@@ -354,7 +354,7 @@ func (s *Service) DeleteAppAssessment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DeleteAppAssessmentResponse{
+	writeJSON(w, &DeleteAppAssessmentResponse{
 		AssessmentARN:    assessmentARN,
 		AssessmentStatus: "Success",
 	})
@@ -377,7 +377,7 @@ func (s *Service) ListAppAssessments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListAppAssessmentsResponse{
+	writeJSON(w, &ListAppAssessmentsResponse{
 		AssessmentSummaries: assessments,
 		NextToken:           nextToken,
 	})
@@ -419,7 +419,7 @@ func (s *Service) TagResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &TagResourceResponse{})
+	writeJSON(w, &TagResourceResponse{})
 }
 
 // UntagResource handles the UntagResource API.
@@ -442,7 +442,7 @@ func (s *Service) UntagResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &UntagResourceResponse{})
+	writeJSON(w, &UntagResourceResponse{})
 }
 
 // ListTagsForResource handles the ListTagsForResource API.
@@ -472,13 +472,13 @@ func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &ListTagsForResourceResponse{Tags: tags})
+	writeJSON(w, &ListTagsForResourceResponse{Tags: tags})
 }
 
 // writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, statusCode int, v any) {
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 

@@ -136,18 +136,23 @@ func (s *MemoryStorage) UpdateApp(req *UpdateAppRequest) (*App, error) {
 	if req.AssessmentSchedule != "" {
 		app.AssessmentSchedule = req.AssessmentSchedule
 	}
+
 	if req.Description != "" {
 		app.Description = req.Description
 	}
+
 	if req.EventSubscriptions != nil {
 		app.EventSubscriptions = req.EventSubscriptions
 	}
+
 	if req.PermissionModel != nil {
 		app.PermissionModel = req.PermissionModel
 	}
+
 	if req.PolicyARN != "" {
 		app.PolicyARN = req.PolicyARN
 	}
+
 	if req.ClearResiliencyPolicyARN {
 		app.PolicyARN = ""
 	}
@@ -338,7 +343,6 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Verify app exists
 	app, ok := s.apps[req.AppARN]
 	if !ok {
 		return nil, &Error{
@@ -347,51 +351,25 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 		}
 	}
 
-	assessmentID := uuid.New().String()
-	assessmentARN := fmt.Sprintf("arn:aws:resiliencehub:us-east-1:123456789012:app-assessment/%s", assessmentID)
+	assessmentARN := fmt.Sprintf("arn:aws:resiliencehub:us-east-1:123456789012:app-assessment/%s", uuid.New().String())
 	now := float64(time.Now().Unix())
 
-	// Get associated policy if exists
 	var policy *ResiliencyPolicy
 	if app.PolicyARN != "" {
 		policy = s.policies[app.PolicyARN]
 	}
 
 	assessment := &AppAssessment{
-		AppARN:           req.AppARN,
-		AppVersion:       req.AppVersion,
-		AssessmentARN:    assessmentARN,
-		AssessmentName:   req.AssessmentName,
-		AssessmentStatus: "Success",
-		ComplianceStatus: "PolicyBreached",
-		Compliance: map[string]*DisruptionCompliance{
-			"Software": {
-				ComplianceStatus:    "PolicyBreached",
-				CurrentRpoInSecs:    86400,
-				CurrentRtoInSecs:    86400,
-				AchievableRpoInSecs: 3600,
-				AchievableRtoInSecs: 3600,
-			},
-			"Hardware": {
-				ComplianceStatus:    "PolicyMet",
-				CurrentRpoInSecs:    3600,
-				CurrentRtoInSecs:    3600,
-				AchievableRpoInSecs: 3600,
-				AchievableRtoInSecs: 3600,
-			},
-		},
-		EndTime:   now,
-		Invoker:   "User",
-		Policy:    policy,
-		StartTime: now,
-		Tags:      req.Tags,
-		ResiliencyScore: &ResiliencyScore{
-			Score: 75.0,
-			DisruptionScore: map[string]float64{
-				"Software": 50.0,
-				"Hardware": 100.0,
-			},
-		},
+		AppARN: req.AppARN, AppVersion: req.AppVersion,
+		AssessmentARN: assessmentARN, AssessmentName: req.AssessmentName,
+		AssessmentStatus: "Success", ComplianceStatus: "PolicyBreached",
+		Compliance:      defaultCompliance(),
+		EndTime:         now,
+		Invoker:         "User",
+		Policy:          policy,
+		StartTime:       now,
+		Tags:            req.Tags,
+		ResiliencyScore: defaultResiliencyScore(),
 	}
 
 	s.assessments[assessmentARN] = assessment
@@ -401,6 +379,19 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 	}
 
 	return assessment, nil
+}
+
+// defaultCompliance returns default compliance data for assessments.
+func defaultCompliance() map[string]*DisruptionCompliance {
+	return map[string]*DisruptionCompliance{
+		"Software": {ComplianceStatus: "PolicyBreached", CurrentRpoInSecs: 86400, CurrentRtoInSecs: 86400, AchievableRpoInSecs: 3600, AchievableRtoInSecs: 3600},
+		"Hardware": {ComplianceStatus: "PolicyMet", CurrentRpoInSecs: 3600, CurrentRtoInSecs: 3600, AchievableRpoInSecs: 3600, AchievableRtoInSecs: 3600},
+	}
+}
+
+// defaultResiliencyScore returns default resiliency score for assessments.
+func defaultResiliencyScore() *ResiliencyScore {
+	return &ResiliencyScore{Score: 75.0, DisruptionScore: map[string]float64{"Software": 50.0, "Hardware": 100.0}}
 }
 
 // DescribeAppAssessment retrieves an assessment by ARN.
