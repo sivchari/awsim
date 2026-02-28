@@ -1,0 +1,567 @@
+package resiliencehub
+
+import (
+	"fmt"
+	"maps"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	errResourceNotFound = "ResourceNotFoundException"
+	errConflict         = "ConflictException"
+)
+
+// Storage defines the interface for Resilience Hub data storage.
+type Storage interface {
+	// App operations
+	CreateApp(req *CreateAppRequest) (*App, error)
+	DescribeApp(appARN string) (*App, error)
+	UpdateApp(req *UpdateAppRequest) (*App, error)
+	DeleteApp(appARN string) error
+	ListApps(req *ListAppsRequest) ([]*AppSummary, string, error)
+
+	// ResiliencyPolicy operations
+	CreateResiliencyPolicy(req *CreateResiliencyPolicyRequest) (*ResiliencyPolicy, error)
+	DescribeResiliencyPolicy(policyARN string) (*ResiliencyPolicy, error)
+	UpdateResiliencyPolicy(req *UpdateResiliencyPolicyRequest) (*ResiliencyPolicy, error)
+	DeleteResiliencyPolicy(policyARN string) error
+	ListResiliencyPolicies(req *ListResiliencyPoliciesRequest) ([]*ResiliencyPolicy, string, error)
+
+	// Assessment operations
+	StartAppAssessment(req *StartAppAssessmentRequest) (*AppAssessment, error)
+	DescribeAppAssessment(assessmentARN string) (*AppAssessment, error)
+	DeleteAppAssessment(assessmentARN string) error
+	ListAppAssessments(req *ListAppAssessmentsRequest) ([]*AppAssessmentSummary, string, error)
+
+	// Tag operations
+	TagResource(resourceARN string, tags map[string]string) error
+	UntagResource(resourceARN string, tagKeys []string) error
+	ListTagsForResource(resourceARN string) (map[string]string, error)
+}
+
+// MemoryStorage provides an in-memory implementation of Storage.
+type MemoryStorage struct {
+	mu          sync.RWMutex
+	apps        map[string]*App
+	policies    map[string]*ResiliencyPolicy
+	assessments map[string]*AppAssessment
+	tags        map[string]map[string]string
+}
+
+// NewMemoryStorage creates a new MemoryStorage.
+func NewMemoryStorage() *MemoryStorage {
+	return &MemoryStorage{
+		apps:        make(map[string]*App),
+		policies:    make(map[string]*ResiliencyPolicy),
+		assessments: make(map[string]*AppAssessment),
+		tags:        make(map[string]map[string]string),
+	}
+}
+
+// CreateApp creates a new application.
+func (s *MemoryStorage) CreateApp(req *CreateAppRequest) (*App, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check for duplicate name
+	for _, app := range s.apps {
+		if app.Name == req.Name {
+			return nil, &Error{
+				Code:    errConflict,
+				Message: fmt.Sprintf("App with name %s already exists", req.Name),
+			}
+		}
+	}
+
+	appID := uuid.New().String()
+	appARN := fmt.Sprintf("arn:aws:resiliencehub:us-east-1:123456789012:app/%s", appID)
+	now := float64(time.Now().Unix())
+
+	app := &App{
+		AppARN:             appARN,
+		AssessmentSchedule: req.AssessmentSchedule,
+		ComplianceStatus:   "NotAssessed",
+		CreationTime:       now,
+		Description:        req.Description,
+		DriftStatus:        "NotChecked",
+		EventSubscriptions: req.EventSubscriptions,
+		Name:               req.Name,
+		PermissionModel:    req.PermissionModel,
+		PolicyARN:          req.PolicyARN,
+		Status:             "Active",
+		Tags:               req.Tags,
+	}
+
+	s.apps[appARN] = app
+
+	if req.Tags != nil {
+		s.tags[appARN] = req.Tags
+	}
+
+	return app, nil
+}
+
+// DescribeApp retrieves an application by ARN.
+func (s *MemoryStorage) DescribeApp(appARN string) (*App, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	app, ok := s.apps[appARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("App not found: %s", appARN),
+		}
+	}
+
+	return app, nil
+}
+
+// UpdateApp updates an existing application.
+func (s *MemoryStorage) UpdateApp(req *UpdateAppRequest) (*App, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	app, ok := s.apps[req.AppARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("App not found: %s", req.AppARN),
+		}
+	}
+
+	if req.AssessmentSchedule != "" {
+		app.AssessmentSchedule = req.AssessmentSchedule
+	}
+	if req.Description != "" {
+		app.Description = req.Description
+	}
+	if req.EventSubscriptions != nil {
+		app.EventSubscriptions = req.EventSubscriptions
+	}
+	if req.PermissionModel != nil {
+		app.PermissionModel = req.PermissionModel
+	}
+	if req.PolicyARN != "" {
+		app.PolicyARN = req.PolicyARN
+	}
+	if req.ClearResiliencyPolicyARN {
+		app.PolicyARN = ""
+	}
+
+	return app, nil
+}
+
+// DeleteApp deletes an application.
+func (s *MemoryStorage) DeleteApp(appARN string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.apps[appARN]; !ok {
+		return &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("App not found: %s", appARN),
+		}
+	}
+
+	delete(s.apps, appARN)
+	delete(s.tags, appARN)
+
+	return nil
+}
+
+// ListApps lists all applications.
+func (s *MemoryStorage) ListApps(req *ListAppsRequest) ([]*AppSummary, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	summaries := make([]*AppSummary, 0, len(s.apps))
+
+	for _, app := range s.apps {
+		// Apply filters
+		if req.Name != "" && app.Name != req.Name {
+			continue
+		}
+		if req.AppARN != "" && app.AppARN != req.AppARN {
+			continue
+		}
+
+		summary := &AppSummary{
+			AppARN:                    app.AppARN,
+			AssessmentSchedule:        app.AssessmentSchedule,
+			ComplianceStatus:          app.ComplianceStatus,
+			CreationTime:              app.CreationTime,
+			Description:               app.Description,
+			DriftStatus:               app.DriftStatus,
+			LastAppComplianceEvalTime: app.LastAppComplianceEvalTime,
+			Name:                      app.Name,
+			ResiliencyScore:           app.ResiliencyScore,
+			RpoInSecs:                 app.RpoInSecs,
+			RtoInSecs:                 app.RtoInSecs,
+			Status:                    app.Status,
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, "", nil
+}
+
+// CreateResiliencyPolicy creates a new resiliency policy.
+func (s *MemoryStorage) CreateResiliencyPolicy(req *CreateResiliencyPolicyRequest) (*ResiliencyPolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check for duplicate name
+	for _, policy := range s.policies {
+		if policy.PolicyName == req.PolicyName {
+			return nil, &Error{
+				Code:    errConflict,
+				Message: fmt.Sprintf("Policy with name %s already exists", req.PolicyName),
+			}
+		}
+	}
+
+	policyID := uuid.New().String()
+	policyARN := fmt.Sprintf("arn:aws:resiliencehub:us-east-1:123456789012:resiliency-policy/%s", policyID)
+	now := float64(time.Now().Unix())
+
+	policy := &ResiliencyPolicy{
+		CreationTime:           now,
+		DataLocationConstraint: req.DataLocationConstraint,
+		Policy:                 req.Policy,
+		PolicyARN:              policyARN,
+		PolicyDescription:      req.PolicyDescription,
+		PolicyName:             req.PolicyName,
+		Tags:                   req.Tags,
+		Tier:                   req.Tier,
+	}
+
+	s.policies[policyARN] = policy
+
+	if req.Tags != nil {
+		s.tags[policyARN] = req.Tags
+	}
+
+	return policy, nil
+}
+
+// DescribeResiliencyPolicy retrieves a policy by ARN.
+func (s *MemoryStorage) DescribeResiliencyPolicy(policyARN string) (*ResiliencyPolicy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	policy, ok := s.policies[policyARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Policy not found: %s", policyARN),
+		}
+	}
+
+	return policy, nil
+}
+
+// UpdateResiliencyPolicy updates an existing policy.
+func (s *MemoryStorage) UpdateResiliencyPolicy(req *UpdateResiliencyPolicyRequest) (*ResiliencyPolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	policy, ok := s.policies[req.PolicyARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Policy not found: %s", req.PolicyARN),
+		}
+	}
+
+	if req.DataLocationConstraint != "" {
+		policy.DataLocationConstraint = req.DataLocationConstraint
+	}
+	if req.Policy != nil {
+		policy.Policy = req.Policy
+	}
+	if req.PolicyDescription != "" {
+		policy.PolicyDescription = req.PolicyDescription
+	}
+	if req.PolicyName != "" {
+		policy.PolicyName = req.PolicyName
+	}
+	if req.Tier != "" {
+		policy.Tier = req.Tier
+	}
+
+	return policy, nil
+}
+
+// DeleteResiliencyPolicy deletes a policy.
+func (s *MemoryStorage) DeleteResiliencyPolicy(policyARN string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.policies[policyARN]; !ok {
+		return &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Policy not found: %s", policyARN),
+		}
+	}
+
+	delete(s.policies, policyARN)
+	delete(s.tags, policyARN)
+
+	return nil
+}
+
+// ListResiliencyPolicies lists all policies.
+func (s *MemoryStorage) ListResiliencyPolicies(req *ListResiliencyPoliciesRequest) ([]*ResiliencyPolicy, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	policies := make([]*ResiliencyPolicy, 0, len(s.policies))
+
+	for _, policy := range s.policies {
+		// Apply filters
+		if req.PolicyName != "" && policy.PolicyName != req.PolicyName {
+			continue
+		}
+
+		policies = append(policies, policy)
+	}
+
+	return policies, "", nil
+}
+
+// StartAppAssessment starts a new assessment.
+func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*AppAssessment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Verify app exists
+	app, ok := s.apps[req.AppARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("App not found: %s", req.AppARN),
+		}
+	}
+
+	assessmentID := uuid.New().String()
+	assessmentARN := fmt.Sprintf("arn:aws:resiliencehub:us-east-1:123456789012:app-assessment/%s", assessmentID)
+	now := float64(time.Now().Unix())
+
+	// Get associated policy if exists
+	var policy *ResiliencyPolicy
+	if app.PolicyARN != "" {
+		policy = s.policies[app.PolicyARN]
+	}
+
+	assessment := &AppAssessment{
+		AppARN:           req.AppARN,
+		AppVersion:       req.AppVersion,
+		AssessmentARN:    assessmentARN,
+		AssessmentName:   req.AssessmentName,
+		AssessmentStatus: "Success",
+		ComplianceStatus: "PolicyBreached",
+		Compliance: map[string]*DisruptionCompliance{
+			"Software": {
+				ComplianceStatus:    "PolicyBreached",
+				CurrentRpoInSecs:    86400,
+				CurrentRtoInSecs:    86400,
+				AchievableRpoInSecs: 3600,
+				AchievableRtoInSecs: 3600,
+			},
+			"Hardware": {
+				ComplianceStatus:    "PolicyMet",
+				CurrentRpoInSecs:    3600,
+				CurrentRtoInSecs:    3600,
+				AchievableRpoInSecs: 3600,
+				AchievableRtoInSecs: 3600,
+			},
+		},
+		EndTime:   now,
+		Invoker:   "User",
+		Policy:    policy,
+		StartTime: now,
+		Tags:      req.Tags,
+		ResiliencyScore: &ResiliencyScore{
+			Score: 75.0,
+			DisruptionScore: map[string]float64{
+				"Software": 50.0,
+				"Hardware": 100.0,
+			},
+		},
+	}
+
+	s.assessments[assessmentARN] = assessment
+
+	if req.Tags != nil {
+		s.tags[assessmentARN] = req.Tags
+	}
+
+	return assessment, nil
+}
+
+// DescribeAppAssessment retrieves an assessment by ARN.
+func (s *MemoryStorage) DescribeAppAssessment(assessmentARN string) (*AppAssessment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	assessment, ok := s.assessments[assessmentARN]
+	if !ok {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Assessment not found: %s", assessmentARN),
+		}
+	}
+
+	return assessment, nil
+}
+
+// DeleteAppAssessment deletes an assessment.
+func (s *MemoryStorage) DeleteAppAssessment(assessmentARN string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.assessments[assessmentARN]; !ok {
+		return &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Assessment not found: %s", assessmentARN),
+		}
+	}
+
+	delete(s.assessments, assessmentARN)
+	delete(s.tags, assessmentARN)
+
+	return nil
+}
+
+// ListAppAssessments lists all assessments.
+func (s *MemoryStorage) ListAppAssessments(req *ListAppAssessmentsRequest) ([]*AppAssessmentSummary, string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	summaries := make([]*AppAssessmentSummary, 0, len(s.assessments))
+
+	for _, assessment := range s.assessments {
+		// Apply filters
+		if req.AppARN != "" && assessment.AppARN != req.AppARN {
+			continue
+		}
+		if req.AssessmentName != "" && assessment.AssessmentName != req.AssessmentName {
+			continue
+		}
+		if req.AssessmentStatus != "" && assessment.AssessmentStatus != req.AssessmentStatus {
+			continue
+		}
+		if req.ComplianceStatus != "" && assessment.ComplianceStatus != req.ComplianceStatus {
+			continue
+		}
+		if req.Invoker != "" && assessment.Invoker != req.Invoker {
+			continue
+		}
+
+		var score float64
+		if assessment.ResiliencyScore != nil {
+			score = assessment.ResiliencyScore.Score
+		}
+
+		summary := &AppAssessmentSummary{
+			AppARN:           assessment.AppARN,
+			AppVersion:       assessment.AppVersion,
+			AssessmentARN:    assessment.AssessmentARN,
+			AssessmentName:   assessment.AssessmentName,
+			AssessmentStatus: assessment.AssessmentStatus,
+			ComplianceStatus: assessment.ComplianceStatus,
+			Cost:             assessment.Cost,
+			DriftStatus:      assessment.DriftStatus,
+			EndTime:          assessment.EndTime,
+			Invoker:          assessment.Invoker,
+			Message:          assessment.Message,
+			ResiliencyScore:  score,
+			StartTime:        assessment.StartTime,
+			VersionName:      assessment.VersionName,
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, "", nil
+}
+
+// TagResource adds tags to a resource.
+func (s *MemoryStorage) TagResource(resourceARN string, tags map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if resource exists
+	_, appOK := s.apps[resourceARN]
+	_, policyOK := s.policies[resourceARN]
+	_, assessmentOK := s.assessments[resourceARN]
+
+	if !appOK && !policyOK && !assessmentOK {
+		return &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Resource not found: %s", resourceARN),
+		}
+	}
+
+	if s.tags[resourceARN] == nil {
+		s.tags[resourceARN] = make(map[string]string)
+	}
+
+	maps.Copy(s.tags[resourceARN], tags)
+
+	return nil
+}
+
+// UntagResource removes tags from a resource.
+func (s *MemoryStorage) UntagResource(resourceARN string, tagKeys []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if resource exists
+	_, appOK := s.apps[resourceARN]
+	_, policyOK := s.policies[resourceARN]
+	_, assessmentOK := s.assessments[resourceARN]
+
+	if !appOK && !policyOK && !assessmentOK {
+		return &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Resource not found: %s", resourceARN),
+		}
+	}
+
+	if s.tags[resourceARN] != nil {
+		for _, key := range tagKeys {
+			delete(s.tags[resourceARN], key)
+		}
+	}
+
+	return nil
+}
+
+// ListTagsForResource retrieves tags for a resource.
+func (s *MemoryStorage) ListTagsForResource(resourceARN string) (map[string]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check if resource exists
+	_, appOK := s.apps[resourceARN]
+	_, policyOK := s.policies[resourceARN]
+	_, assessmentOK := s.assessments[resourceARN]
+
+	if !appOK && !policyOK && !assessmentOK {
+		return nil, &Error{
+			Code:    errResourceNotFound,
+			Message: fmt.Sprintf("Resource not found: %s", resourceARN),
+		}
+	}
+
+	tags := s.tags[resourceARN]
+	if tags == nil {
+		return make(map[string]string), nil
+	}
+
+	return tags, nil
+}

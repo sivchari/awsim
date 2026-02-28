@@ -46,6 +46,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/organizations"
 	_ "github.com/sivchari/awsim/internal/service/pipes"
 	_ "github.com/sivchari/awsim/internal/service/rds"
+	_ "github.com/sivchari/awsim/internal/service/resiliencehub"
 	_ "github.com/sivchari/awsim/internal/service/route53"
 	_ "github.com/sivchari/awsim/internal/service/route53resolver"
 	_ "github.com/sivchari/awsim/internal/service/s3"
