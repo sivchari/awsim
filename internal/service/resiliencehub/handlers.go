@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 )
 
 // CreateApp handles the CreateApp API.
@@ -40,8 +39,17 @@ func (s *Service) CreateApp(w http.ResponseWriter, r *http.Request) {
 
 // DescribeApp handles the DescribeApp API.
 func (s *Service) DescribeApp(w http.ResponseWriter, r *http.Request) {
-	appARN := r.URL.Query().Get("appArn")
-	if appARN == "" {
+	var req DescribeAppRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.AppARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "appArn is required",
@@ -50,7 +58,7 @@ func (s *Service) DescribeApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, err := s.storage.DescribeApp(appARN)
+	app, err := s.storage.DescribeApp(req.AppARN)
 	if err != nil {
 		handleError(w, err)
 
@@ -93,8 +101,17 @@ func (s *Service) UpdateApp(w http.ResponseWriter, r *http.Request) {
 
 // DeleteApp handles the DeleteApp API.
 func (s *Service) DeleteApp(w http.ResponseWriter, r *http.Request) {
-	appARN := r.URL.Query().Get("appArn")
-	if appARN == "" {
+	var req DeleteAppRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.AppARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "appArn is required",
@@ -103,23 +120,24 @@ func (s *Service) DeleteApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.storage.DeleteApp(appARN); err != nil {
+	if err := s.storage.DeleteApp(req.AppARN); err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	writeJSON(w, &DeleteAppResponse{AppARN: appARN})
+	writeJSON(w, &DeleteAppResponse{AppARN: req.AppARN})
 }
 
 // ListApps handles the ListApps API.
 func (s *Service) ListApps(w http.ResponseWriter, r *http.Request) {
-	req := &ListAppsRequest{
-		AppARN: r.URL.Query().Get("appArn"),
-		Name:   r.URL.Query().Get("name"),
+	var req ListAppsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// For list operations, empty body is acceptable
+		req = ListAppsRequest{}
 	}
 
-	apps, nextToken, err := s.storage.ListApps(req)
+	apps, nextToken, err := s.storage.ListApps(&req)
 	if err != nil {
 		handleError(w, err)
 
@@ -174,8 +192,17 @@ func (s *Service) CreateResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 
 // DescribeResiliencyPolicy handles the DescribeResiliencyPolicy API.
 func (s *Service) DescribeResiliencyPolicy(w http.ResponseWriter, r *http.Request) {
-	policyARN := r.URL.Query().Get("policyArn")
-	if policyARN == "" {
+	var req DescribeResiliencyPolicyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.PolicyARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "policyArn is required",
@@ -184,7 +211,7 @@ func (s *Service) DescribeResiliencyPolicy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	policy, err := s.storage.DescribeResiliencyPolicy(policyARN)
+	policy, err := s.storage.DescribeResiliencyPolicy(req.PolicyARN)
 	if err != nil {
 		handleError(w, err)
 
@@ -227,8 +254,17 @@ func (s *Service) UpdateResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 
 // DeleteResiliencyPolicy handles the DeleteResiliencyPolicy API.
 func (s *Service) DeleteResiliencyPolicy(w http.ResponseWriter, r *http.Request) {
-	policyARN := r.URL.Query().Get("policyArn")
-	if policyARN == "" {
+	var req DeleteResiliencyPolicyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.PolicyARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "policyArn is required",
@@ -237,22 +273,24 @@ func (s *Service) DeleteResiliencyPolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := s.storage.DeleteResiliencyPolicy(policyARN); err != nil {
+	if err := s.storage.DeleteResiliencyPolicy(req.PolicyARN); err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	writeJSON(w, &DeleteResiliencyPolicyResponse{PolicyARN: policyARN})
+	writeJSON(w, &DeleteResiliencyPolicyResponse{PolicyARN: req.PolicyARN})
 }
 
 // ListResiliencyPolicies handles the ListResiliencyPolicies API.
 func (s *Service) ListResiliencyPolicies(w http.ResponseWriter, r *http.Request) {
-	req := &ListResiliencyPoliciesRequest{
-		PolicyName: r.URL.Query().Get("policyName"),
+	var req ListResiliencyPoliciesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// For list operations, empty body is acceptable
+		req = ListResiliencyPoliciesRequest{}
 	}
 
-	policies, nextToken, err := s.storage.ListResiliencyPolicies(req)
+	policies, nextToken, err := s.storage.ListResiliencyPolicies(&req)
 	if err != nil {
 		handleError(w, err)
 
@@ -316,8 +354,17 @@ func (s *Service) StartAppAssessment(w http.ResponseWriter, r *http.Request) {
 
 // DescribeAppAssessment handles the DescribeAppAssessment API.
 func (s *Service) DescribeAppAssessment(w http.ResponseWriter, r *http.Request) {
-	assessmentARN := r.URL.Query().Get("assessmentArn")
-	if assessmentARN == "" {
+	var req DescribeAppAssessmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.AssessmentARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "assessmentArn is required",
@@ -326,7 +373,7 @@ func (s *Service) DescribeAppAssessment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	assessment, err := s.storage.DescribeAppAssessment(assessmentARN)
+	assessment, err := s.storage.DescribeAppAssessment(req.AssessmentARN)
 	if err != nil {
 		handleError(w, err)
 
@@ -338,8 +385,17 @@ func (s *Service) DescribeAppAssessment(w http.ResponseWriter, r *http.Request) 
 
 // DeleteAppAssessment handles the DeleteAppAssessment API.
 func (s *Service) DeleteAppAssessment(w http.ResponseWriter, r *http.Request) {
-	assessmentARN := r.URL.Query().Get("assessmentArn")
-	if assessmentARN == "" {
+	var req DeleteAppAssessmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.AssessmentARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "assessmentArn is required",
@@ -348,29 +404,27 @@ func (s *Service) DeleteAppAssessment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.storage.DeleteAppAssessment(assessmentARN); err != nil {
+	if err := s.storage.DeleteAppAssessment(req.AssessmentARN); err != nil {
 		handleError(w, err)
 
 		return
 	}
 
 	writeJSON(w, &DeleteAppAssessmentResponse{
-		AssessmentARN:    assessmentARN,
+		AssessmentARN:    req.AssessmentARN,
 		AssessmentStatus: "Success",
 	})
 }
 
 // ListAppAssessments handles the ListAppAssessments API.
 func (s *Service) ListAppAssessments(w http.ResponseWriter, r *http.Request) {
-	req := &ListAppAssessmentsRequest{
-		AppARN:           r.URL.Query().Get("appArn"),
-		AssessmentName:   r.URL.Query().Get("assessmentName"),
-		AssessmentStatus: r.URL.Query().Get("assessmentStatus"),
-		ComplianceStatus: r.URL.Query().Get("complianceStatus"),
-		Invoker:          r.URL.Query().Get("invoker"),
+	var req ListAppAssessmentsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// For list operations, empty body is acceptable
+		req = ListAppAssessmentsRequest{}
 	}
 
-	assessments, nextToken, err := s.storage.ListAppAssessments(req)
+	assessments, nextToken, err := s.storage.ListAppAssessments(&req)
 	if err != nil {
 		handleError(w, err)
 
@@ -385,24 +439,6 @@ func (s *Service) ListAppAssessments(w http.ResponseWriter, r *http.Request) {
 
 // TagResource handles the TagResource API.
 func (s *Service) TagResource(w http.ResponseWriter, r *http.Request) {
-	resourceARN := r.URL.Query().Get("resourceArn")
-	if resourceARN == "" {
-		// Try to extract from path
-		parts := strings.Split(r.URL.Path, "/tags/")
-		if len(parts) > 1 {
-			resourceARN = parts[1]
-		}
-	}
-
-	if resourceARN == "" {
-		writeError(w, http.StatusBadRequest, &Error{
-			Code:    "ValidationException",
-			Message: "resourceArn is required",
-		})
-
-		return
-	}
-
 	var req TagResourceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, &Error{
@@ -413,7 +449,16 @@ func (s *Service) TagResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.storage.TagResource(resourceARN, req.Tags); err != nil {
+	if req.ResourceARN == "" {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "resourceArn is required",
+		})
+
+		return
+	}
+
+	if err := s.storage.TagResource(req.ResourceARN, req.Tags); err != nil {
 		handleError(w, err)
 
 		return
@@ -424,8 +469,17 @@ func (s *Service) TagResource(w http.ResponseWriter, r *http.Request) {
 
 // UntagResource handles the UntagResource API.
 func (s *Service) UntagResource(w http.ResponseWriter, r *http.Request) {
-	resourceARN := r.URL.Query().Get("resourceArn")
-	if resourceARN == "" {
+	var req UntagResourceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
+	}
+
+	if req.ResourceARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "resourceArn is required",
@@ -434,9 +488,7 @@ func (s *Service) UntagResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagKeys := r.URL.Query()["tagKeys"]
-
-	if err := s.storage.UntagResource(resourceARN, tagKeys); err != nil {
+	if err := s.storage.UntagResource(req.ResourceARN, req.TagKeys); err != nil {
 		handleError(w, err)
 
 		return
@@ -447,16 +499,17 @@ func (s *Service) UntagResource(w http.ResponseWriter, r *http.Request) {
 
 // ListTagsForResource handles the ListTagsForResource API.
 func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
-	resourceARN := r.URL.Query().Get("resourceArn")
-	if resourceARN == "" {
-		// Try to extract from path
-		parts := strings.Split(r.URL.Path, "/tags/")
-		if len(parts) > 1 {
-			resourceARN = parts[1]
-		}
+	var req ListTagsForResourceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, &Error{
+			Code:    "ValidationException",
+			Message: "Invalid request body",
+		})
+
+		return
 	}
 
-	if resourceARN == "" {
+	if req.ResourceARN == "" {
 		writeError(w, http.StatusBadRequest, &Error{
 			Code:    "ValidationException",
 			Message: "resourceArn is required",
@@ -465,7 +518,7 @@ func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags, err := s.storage.ListTagsForResource(resourceARN)
+	tags, err := s.storage.ListTagsForResource(req.ResourceARN)
 	if err != nil {
 		handleError(w, err)
 
@@ -477,14 +530,14 @@ func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON writes a JSON response.
 func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
 // writeError writes an error response.
 func writeError(w http.ResponseWriter, statusCode int, e *Error) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(e)
 }
