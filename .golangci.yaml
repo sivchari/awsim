@@ -234,6 +234,10 @@ linters:
       - path: internal/service/finspace/types\.go
         linters:
           - tagliatelle
+      # AWS Comprehend API requires PascalCase JSON field names.
+      - path: internal/service/comprehend/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

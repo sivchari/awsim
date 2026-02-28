@@ -19,6 +19,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/cloudwatchlogs"
 	_ "github.com/sivchari/awsim/internal/service/codeconnections"
 	_ "github.com/sivchari/awsim/internal/service/cognito"
+	_ "github.com/sivchari/awsim/internal/service/comprehend"
 	_ "github.com/sivchari/awsim/internal/service/configservice"
 	_ "github.com/sivchari/awsim/internal/service/dlm"
 	_ "github.com/sivchari/awsim/internal/service/ds"
