@@ -530,14 +530,14 @@ func (s *Service) ListTagsForResource(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON writes a JSON response.
 func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
 // writeError writes an error response.
 func writeError(w http.ResponseWriter, statusCode int, e *Error) {
-	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(e)
 }
