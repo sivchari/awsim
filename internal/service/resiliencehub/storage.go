@@ -445,15 +445,19 @@ func (s *MemoryStorage) ListAppAssessments(req *ListAppAssessmentsRequest) ([]*A
 		if req.AppARN != "" && assessment.AppARN != req.AppARN {
 			continue
 		}
+
 		if req.AssessmentName != "" && assessment.AssessmentName != req.AssessmentName {
 			continue
 		}
+
 		if req.AssessmentStatus != "" && assessment.AssessmentStatus != req.AssessmentStatus {
 			continue
 		}
+
 		if req.ComplianceStatus != "" && assessment.ComplianceStatus != req.ComplianceStatus {
 			continue
 		}
+
 		if req.Invoker != "" && assessment.Invoker != req.Invoker {
 			continue
 		}
