@@ -46,7 +46,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3
 	github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17
 	github.com/aws/aws-sdk-go-v2/service/rds v1.115.0
-	github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.25.18
+	github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.35.10
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2
 	github.com/aws/aws-sdk-go-v2/service/route53resolver v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0

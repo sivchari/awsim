@@ -106,6 +106,8 @@ github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17 h1:mVj6qM8m1vacLPRvpYsrhqIop
 github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17/go.mod h1:eLlxQF7rzISHqpiOqcW/IdjS7kwO+t1NdEpfLFIapAA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0 h1:oNl6YghOtxu3MiFk1tQ86QlrYMIEJazGUDbBCg9nxLA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0/go.mod h1:JBRYWpz5oXQtHgQC+X8LX9lh0FBCwRHJlWEIT+TTLaE=
+github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.35.10 h1:3QfrRqxoAf3cOeYjXCs2NLp24JOSg+/hkrBZF5ib5gw=
+github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.35.10/go.mod h1:HSwhMNwfAsZNfPHStNaDC9Cai/2uu2o89S7hJTEhg3g=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2 h1:zoD/SoiVQi8l8tuQn//VexrXS2yorg/+717JNA4Ble8=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2/go.mod h1:Ll1DCasPTBFtHK5t/U5WIwGIyRuY3xY+x8/LmqIlqpM=
 github.com/aws/aws-sdk-go-v2/service/route53resolver v1.42.2 h1:D54xyxi00fXBCTEzg/2HAZr4YeZS/aoif6FfRsCAFx8=
