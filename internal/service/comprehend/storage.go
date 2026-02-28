@@ -79,7 +79,7 @@ func (a *Analyzer) DetectKeyPhrases(text, _ string) (*DetectKeyPhrasesResponse, 
 }
 
 // DetectPiiEntities detects PII entities in the given text.
-func (a *Analyzer) DetectPiiEntities(text, languageCode string) (*DetectPiiEntitiesResponse, error) {
+func (a *Analyzer) DetectPiiEntities(text, _ string) (*DetectPiiEntitiesResponse, error) {
 	if err := a.validateText(text); err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (a *Analyzer) DetectPiiEntities(text, languageCode string) (*DetectPiiEntit
 }
 
 // DetectSyntax analyzes the syntax of the given text.
-func (a *Analyzer) DetectSyntax(text, languageCode string) (*DetectSyntaxResponse, error) {
+func (a *Analyzer) DetectSyntax(text, _ string) (*DetectSyntaxResponse, error) {
 	if err := a.validateText(text); err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (a *Analyzer) DetectSyntax(text, languageCode string) (*DetectSyntaxRespons
 }
 
 // ContainsPiiEntities checks if the text contains PII entities.
-func (a *Analyzer) ContainsPiiEntities(text, languageCode string) (*ContainsPiiEntitiesResponse, error) {
+func (a *Analyzer) ContainsPiiEntities(text, _ string) (*ContainsPiiEntitiesResponse, error) {
 	if err := a.validateText(text); err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (a *Analyzer) extractKeyPhrases(text string) []KeyPhrase {
 
 // extractPiiEntities extracts PII entities from text.
 func (a *Analyzer) extractPiiEntities(text string) []PiiEntity {
-	piiEntities := make([]PiiEntity, 0)
+	piiEntities := make([]PiiEntity, 0) //nolint:prealloc // Capacity unknown as we check multiple patterns.
 
 	// Email pattern.
 	emailPattern := regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`)
