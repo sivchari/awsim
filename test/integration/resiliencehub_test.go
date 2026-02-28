@@ -117,12 +117,12 @@ func TestResilienceHub_CreateAndDeleteResiliencyPolicy(t *testing.T) {
 		Tier:       types.ResiliencyPolicyTierCoreServices,
 		Policy: map[string]types.FailurePolicy{
 			"Software": {
-				RpoInSecs: aws.Int32(3600),
-				RtoInSecs: aws.Int32(3600),
+				RpoInSecs: 3600,
+				RtoInSecs: 3600,
 			},
 			"Hardware": {
-				RpoInSecs: aws.Int32(86400),
-				RtoInSecs: aws.Int32(86400),
+				RpoInSecs: 86400,
+				RtoInSecs: 86400,
 			},
 		},
 	})
@@ -172,8 +172,8 @@ func TestResilienceHub_ListResiliencyPolicies(t *testing.T) {
 		Tier:       types.ResiliencyPolicyTierNonCritical,
 		Policy: map[string]types.FailurePolicy{
 			"Software": {
-				RpoInSecs: aws.Int32(86400),
-				RtoInSecs: aws.Int32(86400),
+				RpoInSecs: 86400,
+				RtoInSecs: 86400,
 			},
 		},
 	})
