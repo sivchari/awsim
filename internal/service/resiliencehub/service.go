@@ -28,6 +28,7 @@ func (s *Service) Name() string {
 
 // RegisterRoutes registers the Resilience Hub routes.
 // Resilience Hub uses REST API with POST methods for all operations.
+// Some operations also support GET for SDK compatibility.
 func (s *Service) RegisterRoutes(r service.Router) {
 	// App operations
 	r.Handle("POST", "/create-app", s.CreateApp)
@@ -35,6 +36,7 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("POST", "/update-app", s.UpdateApp)
 	r.Handle("POST", "/delete-app", s.DeleteApp)
 	r.Handle("POST", "/list-apps", s.ListApps)
+	r.Handle("GET", "/list-apps", s.ListApps)
 
 	// ResiliencyPolicy operations
 	r.Handle("POST", "/create-resiliency-policy", s.CreateResiliencyPolicy)
@@ -42,15 +44,18 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("POST", "/update-resiliency-policy", s.UpdateResiliencyPolicy)
 	r.Handle("POST", "/delete-resiliency-policy", s.DeleteResiliencyPolicy)
 	r.Handle("POST", "/list-resiliency-policies", s.ListResiliencyPolicies)
+	r.Handle("GET", "/list-resiliency-policies", s.ListResiliencyPolicies)
 
 	// Assessment operations
 	r.Handle("POST", "/start-app-assessment", s.StartAppAssessment)
 	r.Handle("POST", "/describe-app-assessment", s.DescribeAppAssessment)
 	r.Handle("POST", "/delete-app-assessment", s.DeleteAppAssessment)
 	r.Handle("POST", "/list-app-assessments", s.ListAppAssessments)
+	r.Handle("GET", "/list-app-assessments", s.ListAppAssessments)
 
 	// Tag operations
 	r.Handle("POST", "/tag-resource", s.TagResource)
 	r.Handle("POST", "/untag-resource", s.UntagResource)
 	r.Handle("POST", "/list-tags-for-resource", s.ListTagsForResource)
+	r.Handle("GET", "/list-tags-for-resource", s.ListTagsForResource)
 }
