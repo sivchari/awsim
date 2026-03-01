@@ -152,3 +152,5 @@ github.com/aws/smithy-go v1.24.1 h1:VbyeNfmYkWoxMVpGUAbQumkODcYmfMRfZ8yQiH30SK0=
 github.com/aws/smithy-go v1.24.1/go.mod h1:LEj2LM3rBRQJxPZTB4KuzZkaZYnZPnvgIhb4pu07mx0=
 github.com/sivchari/golden v0.3.0 h1:WUtMlhvqeH8mXcX4hsZwyfrA5jeNz5F9IL1w+u7Ew7w=
 github.com/sivchari/golden v0.3.0/go.mod h1:gddwjsjxPtLYRCq0M471x9WD9khQWty82Yn/PZ/2I8E=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3 h1:4/SsyLjRsD+mub/wEt9xjo/SVPzl1idgwvDtklvp8tw=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3/go.mod h1:GMraVPHg0sV7jaLWiOpIcpo6wA2OyXgJmgPh/GREv9w=
