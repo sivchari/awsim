@@ -1,8 +1,8 @@
 {
   "AppSummaries": [
     {
-      "AppArn": "arn:aws:resiliencehub:us-east-1:123456789012:app/9ab6b440-ddf0-44e4-a9c8-6bbfe0267b95",
-      "CreationTime": "2026-03-01T14:15:41Z",
+      "AppArn": "arn:aws:resiliencehub:us-east-1:123456789012:app/f8b3965e-771a-4359-b8f8-f39ff040e05c",
+      "CreationTime": "2026-03-01T15:05:15Z",
       "Name": "test-list-app",
       "AssessmentSchedule": "",
       "AwsApplicationArn": null,
