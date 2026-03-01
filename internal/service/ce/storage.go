@@ -257,7 +257,7 @@ func (s *MemoryStorage) DeleteCostCategoryDefinition(_ context.Context, arn stri
 }
 
 // ListCostCategoryDefinitions lists cost category definitions.
-func (s *MemoryStorage) ListCostCategoryDefinitions(_ context.Context, req *ListCostCategoryDefinitionsRequest) (*ListCostCategoryDefinitionsResponse, error) {
+func (s *MemoryStorage) ListCostCategoryDefinitions(_ context.Context, _ *ListCostCategoryDefinitionsRequest) (*ListCostCategoryDefinitionsResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
