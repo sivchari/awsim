@@ -301,8 +301,10 @@ func generateMockCostData(req *GetCostAndUsageRequest) []ResultByTime {
 
 	if len(req.GroupBy) > 0 {
 		groups := make([]Group, 0, len(services))
+
 		for i, svc := range services {
 			metricValues := make(map[string]MetricValue)
+
 			for _, metric := range metrics {
 				amount := float64(10+i*5) + float64(i)*0.5
 				metricValues[metric] = MetricValue{
@@ -310,20 +312,24 @@ func generateMockCostData(req *GetCostAndUsageRequest) []ResultByTime {
 					Unit:   "USD",
 				}
 			}
+
 			groups = append(groups, Group{
 				Keys:    []string{svc},
 				Metrics: metricValues,
 			})
 		}
+
 		result.Groups = groups
 	} else {
 		totalMetrics := make(map[string]MetricValue)
+
 		for _, metric := range metrics {
 			totalMetrics[metric] = MetricValue{
 				Amount: "150.50",
 				Unit:   "USD",
 			}
 		}
+
 		result.Total = totalMetrics
 	}
 
@@ -381,6 +387,7 @@ func getMockDimensionValues(dimension, searchString string) []DimensionValueItem
 		if searchString != "" && !containsIgnoreCase(v, searchString) {
 			continue
 		}
+
 		result = append(result, DimensionValueItem{
 			Value:      v,
 			Attributes: map[string]string{},

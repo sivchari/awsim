@@ -242,6 +242,10 @@ linters:
       - path: internal/service/resiliencehub/types\.go
         linters:
           - tagliatelle
+      # AWS Cost Explorer API requires PascalCase JSON field names.
+      - path: internal/service/ce/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
