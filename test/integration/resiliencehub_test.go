@@ -45,7 +45,7 @@ func TestResilienceHub_CreateAndDeleteApp(t *testing.T) {
 	}
 
 	g := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "App.AppArn", "App.CreationTime"),
+		golden.WithIgnoreFields("ResultMetadata", "AppArn", "CreationTime"),
 	)
 	g.Assert("create", createOutput)
 
@@ -58,7 +58,7 @@ func TestResilienceHub_CreateAndDeleteApp(t *testing.T) {
 	}
 
 	g2 := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "App.AppArn", "App.CreationTime"),
+		golden.WithIgnoreFields("ResultMetadata", "AppArn", "CreationTime"),
 	)
 	g2.Assert("describe", describeOutput)
 
@@ -131,7 +131,7 @@ func TestResilienceHub_CreateAndDeleteResiliencyPolicy(t *testing.T) {
 	}
 
 	g := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "Policy.PolicyArn", "Policy.CreationTime"),
+		golden.WithIgnoreFields("ResultMetadata", "PolicyArn", "CreationTime"),
 	)
 	g.Assert("create", createOutput)
 
@@ -144,7 +144,7 @@ func TestResilienceHub_CreateAndDeleteResiliencyPolicy(t *testing.T) {
 	}
 
 	g2 := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "Policy.PolicyArn", "Policy.CreationTime"),
+		golden.WithIgnoreFields("ResultMetadata", "PolicyArn", "CreationTime"),
 	)
 	g2.Assert("describe", describeOutput)
 
@@ -229,7 +229,7 @@ func TestResilienceHub_AppAssessment(t *testing.T) {
 	}
 
 	g := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "Assessment.AssessmentArn", "Assessment.AppArn", "Assessment.StartTime", "Assessment.EndTime"),
+		golden.WithIgnoreFields("ResultMetadata", "AssessmentArn", "AppArn", "StartTime", "EndTime"),
 	)
 	g.Assert("start", assessmentOutput)
 
@@ -242,7 +242,7 @@ func TestResilienceHub_AppAssessment(t *testing.T) {
 	}
 
 	g2 := golden.New(t,
-		golden.WithIgnoreFields("ResultMetadata", "Assessment.AssessmentArn", "Assessment.AppArn", "Assessment.StartTime", "Assessment.EndTime"),
+		golden.WithIgnoreFields("ResultMetadata", "AssessmentArn", "AppArn", "StartTime", "EndTime"),
 	)
 	g2.Assert("describe", describeOutput)
 
