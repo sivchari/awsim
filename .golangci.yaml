@@ -246,6 +246,10 @@ linters:
       - path: internal/service/ce/types\.go
         linters:
           - tagliatelle
+      # AWS Rekognition API requires PascalCase JSON field names.
+      - path: internal/service/rekognition/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

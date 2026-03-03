@@ -46,6 +46,8 @@ github.com/aws/aws-sdk-go-v2/service/comprehend v1.40.18 h1:Nq5a1NHA7V26jCwajbSf
 github.com/aws/aws-sdk-go-v2/service/comprehend v1.40.18/go.mod h1:RAyYQafoEJR/v5MhsSzl7h15SZP7l+YcPjUZTRRuE+0=
 github.com/aws/aws-sdk-go-v2/service/configservice v1.61.1 h1:aho+qoT/ybRPv3EKee98Pc1hZcKRd5ECrv+KdCdj2I8=
 github.com/aws/aws-sdk-go-v2/service/configservice v1.61.1/go.mod h1:jAsoyYj8HSPYo4ZMaoGtDG622Nz8VXtsYVA8jyPYyqI=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3 h1:4/SsyLjRsD+mub/wEt9xjo/SVPzl1idgwvDtklvp8tw=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3/go.mod h1:GMraVPHg0sV7jaLWiOpIcpo6wA2OyXgJmgPh/GREv9w=
 github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0 h1:5MthmITq3unZoB5EHlwYsoadubv0H/vi8/gnO0/UmF4=
 github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0/go.mod h1:KkCYX9biRFzx8lAEgYyNSuQ3ljMK2ZOTnplMhHyCfhk=
 github.com/aws/aws-sdk-go-v2/service/dlm v1.35.13 h1:wyKOcqzzdbwz1UQtbFmmDw6YR6ux20yqmVaB4zONToE=
@@ -106,6 +108,8 @@ github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17 h1:mVj6qM8m1vacLPRvpYsrhqIop
 github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17/go.mod h1:eLlxQF7rzISHqpiOqcW/IdjS7kwO+t1NdEpfLFIapAA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0 h1:oNl6YghOtxu3MiFk1tQ86QlrYMIEJazGUDbBCg9nxLA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.115.0/go.mod h1:JBRYWpz5oXQtHgQC+X8LX9lh0FBCwRHJlWEIT+TTLaE=
+github.com/aws/aws-sdk-go-v2/service/rekognition v1.51.17 h1:6j6Oyx94NqHnnakbwTEwl2C/Q5vsKuzVlKl0ruPQZCo=
+github.com/aws/aws-sdk-go-v2/service/rekognition v1.51.17/go.mod h1:K3SrqERm8hniMSa1nYUI4zOhh/2gGKWAEv3XWcFxUrU=
 github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.35.10 h1:3QfrRqxoAf3cOeYjXCs2NLp24JOSg+/hkrBZF5ib5gw=
 github.com/aws/aws-sdk-go-v2/service/resiliencehub v1.35.10/go.mod h1:HSwhMNwfAsZNfPHStNaDC9Cai/2uu2o89S7hJTEhg3g=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.62.2 h1:zoD/SoiVQi8l8tuQn//VexrXS2yorg/+717JNA4Ble8=
@@ -152,5 +156,3 @@ github.com/aws/smithy-go v1.24.1 h1:VbyeNfmYkWoxMVpGUAbQumkODcYmfMRfZ8yQiH30SK0=
 github.com/aws/smithy-go v1.24.1/go.mod h1:LEj2LM3rBRQJxPZTB4KuzZkaZYnZPnvgIhb4pu07mx0=
 github.com/sivchari/golden v0.3.0 h1:WUtMlhvqeH8mXcX4hsZwyfrA5jeNz5F9IL1w+u7Ew7w=
 github.com/sivchari/golden v0.3.0/go.mod h1:gddwjsjxPtLYRCq0M471x9WD9khQWty82Yn/PZ/2I8E=
-github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3 h1:4/SsyLjRsD+mub/wEt9xjo/SVPzl1idgwvDtklvp8tw=
-github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3/go.mod h1:GMraVPHg0sV7jaLWiOpIcpo6wA2OyXgJmgPh/GREv9w=
