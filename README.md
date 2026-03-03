@@ -1,5 +1,10 @@
 # awsim
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/sivchari/awsim)](https://go.dev/)
+[![License](https://img.shields.io/github/license/sivchari/awsim)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/sivchari/awsim)](https://github.com/sivchari/awsim/releases)
+[![CI](https://github.com/sivchari/awsim/actions/workflows/ci.yaml/badge.svg)](https://github.com/sivchari/awsim/actions/workflows/ci.yaml)
+
 A lightweight AWS service emulator written in Go. Designed for CI/CD environments where authentication-free local AWS testing is needed.
 
 ## Features
