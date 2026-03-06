@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.2.0](https://github.com/sivchari/awsim/compare/v0.1.3...v0.2.0) - 2026-03-06
+- feat(mq): implement Amazon MQ service by @sivchari in https://github.com/sivchari/awsim/pull/290
+- feat(ds): implement AWS Directory Service by @sivchari in https://github.com/sivchari/awsim/pull/292
+- refactor: remove unused Prefix() method from Service interface by @sivchari in https://github.com/sivchari/awsim/pull/294
+- feat(s3control): implement AWS S3 Control service by @sivchari in https://github.com/sivchari/awsim/pull/295
+- feat(route53resolver): implement AWS Route 53 Resolver service by @sivchari in https://github.com/sivchari/awsim/pull/296
+- feat(securitylake): implement AWS Security Lake service by @sivchari in https://github.com/sivchari/awsim/pull/297
+- feat(finspace): implement AWS FinSpace service by @sivchari in https://github.com/sivchari/awsim/pull/298
+- feat(comprehend): implement AWS Comprehend service by @sivchari in https://github.com/sivchari/awsim/pull/299
+- feat(resiliencehub): implement AWS Resilience Hub service by @sivchari in https://github.com/sivchari/awsim/pull/300
+- feat(ce): implement AWS Cost Explorer service by @sivchari in https://github.com/sivchari/awsim/pull/301
+- feat(rekognition): implement AWS Rekognition service by @sivchari in https://github.com/sivchari/awsim/pull/302
+- docs: update README with current service list and examples by @sivchari in https://github.com/sivchari/awsim/pull/303
+- Release v0.2.0 by @sivchari in https://github.com/sivchari/awsim/pull/304
+
 ## [v0.1.3](https://github.com/sivchari/awsim/compare/v0.1.2...v0.1.3) - 2026-02-26
 - fix(kinesis): use NextToken parameter in ListStreams by @sivchari in https://github.com/sivchari/awsim/pull/273
 - fix(eks): fix nextToken handling and add maxResults validation by @sivchari in https://github.com/sivchari/awsim/pull/274
