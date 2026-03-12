@@ -30,6 +30,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/ecs"
 	_ "github.com/sivchari/awsim/internal/service/eks"
 	_ "github.com/sivchari/awsim/internal/service/elasticache"
+	_ "github.com/sivchari/awsim/internal/service/elasticbeanstalk"
 	_ "github.com/sivchari/awsim/internal/service/elbv2"
 	_ "github.com/sivchari/awsim/internal/service/emrserverless"
 	_ "github.com/sivchari/awsim/internal/service/entityresolution"

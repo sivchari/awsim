@@ -1,0 +1,52 @@
+package elasticbeanstalk
+
+import (
+	"github.com/sivchari/awsim/internal/service"
+)
+
+// Service implements the AWS Elastic Beanstalk service.
+type Service struct {
+	storage Storage
+}
+
+// New creates a new Elastic Beanstalk service.
+func New(storage Storage) *Service {
+	return &Service{
+		storage: storage,
+	}
+}
+
+// Name returns the service name.
+func (s *Service) Name() string {
+	return "elasticbeanstalk"
+}
+
+// TargetPrefix returns the X-Amz-Target header prefix.
+func (s *Service) TargetPrefix() string {
+	return "ElasticBeanstalk"
+}
+
+// Actions returns the list of action names this service handles.
+func (s *Service) Actions() []string {
+	return []string{
+		"CreateApplication",
+		"DescribeApplications",
+		"UpdateApplication",
+		"DeleteApplication",
+		"CreateEnvironment",
+		"DescribeEnvironments",
+		"TerminateEnvironment",
+	}
+}
+
+// QueryProtocol marks this service as using AWS Query protocol.
+func (s *Service) QueryProtocol() {}
+
+// RegisterRoutes registers routes with the router.
+func (s *Service) RegisterRoutes(_ service.Router) {
+	// Query protocol services use DispatchAction for routing.
+}
+
+func init() {
+	service.Register(New(NewMemoryStorage()))
+}
