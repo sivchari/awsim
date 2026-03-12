@@ -25,6 +25,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/dlm"
 	_ "github.com/sivchari/awsim/internal/service/ds"
 	_ "github.com/sivchari/awsim/internal/service/dynamodb"
+	_ "github.com/sivchari/awsim/internal/service/ebs"
 	_ "github.com/sivchari/awsim/internal/service/ec2"
 	_ "github.com/sivchari/awsim/internal/service/ecr"
 	_ "github.com/sivchari/awsim/internal/service/ecs"

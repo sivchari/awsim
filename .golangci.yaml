@@ -262,6 +262,10 @@ linters:
       - path: internal/service/elasticbeanstalk/types\.go
         linters:
           - tagliatelle
+      # AWS EBS API requires PascalCase JSON field names.
+      - path: internal/service/ebs/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
