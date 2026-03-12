@@ -217,22 +217,38 @@ func TestDocDB_CreateAndDeleteInstance(t *testing.T) {
 func TestDocDB_DescribeInstances(t *testing.T) {
 	client := newDocDBClient(t)
 	ctx := t.Context()
+	clusterID := "test-docdb-describe-inst-cluster"
 	instanceID := "test-docdb-describe-instance"
 
-	_, err := client.CreateDBInstance(ctx, &docdb.CreateDBInstanceInput{
-		DBInstanceIdentifier: aws.String(instanceID),
-		DBInstanceClass:      aws.String("db.r5.large"),
-		Engine:               aws.String("docdb"),
+	_, err := client.CreateDBCluster(ctx, &docdb.CreateDBClusterInput{
+		DBClusterIdentifier: aws.String(clusterID),
+		Engine:              aws.String("docdb"),
+		MasterUsername:      aws.String("admin"),
+		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create instance: %v", err)
+		t.Fatalf("failed to create cluster: %v", err)
 	}
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteDBInstance(context.Background(), &docdb.DeleteDBInstanceInput{
 			DBInstanceIdentifier: aws.String(instanceID),
 		})
+		_, _ = client.DeleteDBCluster(context.Background(), &docdb.DeleteDBClusterInput{
+			DBClusterIdentifier: aws.String(clusterID),
+			SkipFinalSnapshot:   aws.Bool(true),
+		})
 	})
+
+	_, err = client.CreateDBInstance(ctx, &docdb.CreateDBInstanceInput{
+		DBInstanceIdentifier: aws.String(instanceID),
+		DBInstanceClass:      aws.String("db.r5.large"),
+		Engine:               aws.String("docdb"),
+		DBClusterIdentifier:  aws.String(clusterID),
+	})
+	if err != nil {
+		t.Fatalf("failed to create instance: %v", err)
+	}
 
 	describeResult, err := client.DescribeDBInstances(ctx, &docdb.DescribeDBInstancesInput{
 		DBInstanceIdentifier: aws.String(instanceID),
