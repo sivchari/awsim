@@ -39,10 +39,10 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("DELETE", "/matchingworkflows/{workflowName}", s.DeleteMatchingWorkflow)
 
 	// ID mapping workflow routes.
-	r.Handle("POST", "/idmappingworkflows", s.CreateIdMappingWorkflow)
-	r.Handle("GET", "/idmappingworkflows", s.ListIdMappingWorkflows)
-	r.Handle("GET", "/idmappingworkflows/{workflowName}", s.GetIdMappingWorkflow)
-	r.Handle("DELETE", "/idmappingworkflows/{workflowName}", s.DeleteIdMappingWorkflow)
+	r.Handle("POST", "/idmappingworkflows", s.CreateIDMappingWorkflow)
+	r.Handle("GET", "/idmappingworkflows", s.ListIDMappingWorkflows)
+	r.Handle("GET", "/idmappingworkflows/{workflowName}", s.GetIDMappingWorkflow)
+	r.Handle("DELETE", "/idmappingworkflows/{workflowName}", s.DeleteIDMappingWorkflow)
 
 	// Provider service routes.
 	r.Handle("GET", "/providerservices", s.ListProviderServices)

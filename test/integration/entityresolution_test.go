@@ -225,6 +225,7 @@ func TestEntityResolution_GetMatchingWorkflow(t *testing.T) {
 		InputSourceConfig: []types.InputSource{
 			{
 				InputSourceARN: aws.String("arn:aws:glue:us-east-1:000000000000:table/db/table1"),
+				SchemaName:     aws.String("test-schema"),
 			},
 		},
 		OutputSourceConfig: []types.OutputSource{

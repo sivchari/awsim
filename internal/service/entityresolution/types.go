@@ -1,7 +1,5 @@
 package entityresolution
 
-import "time"
-
 // SchemaInputAttribute represents a mapped input field in a schema.
 type SchemaInputAttribute struct {
 	FieldName string `json:"fieldName"`
@@ -18,14 +16,14 @@ type SchemaMapping struct {
 	SchemaArn         string                 `json:"schemaArn"`
 	Description       string                 `json:"description,omitempty"`
 	MappedInputFields []SchemaInputAttribute `json:"mappedInputFields"`
-	CreatedAt         time.Time              `json:"createdAt"`
-	UpdatedAt         time.Time              `json:"updatedAt"`
+	CreatedAt         float64                `json:"createdAt"`
+	UpdatedAt         float64                `json:"updatedAt"`
 	Tags              map[string]string      `json:"tags,omitempty"`
 }
 
 // InputSource represents an input source for a workflow.
 type InputSource struct {
-	InputSourceARN     string `json:"inputSourceARN"`
+	InputSourceARN     string `json:"inputSourceArn"`
 	SchemaName         string `json:"schemaName,omitempty"`
 	ApplyNormalization *bool  `json:"applyNormalization,omitempty"`
 }
@@ -40,7 +38,7 @@ type OutputAttribute struct {
 type OutputSource struct {
 	OutputS3Path       string            `json:"outputS3Path"`
 	Output             []OutputAttribute `json:"output"`
-	KMSArn             string            `json:"KMSArn,omitempty"`
+	KMSArn             string            `json:"kmsArn,omitempty"`
 	ApplyNormalization *bool             `json:"applyNormalization,omitempty"`
 }
 
@@ -58,40 +56,40 @@ type MatchingWorkflow struct {
 	OutputSourceConfig   []OutputSource        `json:"outputSourceConfig"`
 	ResolutionTechniques *ResolutionTechniques `json:"resolutionTechniques"`
 	RoleArn              string                `json:"roleArn"`
-	CreatedAt            time.Time             `json:"createdAt"`
-	UpdatedAt            time.Time             `json:"updatedAt"`
+	CreatedAt            float64               `json:"createdAt"`
+	UpdatedAt            float64               `json:"updatedAt"`
 	Tags                 map[string]string     `json:"tags,omitempty"`
 }
 
-// IdMappingTechniques represents ID mapping techniques configuration.
-type IdMappingTechniques struct {
-	IdMappingType string `json:"idMappingType"`
+// IDMappingTechniques represents ID mapping techniques configuration.
+type IDMappingTechniques struct {
+	IDMappingType string `json:"idMappingType"`
 }
 
-// IdMappingInputSource represents an input source for an ID mapping workflow.
-type IdMappingInputSource struct {
-	InputSourceARN string `json:"inputSourceARN"`
+// IDMappingInputSource represents an input source for an ID mapping workflow.
+type IDMappingInputSource struct {
+	InputSourceARN string `json:"inputSourceArn"`
 	SchemaName     string `json:"schemaName,omitempty"`
 	Type           string `json:"type,omitempty"`
 }
 
-// IdMappingOutputSource represents an output source for an ID mapping workflow.
-type IdMappingOutputSource struct {
+// IDMappingOutputSource represents an output source for an ID mapping workflow.
+type IDMappingOutputSource struct {
 	OutputS3Path string `json:"outputS3Path"`
-	KMSArn       string `json:"KMSArn,omitempty"`
+	KMSArn       string `json:"kmsArn,omitempty"`
 }
 
-// IdMappingWorkflow represents an ID mapping workflow.
-type IdMappingWorkflow struct {
+// IDMappingWorkflow represents an ID mapping workflow.
+type IDMappingWorkflow struct {
 	WorkflowName        string                  `json:"workflowName"`
 	WorkflowArn         string                  `json:"workflowArn"`
 	Description         string                  `json:"description,omitempty"`
-	InputSourceConfig   []IdMappingInputSource  `json:"inputSourceConfig"`
-	OutputSourceConfig  []IdMappingOutputSource `json:"outputSourceConfig,omitempty"`
-	IdMappingTechniques *IdMappingTechniques    `json:"idMappingTechniques"`
+	InputSourceConfig   []IDMappingInputSource  `json:"inputSourceConfig"`
+	OutputSourceConfig  []IDMappingOutputSource `json:"outputSourceConfig,omitempty"`
+	IDMappingTechniques *IDMappingTechniques    `json:"idMappingTechniques"`
 	RoleArn             string                  `json:"roleArn,omitempty"`
-	CreatedAt           time.Time               `json:"createdAt"`
-	UpdatedAt           time.Time               `json:"updatedAt"`
+	CreatedAt           float64                 `json:"createdAt"`
+	UpdatedAt           float64                 `json:"updatedAt"`
 	Tags                map[string]string       `json:"tags,omitempty"`
 }
 
@@ -124,39 +122,39 @@ type CreateMatchingWorkflowRequest struct {
 	Tags                 map[string]string     `json:"tags,omitempty"`
 }
 
-// CreateIdMappingWorkflowRequest represents the request for CreateIdMappingWorkflow.
-type CreateIdMappingWorkflowRequest struct {
+// CreateIDMappingWorkflowRequest represents the request for CreateIDMappingWorkflow.
+type CreateIDMappingWorkflowRequest struct {
 	WorkflowName        string                  `json:"workflowName"`
 	Description         string                  `json:"description,omitempty"`
-	InputSourceConfig   []IdMappingInputSource  `json:"inputSourceConfig"`
-	OutputSourceConfig  []IdMappingOutputSource `json:"outputSourceConfig,omitempty"`
-	IdMappingTechniques *IdMappingTechniques    `json:"idMappingTechniques"`
+	InputSourceConfig   []IDMappingInputSource  `json:"inputSourceConfig"`
+	OutputSourceConfig  []IDMappingOutputSource `json:"outputSourceConfig,omitempty"`
+	IDMappingTechniques *IDMappingTechniques    `json:"idMappingTechniques"`
 	RoleArn             string                  `json:"roleArn,omitempty"`
 	Tags                map[string]string       `json:"tags,omitempty"`
 }
 
 // SchemaMappingSummary represents a summary of a schema mapping for list responses.
 type SchemaMappingSummary struct {
-	SchemaName string    `json:"schemaName"`
-	SchemaArn  string    `json:"schemaArn"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	SchemaName string  `json:"schemaName"`
+	SchemaArn  string  `json:"schemaArn"`
+	CreatedAt  float64 `json:"createdAt"`
+	UpdatedAt  float64 `json:"updatedAt"`
 }
 
 // MatchingWorkflowSummary represents a summary of a matching workflow for list responses.
 type MatchingWorkflowSummary struct {
-	WorkflowName string    `json:"workflowName"`
-	WorkflowArn  string    `json:"workflowArn"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	WorkflowName string  `json:"workflowName"`
+	WorkflowArn  string  `json:"workflowArn"`
+	CreatedAt    float64 `json:"createdAt"`
+	UpdatedAt    float64 `json:"updatedAt"`
 }
 
-// IdMappingWorkflowSummary represents a summary of an ID mapping workflow for list responses.
-type IdMappingWorkflowSummary struct {
-	WorkflowName string    `json:"workflowName"`
-	WorkflowArn  string    `json:"workflowArn"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+// IDMappingWorkflowSummary represents a summary of an ID mapping workflow for list responses.
+type IDMappingWorkflowSummary struct {
+	WorkflowName string  `json:"workflowName"`
+	WorkflowArn  string  `json:"workflowArn"`
+	CreatedAt    float64 `json:"createdAt"`
+	UpdatedAt    float64 `json:"updatedAt"`
 }
 
 // ListSchemaMappingsResponse represents the response for ListSchemaMappings.
@@ -171,9 +169,9 @@ type ListMatchingWorkflowsResponse struct {
 	NextToken         string                    `json:"nextToken,omitempty"`
 }
 
-// ListIdMappingWorkflowsResponse represents the response for ListIdMappingWorkflows.
-type ListIdMappingWorkflowsResponse struct {
-	WorkflowSummaries []IdMappingWorkflowSummary `json:"workflowSummaries"`
+// ListIDMappingWorkflowsResponse represents the response for ListIDMappingWorkflows.
+type ListIDMappingWorkflowsResponse struct {
+	WorkflowSummaries []IDMappingWorkflowSummary `json:"workflowSummaries"`
 	NextToken         string                     `json:"nextToken,omitempty"`
 }
 
@@ -200,5 +198,4 @@ const (
 	errNotFound      = "ResourceNotFoundException"
 	errConflict      = "ConflictException"
 	errInternalError = "InternalServerException"
-	errAccessDenied  = "AccessDeniedException"
 )

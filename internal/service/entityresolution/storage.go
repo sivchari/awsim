@@ -24,10 +24,10 @@ type Storage interface {
 	DeleteMatchingWorkflow(ctx context.Context, workflowName string) error
 	ListMatchingWorkflows(ctx context.Context) ([]MatchingWorkflowSummary, error)
 
-	CreateIdMappingWorkflow(ctx context.Context, req *CreateIdMappingWorkflowRequest) (*IdMappingWorkflow, error)
-	GetIdMappingWorkflow(ctx context.Context, workflowName string) (*IdMappingWorkflow, error)
-	DeleteIdMappingWorkflow(ctx context.Context, workflowName string) error
-	ListIdMappingWorkflows(ctx context.Context) ([]IdMappingWorkflowSummary, error)
+	CreateIDMappingWorkflow(ctx context.Context, req *CreateIDMappingWorkflowRequest) (*IDMappingWorkflow, error)
+	GetIDMappingWorkflow(ctx context.Context, workflowName string) (*IDMappingWorkflow, error)
+	DeleteIDMappingWorkflow(ctx context.Context, workflowName string) error
+	ListIDMappingWorkflows(ctx context.Context) ([]IDMappingWorkflowSummary, error)
 
 	ListProviderServices(ctx context.Context) ([]ProviderService, error)
 }
@@ -37,7 +37,7 @@ type MemoryStorage struct {
 	mu                 sync.RWMutex
 	schemas            map[string]*SchemaMapping
 	matchingWorkflows  map[string]*MatchingWorkflow
-	idMappingWorkflows map[string]*IdMappingWorkflow
+	idMappingWorkflows map[string]*IDMappingWorkflow
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
@@ -45,7 +45,7 @@ func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
 		schemas:            make(map[string]*SchemaMapping),
 		matchingWorkflows:  make(map[string]*MatchingWorkflow),
-		idMappingWorkflows: make(map[string]*IdMappingWorkflow),
+		idMappingWorkflows: make(map[string]*IDMappingWorkflow),
 	}
 }
 
@@ -61,7 +61,7 @@ func (m *MemoryStorage) CreateSchemaMapping(_ context.Context, req *CreateSchema
 		}
 	}
 
-	now := time.Now()
+	now := float64(time.Now().Unix())
 	schema := &SchemaMapping{
 		SchemaName:        req.SchemaName,
 		SchemaArn:         fmt.Sprintf("arn:aws:entityresolution:%s:%s:schemamapping/%s", defaultRegion, defaultAccountID, req.SchemaName),
@@ -140,7 +140,7 @@ func (m *MemoryStorage) CreateMatchingWorkflow(_ context.Context, req *CreateMat
 		}
 	}
 
-	now := time.Now()
+	now := float64(time.Now().Unix())
 	workflow := &MatchingWorkflow{
 		WorkflowName:         req.WorkflowName,
 		WorkflowArn:          fmt.Sprintf("arn:aws:entityresolution:%s:%s:matchingworkflow/%s", defaultRegion, defaultAccountID, req.WorkflowName),
@@ -210,8 +210,8 @@ func (m *MemoryStorage) ListMatchingWorkflows(_ context.Context) ([]MatchingWork
 	return summaries, nil
 }
 
-// CreateIdMappingWorkflow creates a new ID mapping workflow.
-func (m *MemoryStorage) CreateIdMappingWorkflow(_ context.Context, req *CreateIdMappingWorkflowRequest) (*IdMappingWorkflow, error) {
+// CreateIDMappingWorkflow creates a new ID mapping workflow.
+func (m *MemoryStorage) CreateIDMappingWorkflow(_ context.Context, req *CreateIDMappingWorkflowRequest) (*IDMappingWorkflow, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -222,14 +222,14 @@ func (m *MemoryStorage) CreateIdMappingWorkflow(_ context.Context, req *CreateId
 		}
 	}
 
-	now := time.Now()
-	workflow := &IdMappingWorkflow{
+	now := float64(time.Now().Unix())
+	workflow := &IDMappingWorkflow{
 		WorkflowName:        req.WorkflowName,
 		WorkflowArn:         fmt.Sprintf("arn:aws:entityresolution:%s:%s:idmappingworkflow/%s", defaultRegion, defaultAccountID, req.WorkflowName),
 		Description:         req.Description,
 		InputSourceConfig:   req.InputSourceConfig,
 		OutputSourceConfig:  req.OutputSourceConfig,
-		IdMappingTechniques: req.IdMappingTechniques,
+		IDMappingTechniques: req.IDMappingTechniques,
 		RoleArn:             req.RoleArn,
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -241,8 +241,8 @@ func (m *MemoryStorage) CreateIdMappingWorkflow(_ context.Context, req *CreateId
 	return workflow, nil
 }
 
-// GetIdMappingWorkflow returns an ID mapping workflow.
-func (m *MemoryStorage) GetIdMappingWorkflow(_ context.Context, workflowName string) (*IdMappingWorkflow, error) {
+// GetIDMappingWorkflow returns an ID mapping workflow.
+func (m *MemoryStorage) GetIDMappingWorkflow(_ context.Context, workflowName string) (*IDMappingWorkflow, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -257,8 +257,8 @@ func (m *MemoryStorage) GetIdMappingWorkflow(_ context.Context, workflowName str
 	return workflow, nil
 }
 
-// DeleteIdMappingWorkflow deletes an ID mapping workflow.
-func (m *MemoryStorage) DeleteIdMappingWorkflow(_ context.Context, workflowName string) error {
+// DeleteIDMappingWorkflow deletes an ID mapping workflow.
+func (m *MemoryStorage) DeleteIDMappingWorkflow(_ context.Context, workflowName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -274,14 +274,14 @@ func (m *MemoryStorage) DeleteIdMappingWorkflow(_ context.Context, workflowName 
 	return nil
 }
 
-// ListIdMappingWorkflows lists all ID mapping workflows.
-func (m *MemoryStorage) ListIdMappingWorkflows(_ context.Context) ([]IdMappingWorkflowSummary, error) {
+// ListIDMappingWorkflows lists all ID mapping workflows.
+func (m *MemoryStorage) ListIDMappingWorkflows(_ context.Context) ([]IDMappingWorkflowSummary, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	summaries := make([]IdMappingWorkflowSummary, 0, len(m.idMappingWorkflows))
+	summaries := make([]IDMappingWorkflowSummary, 0, len(m.idMappingWorkflows))
 	for _, w := range m.idMappingWorkflows {
-		summaries = append(summaries, IdMappingWorkflowSummary{
+		summaries = append(summaries, IDMappingWorkflowSummary{
 			WorkflowName: w.WorkflowName,
 			WorkflowArn:  w.WorkflowArn,
 			CreatedAt:    w.CreatedAt,

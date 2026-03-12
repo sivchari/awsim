@@ -170,9 +170,9 @@ func (s *Service) ListMatchingWorkflows(w http.ResponseWriter, r *http.Request) 
 
 // ID mapping workflow handlers.
 
-// CreateIdMappingWorkflow handles POST /idmappingworkflows.
-func (s *Service) CreateIdMappingWorkflow(w http.ResponseWriter, r *http.Request) {
-	var req CreateIdMappingWorkflowRequest
+// CreateIDMappingWorkflow handles POST /idmappingworkflows.
+func (s *Service) CreateIDMappingWorkflow(w http.ResponseWriter, r *http.Request) {
+	var req CreateIDMappingWorkflowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, errValidation, "Invalid request body")
 
@@ -185,7 +185,7 @@ func (s *Service) CreateIdMappingWorkflow(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workflow, err := s.storage.CreateIdMappingWorkflow(r.Context(), &req)
+	workflow, err := s.storage.CreateIDMappingWorkflow(r.Context(), &req)
 	if err != nil {
 		handleError(w, err)
 
@@ -195,8 +195,8 @@ func (s *Service) CreateIdMappingWorkflow(w http.ResponseWriter, r *http.Request
 	writeJSON(w, workflow)
 }
 
-// GetIdMappingWorkflow handles GET /idmappingworkflows/{workflowName}.
-func (s *Service) GetIdMappingWorkflow(w http.ResponseWriter, r *http.Request) {
+// GetIDMappingWorkflow handles GET /idmappingworkflows/{workflowName}.
+func (s *Service) GetIDMappingWorkflow(w http.ResponseWriter, r *http.Request) {
 	workflowName := r.PathValue("workflowName")
 	if workflowName == "" {
 		writeError(w, http.StatusBadRequest, errValidation, "workflowName is required")
@@ -204,7 +204,7 @@ func (s *Service) GetIdMappingWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workflow, err := s.storage.GetIdMappingWorkflow(r.Context(), workflowName)
+	workflow, err := s.storage.GetIDMappingWorkflow(r.Context(), workflowName)
 	if err != nil {
 		handleError(w, err)
 
@@ -214,8 +214,8 @@ func (s *Service) GetIdMappingWorkflow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, workflow)
 }
 
-// DeleteIdMappingWorkflow handles DELETE /idmappingworkflows/{workflowName}.
-func (s *Service) DeleteIdMappingWorkflow(w http.ResponseWriter, r *http.Request) {
+// DeleteIDMappingWorkflow handles DELETE /idmappingworkflows/{workflowName}.
+func (s *Service) DeleteIDMappingWorkflow(w http.ResponseWriter, r *http.Request) {
 	workflowName := r.PathValue("workflowName")
 	if workflowName == "" {
 		writeError(w, http.StatusBadRequest, errValidation, "workflowName is required")
@@ -223,7 +223,7 @@ func (s *Service) DeleteIdMappingWorkflow(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := s.storage.DeleteIdMappingWorkflow(r.Context(), workflowName); err != nil {
+	if err := s.storage.DeleteIDMappingWorkflow(r.Context(), workflowName); err != nil {
 		handleError(w, err)
 
 		return
@@ -232,16 +232,16 @@ func (s *Service) DeleteIdMappingWorkflow(w http.ResponseWriter, r *http.Request
 	writeJSON(w, map[string]string{"message": "ID mapping workflow deleted"})
 }
 
-// ListIdMappingWorkflows handles GET /idmappingworkflows.
-func (s *Service) ListIdMappingWorkflows(w http.ResponseWriter, r *http.Request) {
-	summaries, err := s.storage.ListIdMappingWorkflows(r.Context())
+// ListIDMappingWorkflows handles GET /idmappingworkflows.
+func (s *Service) ListIDMappingWorkflows(w http.ResponseWriter, r *http.Request) {
+	summaries, err := s.storage.ListIDMappingWorkflows(r.Context())
 	if err != nil {
 		handleError(w, err)
 
 		return
 	}
 
-	writeJSON(w, &ListIdMappingWorkflowsResponse{
+	writeJSON(w, &ListIDMappingWorkflowsResponse{
 		WorkflowSummaries: summaries,
 	})
 }
