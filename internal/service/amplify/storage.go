@@ -63,7 +63,7 @@ func (m *MemoryStorage) CreateApp(_ context.Context, input *CreateAppInput) (*Ap
 	defer m.mu.Unlock()
 
 	appID := uuid.New().String()[:12]
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := epochNow()
 
 	platform := defaultPlatform
 	if input.Platform != "" {
@@ -160,7 +160,7 @@ func (m *MemoryStorage) UpdateApp(_ context.Context, appID string, input *Update
 		app.EnvironmentVariables = input.EnvironmentVariables
 	}
 
-	app.UpdateTime = time.Now().UTC().Format(time.RFC3339)
+	app.UpdateTime = epochNow()
 
 	return app, nil
 }
@@ -199,7 +199,7 @@ func (m *MemoryStorage) CreateBranch(_ context.Context, appID string, input *Cre
 		}
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := epochNow()
 
 	stage := "NONE"
 	if input.Stage != "" {
@@ -324,4 +324,8 @@ func ensureMap(m map[string]string) map[string]string {
 	}
 
 	return m
+}
+
+func epochNow() float64 {
+	return float64(time.Now().Unix())
 }

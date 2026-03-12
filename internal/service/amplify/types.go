@@ -4,7 +4,7 @@ package amplify
 type App struct {
 	AppArn                string            `json:"appArn"`
 	AppID                 string            `json:"appId"`
-	CreateTime            string            `json:"createTime"`
+	CreateTime            float64           `json:"createTime"`
 	DefaultDomain         string            `json:"defaultDomain"`
 	Description           string            `json:"description"`
 	EnableBasicAuth       bool              `json:"enableBasicAuth"`
@@ -13,7 +13,7 @@ type App struct {
 	Name                  string            `json:"name"`
 	Platform              string            `json:"platform"`
 	Repository            string            `json:"repository"`
-	UpdateTime            string            `json:"updateTime"`
+	UpdateTime            float64           `json:"updateTime"`
 	Tags                  map[string]string `json:"tags,omitempty"`
 }
 
@@ -22,7 +22,7 @@ type Branch struct {
 	ActiveJobID              string            `json:"activeJobId"`
 	BranchArn                string            `json:"branchArn"`
 	BranchName               string            `json:"branchName"`
-	CreateTime               string            `json:"createTime"`
+	CreateTime               float64           `json:"createTime"`
 	CustomDomains            []string          `json:"customDomains"`
 	Description              string            `json:"description"`
 	DisplayName              string            `json:"displayName"`
@@ -34,7 +34,7 @@ type Branch struct {
 	Stage                    string            `json:"stage"`
 	TTL                      string            `json:"ttl"`
 	TotalNumberOfJobs        string            `json:"totalNumberOfJobs"`
-	UpdateTime               string            `json:"updateTime"`
+	UpdateTime               float64           `json:"updateTime"`
 	Tags                     map[string]string `json:"tags,omitempty"`
 }
 
