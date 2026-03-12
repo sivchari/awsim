@@ -254,6 +254,10 @@ linters:
       - path: internal/service/memorydb/types\.go
         linters:
           - tagliatelle
+      # AWS Glacier API requires PascalCase JSON field names.
+      - path: internal/service/glacier/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

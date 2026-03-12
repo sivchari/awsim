@@ -38,6 +38,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/firehose"
 	_ "github.com/sivchari/awsim/internal/service/forecast"
 	_ "github.com/sivchari/awsim/internal/service/gamelift"
+	_ "github.com/sivchari/awsim/internal/service/glacier"
 	_ "github.com/sivchari/awsim/internal/service/globalaccelerator"
 	_ "github.com/sivchari/awsim/internal/service/glue"
 	_ "github.com/sivchari/awsim/internal/service/iam"
