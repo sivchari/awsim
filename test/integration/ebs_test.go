@@ -45,8 +45,8 @@ func TestEBS_StartSnapshot(t *testing.T) {
 		t.Error("expected snapshot ID to be set")
 	}
 
-	if *result.Status != "pending" {
-		t.Errorf("expected status pending, got %s", string(*result.Status))
+	if result.Status != "pending" {
+		t.Errorf("expected status pending, got %s", string(result.Status))
 	}
 
 	if *result.VolumeSize != 100 {
@@ -77,8 +77,8 @@ func TestEBS_CompleteSnapshot(t *testing.T) {
 		t.Fatalf("failed to complete snapshot: %v", err)
 	}
 
-	if *completeResult.Status != "completed" {
-		t.Errorf("expected status completed, got %s", string(*completeResult.Status))
+	if completeResult.Status != "completed" {
+		t.Errorf("expected status completed, got %s", string(completeResult.Status))
 	}
 }
 
