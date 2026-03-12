@@ -26,7 +26,7 @@ type EncryptionInfo struct {
 
 // EncryptionAtRest represents encryption at rest configuration.
 type EncryptionAtRest struct {
-	DataVolumeKMSKeyID string `json:"dataVolumeKMSKeyId,omitempty"`
+	DataVolumeKMSKeyID string `json:"dataVolumeKmsKeyId,omitempty"`
 }
 
 // EncryptionInTransit represents encryption in transit configuration.

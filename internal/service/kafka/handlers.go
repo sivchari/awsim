@@ -37,7 +37,7 @@ func (s *Service) CreateCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, resp)
 }
 
 // ListClusters handles the ListClusters operation.
@@ -68,7 +68,7 @@ func (s *Service) ListClusters(w http.ResponseWriter, r *http.Request) {
 		resp.NextToken = next
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, resp)
 }
 
 // DescribeCluster handles the DescribeCluster operation.
@@ -87,7 +87,7 @@ func (s *Service) DescribeCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, &DescribeClusterResponse{ClusterInfo: cluster})
+	writeJSON(w, &DescribeClusterResponse{ClusterInfo: cluster})
 }
 
 // DeleteCluster handles the DeleteCluster operation.
@@ -106,7 +106,7 @@ func (s *Service) DeleteCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, resp)
 }
 
 // GetBootstrapBrokers handles the GetBootstrapBrokers operation.
@@ -125,7 +125,7 @@ func (s *Service) GetBootstrapBrokers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, resp)
 }
 
 // UpdateClusterConfiguration handles the UpdateClusterConfiguration operation.
@@ -151,7 +151,7 @@ func (s *Service) UpdateClusterConfiguration(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, resp)
 }
 
 // extractClusterArn extracts the cluster ARN from the URL path.
@@ -179,9 +179,9 @@ func extractClusterArn(path string) string {
 }
 
 // writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

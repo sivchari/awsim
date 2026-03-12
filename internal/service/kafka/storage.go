@@ -149,6 +149,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, clusterArn string) (*De
 	}
 
 	cluster.State = statusDeleting
+
 	delete(s.clusters, clusterArn)
 
 	return &DeleteClusterResponse{
