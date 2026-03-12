@@ -266,6 +266,10 @@ linters:
       - path: internal/service/ebs/types\.go
         linters:
           - tagliatelle
+      # AWS STS API requires PascalCase JSON field names.
+      - path: internal/service/sts/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

@@ -70,6 +70,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/sns"
 	_ "github.com/sivchari/awsim/internal/service/sqs"
 	_ "github.com/sivchari/awsim/internal/service/ssm"
+	_ "github.com/sivchari/awsim/internal/service/sts"
 	_ "github.com/sivchari/awsim/internal/service/xray"
 )
 
