@@ -129,13 +129,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Check if the request matches a prefix router first
-	for prefix, mux := range r.prefixRouters {
-		if len(req.URL.Path) >= len(prefix) && req.URL.Path[:len(prefix)] == prefix {
-			mux.ServeHTTP(w, req)
+	// Check if the request matches a prefix router first.
+	// Use longest prefix match to avoid short prefixes (e.g., "/apps")
+	// incorrectly capturing longer ones (e.g., "/appsync").
+	bestPrefix := ""
 
-			return
+	for prefix := range r.prefixRouters {
+		if len(req.URL.Path) >= len(prefix) && req.URL.Path[:len(prefix)] == prefix && len(prefix) > len(bestPrefix) {
+			bestPrefix = prefix
 		}
+	}
+
+	if bestPrefix != "" {
+		r.prefixRouters[bestPrefix].ServeHTTP(w, req)
+
+		return
 	}
 
 	r.mux.ServeHTTP(w, req)
