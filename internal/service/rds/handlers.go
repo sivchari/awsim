@@ -38,6 +38,8 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.DeleteDBCluster(w, r)
 	case "DescribeDBClusters":
 		s.DescribeDBClusters(w, r)
+	case "ModifyDBCluster":
+		s.ModifyDBCluster(w, r)
 	case "CreateDBSnapshot":
 		s.CreateDBSnapshot(w, r)
 	case "DeleteDBSnapshot":
@@ -321,6 +323,35 @@ func (s *Service) DescribeDBClusters(w http.ResponseWriter, r *http.Request) {
 		Xmlns:      rdsXMLNS,
 		DBClusters: XMLDBClusters{Items: xmlClusters},
 		RequestID:  uuid.New().String(),
+	})
+}
+
+// ModifyDBCluster handles the ModifyDBCluster action.
+func (s *Service) ModifyDBCluster(w http.ResponseWriter, r *http.Request) {
+	var req ModifyDBClusterInput
+	if err := readJSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameterValue, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.DBClusterIdentifier == "" {
+		writeError(w, errInvalidParameterValue, "DBClusterIdentifier is required", http.StatusBadRequest)
+
+		return
+	}
+
+	cluster, err := s.storage.ModifyDBCluster(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeXMLResponse(w, XMLModifyDBClusterResponse{
+		Xmlns:     rdsXMLNS,
+		DBCluster: convertToXMLDBCluster(cluster),
+		RequestID: uuid.New().String(),
 	})
 }
 
@@ -627,6 +658,14 @@ type XMLDescribeDBClustersResponse struct {
 	Xmlns      string        `xml:"xmlns,attr"`
 	DBClusters XMLDBClusters `xml:"DescribeDBClustersResult>DBClusters"`
 	RequestID  string        `xml:"ResponseMetadata>RequestId"`
+}
+
+// XMLModifyDBClusterResponse is the XML response for ModifyDBCluster.
+type XMLModifyDBClusterResponse struct {
+	XMLName   xml.Name     `xml:"ModifyDBClusterResponse"`
+	Xmlns     string       `xml:"xmlns,attr"`
+	DBCluster XMLDBCluster `xml:"ModifyDBClusterResult>DBCluster"`
+	RequestID string       `xml:"ResponseMetadata>RequestId"`
 }
 
 // XMLCreateDBSnapshotResponse is the XML response for CreateDBSnapshot.

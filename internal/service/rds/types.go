@@ -262,6 +262,17 @@ type DescribeDBClustersOutput struct {
 	Marker     string      `json:"Marker,omitempty"`
 }
 
+// ModifyDBClusterInput represents the input for ModifyDBCluster.
+type ModifyDBClusterInput struct {
+	DBClusterIdentifier string   `json:"DBClusterIdentifier"`
+	EngineVersion       string   `json:"EngineVersion,omitempty"`
+	MasterUserPassword  string   `json:"MasterUserPassword,omitempty"`
+	Port                *int32   `json:"Port,omitempty"`
+	DeletionProtection  *bool    `json:"DeletionProtection,omitempty"`
+	VpcSecurityGroupIDs []string `json:"VpcSecurityGroupIDs,omitempty"`
+	ApplyImmediately    bool     `json:"ApplyImmediately,omitempty"`
+}
+
 // CreateDBSnapshotInput represents the input for CreateDBSnapshot.
 type CreateDBSnapshotInput struct {
 	DBSnapshotIdentifier string `json:"DBSnapshotIdentifier"`

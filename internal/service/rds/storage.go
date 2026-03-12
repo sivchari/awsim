@@ -25,6 +25,7 @@ type Storage interface {
 	CreateDBCluster(ctx context.Context, input *CreateDBClusterInput) (*DBCluster, error)
 	DeleteDBCluster(ctx context.Context, identifier string, skipFinalSnapshot bool) (*DBCluster, error)
 	DescribeDBClusters(ctx context.Context, identifier string) ([]DBCluster, error)
+	ModifyDBCluster(ctx context.Context, input *ModifyDBClusterInput) (*DBCluster, error)
 	CreateDBSnapshot(ctx context.Context, input *CreateDBSnapshotInput) (*DBSnapshot, error)
 	DeleteDBSnapshot(ctx context.Context, identifier string) (*DBSnapshot, error)
 }
@@ -369,6 +370,38 @@ func (m *MemoryStorage) DescribeDBClusters(_ context.Context, identifier string)
 	}
 
 	return clusters, nil
+}
+
+// ModifyDBCluster modifies a DB cluster.
+func (m *MemoryStorage) ModifyDBCluster(_ context.Context, input *ModifyDBClusterInput) (*DBCluster, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cluster, exists := m.clusters[input.DBClusterIdentifier]
+	if !exists {
+		return nil, &Error{
+			Code:    errDBClusterNotFound,
+			Message: fmt.Sprintf("DB cluster not found: %s", input.DBClusterIdentifier),
+		}
+	}
+
+	if input.EngineVersion != "" {
+		cluster.EngineVersion = input.EngineVersion
+	}
+
+	if input.Port != nil {
+		cluster.Port = *input.Port
+	}
+
+	if input.DeletionProtection != nil {
+		cluster.DeletionProtection = *input.DeletionProtection
+	}
+
+	if len(input.VpcSecurityGroupIDs) > 0 {
+		cluster.VpcSecurityGroups = buildVpcSecurityGroups(input.VpcSecurityGroupIDs)
+	}
+
+	return cluster, nil
 }
 
 // CreateDBSnapshot creates a DB snapshot.

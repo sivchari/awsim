@@ -50,6 +50,7 @@ func (s *Service) Actions() []string {
 		"CreateDBCluster",
 		"DeleteDBCluster",
 		"DescribeDBClusters",
+		"ModifyDBCluster",
 		"CreateDBSnapshot",
 		"DeleteDBSnapshot",
 	}
