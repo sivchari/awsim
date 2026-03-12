@@ -7,6 +7,7 @@ import (
 	"github.com/sivchari/awsim/internal/server"
 	// Register services via init().
 	_ "github.com/sivchari/awsim/internal/service/acm"
+	_ "github.com/sivchari/awsim/internal/service/amplify"
 	_ "github.com/sivchari/awsim/internal/service/apigateway"
 	_ "github.com/sivchari/awsim/internal/service/appmesh"
 	_ "github.com/sivchari/awsim/internal/service/appsync"
