@@ -24,6 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3
 	github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/dlm v1.35.13
+	github.com/aws/aws-sdk-go-v2/service/docdb v1.48.11
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.55.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.285.0
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.55.1
@@ -32,6 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.51.9
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.54.7
 	github.com/aws/aws-sdk-go-v2/service/emrserverless v1.39.3
+	github.com/aws/aws-sdk-go-v2/service/entityresolution v1.26.3
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18
 	github.com/aws/aws-sdk-go-v2/service/finspace v1.33.18
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.42.9
@@ -40,9 +42,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/globalaccelerator v1.35.11
 	github.com/aws/aws-sdk-go-v2/service/glue v1.137.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.2
+	github.com/aws/aws-sdk-go-v2/service/kafka v1.49.0
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.49.5
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0
+	github.com/aws/aws-sdk-go-v2/service/memorydb v1.33.12
 	github.com/aws/aws-sdk-go-v2/service/mq v1.33.1
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3
 	github.com/aws/aws-sdk-go-v2/service/pipes v1.23.17
@@ -76,14 +80,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.19 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/docdb v1.48.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/entityresolution v1.26.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.19 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.18 // indirect
-	github.com/aws/aws-sdk-go-v2/service/kafka v1.49.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.13 // indirect

@@ -250,6 +250,10 @@ linters:
       - path: internal/service/rekognition/types\.go
         linters:
           - tagliatelle
+      # AWS MemoryDB API requires PascalCase JSON field names.
+      - path: internal/service/memorydb/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

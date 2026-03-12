@@ -1,0 +1,434 @@
+package memorydb
+
+import (
+	"context"
+	"fmt"
+	"sync"
+)
+
+const (
+	defaultRegion    = "us-east-1"
+	defaultAccountID = "000000000000"
+)
+
+// ServiceError represents a MemoryDB service error.
+type ServiceError struct {
+	Code    string
+	Message string
+}
+
+func (e *ServiceError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
+
+const (
+	errClusterNotFound = "ClusterNotFoundFault"
+	errClusterExists   = "ClusterAlreadyExistsFault"
+	errUserNotFound    = "UserNotFoundFault"
+	errUserExists      = "UserAlreadyExistsFault"
+	errACLNotFound     = "ACLNotFoundFault"
+	errACLExists       = "ACLAlreadyExistsFault"
+
+	statusDeleting = "deleting"
+)
+
+// Storage defines the MemoryDB storage interface.
+type Storage interface {
+	CreateCluster(ctx context.Context, req *CreateClusterRequest) (*Cluster, error)
+	DescribeClusters(ctx context.Context, clusterName string) ([]Cluster, error)
+	UpdateCluster(ctx context.Context, req *UpdateClusterRequest) (*Cluster, error)
+	DeleteCluster(ctx context.Context, clusterName string) (*Cluster, error)
+
+	CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error)
+	DescribeUsers(ctx context.Context, userName string) ([]User, error)
+	DeleteUser(ctx context.Context, userName string) (*User, error)
+
+	CreateACL(ctx context.Context, req *CreateACLRequest) (*ACL, error)
+	DescribeACLs(ctx context.Context, aclName string) ([]ACL, error)
+	DeleteACL(ctx context.Context, aclName string) (*ACL, error)
+}
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu       sync.RWMutex
+	clusters map[string]*Cluster
+	users    map[string]*User
+	acls     map[string]*ACL
+}
+
+// NewMemoryStorage creates a new MemoryStorage.
+func NewMemoryStorage() *MemoryStorage {
+	return &MemoryStorage{
+		clusters: make(map[string]*Cluster),
+		users:    make(map[string]*User),
+		acls:     make(map[string]*ACL),
+	}
+}
+
+// buildClusterBase creates a Cluster with core fields from a CreateClusterRequest.
+func buildClusterBase(req *CreateClusterRequest) *Cluster {
+	numShards := int32(1)
+	if req.NumShards != nil {
+		numShards = *req.NumShards
+	}
+
+	port := int32(6379)
+	if req.Port != nil {
+		port = *req.Port
+	}
+
+	engine := "redis"
+	if req.Engine != "" {
+		engine = req.Engine
+	}
+
+	engineVersion := "7.1"
+	if req.EngineVersion != "" {
+		engineVersion = req.EngineVersion
+	}
+
+	return &Cluster{
+		ACLName:            req.ACLName,
+		ARN:                fmt.Sprintf("arn:aws:memorydb:%s:%s:cluster/%s", defaultRegion, defaultAccountID, req.ClusterName),
+		AvailabilityMode:   "singleaz",
+		ClusterEndpoint:    &Endpoint{Address: fmt.Sprintf("%s.memorydb.%s.amazonaws.com", req.ClusterName, defaultRegion), Port: port},
+		Description:        req.Description,
+		Engine:             engine,
+		EngineVersion:      engineVersion,
+		KmsKeyID:           req.KmsKeyID,
+		MaintenanceWindow:  req.MaintenanceWindow,
+		Name:               req.ClusterName,
+		NodeType:           req.NodeType,
+		NumberOfShards:     numShards,
+		ParameterGroupName: req.ParameterGroupName,
+		Status:             "available",
+		SubnetGroupName:    req.SubnetGroupName,
+	}
+}
+
+// applyOptionalClusterFields sets optional fields on a Cluster from a CreateClusterRequest.
+func applyOptionalClusterFields(cluster *Cluster, req *CreateClusterRequest) {
+	if req.AutoMinorVersionUpgrade != nil {
+		cluster.AutoMinorVersionUpgrade = *req.AutoMinorVersionUpgrade
+	}
+
+	if req.TLSEnabled != nil {
+		cluster.TLSEnabled = *req.TLSEnabled
+	}
+
+	if req.SnapshotRetentionLimit != nil {
+		cluster.SnapshotRetentionLimit = *req.SnapshotRetentionLimit
+	}
+
+	if req.SnapshotWindow != "" {
+		cluster.SnapshotWindow = req.SnapshotWindow
+	}
+
+	if len(req.SecurityGroupIDs) > 0 {
+		sgs := make([]SecurityGroupMembership, 0, len(req.SecurityGroupIDs))
+		for _, sgID := range req.SecurityGroupIDs {
+			sgs = append(sgs, SecurityGroupMembership{
+				SecurityGroupID: sgID,
+				Status:          "active",
+			})
+		}
+
+		cluster.SecurityGroups = sgs
+	}
+}
+
+// buildCluster creates a Cluster from a CreateClusterRequest.
+func buildCluster(req *CreateClusterRequest) *Cluster {
+	cluster := buildClusterBase(req)
+	applyOptionalClusterFields(cluster, req)
+
+	return cluster
+}
+
+// CreateCluster creates a new cluster.
+func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterRequest) (*Cluster, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.clusters[req.ClusterName]; exists {
+		return nil, &ServiceError{
+			Code:    errClusterExists,
+			Message: fmt.Sprintf("Cluster %s already exists", req.ClusterName),
+		}
+	}
+
+	cluster := buildCluster(req)
+	m.clusters[req.ClusterName] = cluster
+
+	return cluster, nil
+}
+
+// DescribeClusters returns clusters matching the filter.
+func (m *MemoryStorage) DescribeClusters(_ context.Context, clusterName string) ([]Cluster, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if clusterName != "" {
+		cluster, exists := m.clusters[clusterName]
+		if !exists {
+			return nil, &ServiceError{
+				Code:    errClusterNotFound,
+				Message: fmt.Sprintf("Cluster %s not found", clusterName),
+			}
+		}
+
+		return []Cluster{*cluster}, nil
+	}
+
+	clusters := make([]Cluster, 0, len(m.clusters))
+	for _, c := range m.clusters {
+		clusters = append(clusters, *c)
+	}
+
+	return clusters, nil
+}
+
+// UpdateCluster updates an existing cluster.
+func (m *MemoryStorage) UpdateCluster(_ context.Context, req *UpdateClusterRequest) (*Cluster, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cluster, exists := m.clusters[req.ClusterName]
+	if !exists {
+		return nil, &ServiceError{
+			Code:    errClusterNotFound,
+			Message: fmt.Sprintf("Cluster %s not found", req.ClusterName),
+		}
+	}
+
+	if req.Description != "" {
+		cluster.Description = req.Description
+	}
+
+	if req.ACLName != "" {
+		cluster.ACLName = req.ACLName
+	}
+
+	if req.EngineVersion != "" {
+		cluster.EngineVersion = req.EngineVersion
+	}
+
+	if req.MaintenanceWindow != "" {
+		cluster.MaintenanceWindow = req.MaintenanceWindow
+	}
+
+	if req.NodeType != "" {
+		cluster.NodeType = req.NodeType
+	}
+
+	if req.ParameterGroupName != "" {
+		cluster.ParameterGroupName = req.ParameterGroupName
+	}
+
+	if req.SnapshotRetentionLimit != nil {
+		cluster.SnapshotRetentionLimit = *req.SnapshotRetentionLimit
+	}
+
+	if req.SnapshotWindow != "" {
+		cluster.SnapshotWindow = req.SnapshotWindow
+	}
+
+	if req.SnsTopicArn != "" {
+		cluster.SnsTopicArn = req.SnsTopicArn
+	}
+
+	if len(req.SecurityGroupIDs) > 0 {
+		sgs := make([]SecurityGroupMembership, 0, len(req.SecurityGroupIDs))
+		for _, sgID := range req.SecurityGroupIDs {
+			sgs = append(sgs, SecurityGroupMembership{
+				SecurityGroupID: sgID,
+				Status:          "active",
+			})
+		}
+
+		cluster.SecurityGroups = sgs
+	}
+
+	return cluster, nil
+}
+
+// DeleteCluster deletes a cluster.
+func (m *MemoryStorage) DeleteCluster(_ context.Context, clusterName string) (*Cluster, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cluster, exists := m.clusters[clusterName]
+	if !exists {
+		return nil, &ServiceError{
+			Code:    errClusterNotFound,
+			Message: fmt.Sprintf("Cluster %s not found", clusterName),
+		}
+	}
+
+	cluster.Status = statusDeleting
+
+	delete(m.clusters, clusterName)
+
+	return cluster, nil
+}
+
+// CreateUser creates a new user.
+func (m *MemoryStorage) CreateUser(_ context.Context, req *CreateUserRequest) (*User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.users[req.UserName]; exists {
+		return nil, &ServiceError{
+			Code:    errUserExists,
+			Message: fmt.Sprintf("User %s already exists", req.UserName),
+		}
+	}
+
+	passwordCount := int32(0)
+	authType := "no-password"
+
+	if req.AuthenticationMode != nil {
+		if req.AuthenticationMode.Type != "" {
+			authType = req.AuthenticationMode.Type
+		}
+
+		passwordCount = int32(min(len(req.AuthenticationMode.Passwords), 2)) //nolint:gosec // MemoryDB allows max 2 passwords
+	}
+
+	user := &User{
+		ARN:          fmt.Sprintf("arn:aws:memorydb:%s:%s:user/%s", defaultRegion, defaultAccountID, req.UserName),
+		AccessString: req.AccessString,
+		Authentication: &Authentication{
+			PasswordCount: passwordCount,
+			Type:          authType,
+		},
+		Name:     req.UserName,
+		Status:   "active",
+		ACLNames: []string{},
+	}
+
+	m.users[req.UserName] = user
+
+	return user, nil
+}
+
+// DescribeUsers returns users matching the filter.
+func (m *MemoryStorage) DescribeUsers(_ context.Context, userName string) ([]User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if userName != "" {
+		user, exists := m.users[userName]
+		if !exists {
+			return nil, &ServiceError{
+				Code:    errUserNotFound,
+				Message: fmt.Sprintf("User %s not found", userName),
+			}
+		}
+
+		return []User{*user}, nil
+	}
+
+	users := make([]User, 0, len(m.users))
+	for _, u := range m.users {
+		users = append(users, *u)
+	}
+
+	return users, nil
+}
+
+// DeleteUser deletes a user.
+func (m *MemoryStorage) DeleteUser(_ context.Context, userName string) (*User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	user, exists := m.users[userName]
+	if !exists {
+		return nil, &ServiceError{
+			Code:    errUserNotFound,
+			Message: fmt.Sprintf("User %s not found", userName),
+		}
+	}
+
+	user.Status = statusDeleting
+
+	delete(m.users, userName)
+
+	return user, nil
+}
+
+// CreateACL creates a new ACL.
+func (m *MemoryStorage) CreateACL(_ context.Context, req *CreateACLRequest) (*ACL, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.acls[req.ACLName]; exists {
+		return nil, &ServiceError{
+			Code:    errACLExists,
+			Message: fmt.Sprintf("ACL %s already exists", req.ACLName),
+		}
+	}
+
+	userNames := req.UserNames
+	if userNames == nil {
+		userNames = []string{}
+	}
+
+	acl := &ACL{
+		ARN:                  fmt.Sprintf("arn:aws:memorydb:%s:%s:acl/%s", defaultRegion, defaultAccountID, req.ACLName),
+		Clusters:             []string{},
+		MinimumEngineVersion: "6.2.6",
+		Name:                 req.ACLName,
+		Status:               "active",
+		UserNames:            userNames,
+	}
+
+	m.acls[req.ACLName] = acl
+
+	return acl, nil
+}
+
+// DescribeACLs returns ACLs matching the filter.
+func (m *MemoryStorage) DescribeACLs(_ context.Context, aclName string) ([]ACL, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if aclName != "" {
+		acl, exists := m.acls[aclName]
+		if !exists {
+			return nil, &ServiceError{
+				Code:    errACLNotFound,
+				Message: fmt.Sprintf("ACL %s not found", aclName),
+			}
+		}
+
+		return []ACL{*acl}, nil
+	}
+
+	acls := make([]ACL, 0, len(m.acls))
+	for _, a := range m.acls {
+		acls = append(acls, *a)
+	}
+
+	return acls, nil
+}
+
+// DeleteACL deletes an ACL.
+func (m *MemoryStorage) DeleteACL(_ context.Context, aclName string) (*ACL, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	acl, exists := m.acls[aclName]
+	if !exists {
+		return nil, &ServiceError{
+			Code:    errACLNotFound,
+			Message: fmt.Sprintf("ACL %s not found", aclName),
+		}
+	}
+
+	acl.Status = statusDeleting
+
+	delete(m.acls, aclName)
+
+	return acl, nil
+}
