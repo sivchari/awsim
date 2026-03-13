@@ -18,7 +18,7 @@
 - **Lightweight** - Fast startup, minimal resource usage
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 
-## Supported Services (69 services)
+## Supported Services (70 services)
 
 ### Storage
 | Service | Description |
@@ -125,6 +125,11 @@
 | Forecast | Time-series forecasting |
 | Data Exchange | Data marketplace |
 | Entity Resolution | Entity matching |
+
+### Developer Tools
+| Service | Description |
+|---------|-------------|
+| CodeGuru Reviewer | Automated code review |
 
 ### Other Services
 | Service | Description |
