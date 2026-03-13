@@ -1,11 +1,17 @@
-# awsim
+<p align="center">
+  <img src="assets/awsim.png" alt="awsim logo" width="300">
+</p>
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/sivchari/awsim)](https://go.dev/)
-[![License](https://img.shields.io/github/license/sivchari/awsim)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/sivchari/awsim)](https://github.com/sivchari/awsim/releases)
-[![CI](https://github.com/sivchari/awsim/actions/workflows/ci.yaml/badge.svg)](https://github.com/sivchari/awsim/actions/workflows/ci.yaml)
+<h1 align="center">awsim</h1>
 
-A lightweight AWS service emulator written in Go. Designed for CI/CD environments where authentication-free local AWS testing is needed.
+<p align="center">
+  <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/sivchari/awsim" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/sivchari/awsim" alt="License"></a>
+  <a href="https://github.com/sivchari/awsim/releases"><img src="https://img.shields.io/github/v/release/sivchari/awsim" alt="Release"></a>
+  <a href="https://github.com/sivchari/awsim/actions/workflows/ci.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+</p>
+
+<p align="center">A lightweight AWS service emulator written in Go. Designed for CI/CD environments where authentication-free local AWS testing is needed.</p>
 
 ## Features
 
@@ -15,7 +21,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 - **Lightweight** - Fast startup, minimal resource usage
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 
-## Supported Services (59 services)
+## Supported Services (69 services)
 
 ### Storage
 | Service | Description |
@@ -25,6 +31,9 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | S3 Tables | S3 table buckets |
 | DynamoDB | NoSQL database |
 | ElastiCache | In-memory caching |
+| MemoryDB | Redis-compatible database |
+| Glacier | Archive storage |
+| EBS | Block storage |
 
 ### Compute
 | Service | Description |
@@ -32,6 +41,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | Lambda | Serverless functions |
 | Batch | Batch computing |
 | EC2 | Virtual machines |
+| Elastic Beanstalk | Application deployment |
 
 ### Container
 | Service | Description |
@@ -55,6 +65,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | Firehose | Data delivery |
 | MQ | Message broker (ActiveMQ/RabbitMQ) |
 | Pipes | Event-driven integration |
+| MSK (Kafka) | Managed streaming for Kafka |
 
 ### Security & Identity
 | Service | Description |
@@ -65,6 +76,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | ACM | Certificate management |
 | Cognito | User authentication |
 | Security Lake | Security data lake |
+| STS | Security token service |
 
 ### Monitoring & Logging
 | Service | Description |
@@ -92,6 +104,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | AppSync | GraphQL API |
 | SES v2 | Email service |
 | Scheduler | Task scheduling |
+| Amplify | Full-stack application hosting |
 
 ### Management & Configuration
 | Service | Description |
@@ -102,6 +115,7 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | Organizations | Multi-account management |
 | Service Quotas | Service limit management |
 | CodeConnections | Source code connections |
+| Backup | Centralized backup service |
 
 ### Analytics & ML
 | Service | Description |
@@ -112,6 +126,8 @@ A lightweight AWS service emulator written in Go. Designed for CI/CD environment
 | Rekognition | Image/video analysis |
 | SageMaker | Machine learning |
 | Forecast | Time-series forecasting |
+| Data Exchange | Data marketplace |
+| Entity Resolution | Entity matching |
 
 ### Other Services
 | Service | Description |
