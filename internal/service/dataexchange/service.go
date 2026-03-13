@@ -37,14 +37,14 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("POST", "/v1/data-sets", s.CreateDataSet)
 	r.Handle("GET", "/v1/data-sets", s.ListDataSets)
 	r.Handle("GET", "/v1/data-sets/{dataSetId}", s.GetDataSet)
-	r.Handle("PUT", "/v1/data-sets/{dataSetId}", s.UpdateDataSet)
+	r.Handle("PATCH", "/v1/data-sets/{dataSetId}", s.UpdateDataSet)
 	r.Handle("DELETE", "/v1/data-sets/{dataSetId}", s.DeleteDataSet)
 
 	// Revision operations.
 	r.Handle("POST", "/v1/data-sets/{dataSetId}/revisions", s.CreateRevision)
 	r.Handle("GET", "/v1/data-sets/{dataSetId}/revisions", s.ListRevisions)
 	r.Handle("GET", "/v1/data-sets/{dataSetId}/revisions/{revisionId}", s.GetRevision)
-	r.Handle("PUT", "/v1/data-sets/{dataSetId}/revisions/{revisionId}", s.UpdateRevision)
+	r.Handle("PATCH", "/v1/data-sets/{dataSetId}/revisions/{revisionId}", s.UpdateRevision)
 	r.Handle("DELETE", "/v1/data-sets/{dataSetId}/revisions/{revisionId}", s.DeleteRevision)
 
 	// Job operations.
