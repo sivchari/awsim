@@ -24,6 +24,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/cognito"
 	_ "github.com/sivchari/awsim/internal/service/comprehend"
 	_ "github.com/sivchari/awsim/internal/service/configservice"
+	_ "github.com/sivchari/awsim/internal/service/dataexchange"
 	_ "github.com/sivchari/awsim/internal/service/dlm"
 	_ "github.com/sivchari/awsim/internal/service/ds"
 	_ "github.com/sivchari/awsim/internal/service/dynamodb"

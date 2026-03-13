@@ -24,6 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/comprehend v1.40.18
 	github.com/aws/aws-sdk-go-v2/service/configservice v1.61.1
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3
+	github.com/aws/aws-sdk-go-v2/service/dataexchange v1.40.12
 	github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/dlm v1.35.13
 	github.com/aws/aws-sdk-go-v2/service/docdb v1.48.11

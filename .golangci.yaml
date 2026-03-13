@@ -274,6 +274,10 @@ linters:
       - path: internal/service/backup/types\.go
         linters:
           - tagliatelle
+      # AWS Data Exchange API requires PascalCase JSON field names.
+      - path: internal/service/dataexchange/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true

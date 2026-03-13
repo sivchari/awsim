@@ -52,6 +52,8 @@ github.com/aws/aws-sdk-go-v2/service/configservice v1.61.1 h1:aho+qoT/ybRPv3EKee
 github.com/aws/aws-sdk-go-v2/service/configservice v1.61.1/go.mod h1:jAsoyYj8HSPYo4ZMaoGtDG622Nz8VXtsYVA8jyPYyqI=
 github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3 h1:4/SsyLjRsD+mub/wEt9xjo/SVPzl1idgwvDtklvp8tw=
 github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.3/go.mod h1:GMraVPHg0sV7jaLWiOpIcpo6wA2OyXgJmgPh/GREv9w=
+github.com/aws/aws-sdk-go-v2/service/dataexchange v1.40.12 h1:6fBxi0T16K4zrtSWs7l8lMdHUtxMCr5MlW+GykYQxt0=
+github.com/aws/aws-sdk-go-v2/service/dataexchange v1.40.12/go.mod h1:w7nDzuv9rEUL0/pmoaq9H0u0GIBZ1yeAvzfqbOv9RZ0=
 github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0 h1:5MthmITq3unZoB5EHlwYsoadubv0H/vi8/gnO0/UmF4=
 github.com/aws/aws-sdk-go-v2/service/directoryservice v1.37.0/go.mod h1:KkCYX9biRFzx8lAEgYyNSuQ3ljMK2ZOTnplMhHyCfhk=
 github.com/aws/aws-sdk-go-v2/service/dlm v1.35.13 h1:wyKOcqzzdbwz1UQtbFmmDw6YR6ux20yqmVaB4zONToE=
