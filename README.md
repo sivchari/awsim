@@ -1,15 +1,14 @@
 <p align="center">
   <img src="assets/awsim.png" alt="awsim logo" width="480">
-</p>
-
-<p align="center">
+  <br><br>
   <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/sivchari/awsim" alt="Go Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/sivchari/awsim" alt="License"></a>
   <a href="https://github.com/sivchari/awsim/releases"><img src="https://img.shields.io/github/v/release/sivchari/awsim" alt="Release"></a>
-  <a href="https://github.com/sivchari/awsim/actions/workflows/ci.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sivchari/awsim/actions/workflows/lint.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/lint.yaml/badge.svg" alt="Lint"></a>
+  <a href="https://github.com/sivchari/awsim/actions/workflows/integration-test.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/integration-test.yaml/badge.svg" alt="Integration Tests"></a>
 </p>
 
-<p align="center">A lightweight AWS service emulator written in Go. Designed for CI/CD environments where authentication-free local AWS testing is needed.</p>
+<p align="center">A lightweight AWS service emulator written in Go.<br>Designed for CI/CD environments where authentication-free local AWS testing is needed.</p>
 
 ## Features
 
