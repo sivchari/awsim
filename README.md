@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="assets/awsim.png" alt="awsim logo" width="300">
+  <img src="assets/awsim.png" alt="awsim logo" width="480">
 </p>
-
-<h1 align="center">awsim</h1>
 
 <p align="center">
   <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/sivchari/awsim" alt="Go Version"></a>
