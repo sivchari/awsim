@@ -278,6 +278,10 @@ linters:
       - path: internal/service/dataexchange/types\.go
         linters:
           - tagliatelle
+      # AWS CodeGuru Reviewer API requires PascalCase JSON field names.
+      - path: internal/service/codegurureviewer/types\.go
+        linters:
+          - tagliatelle
   settings:
     gocritic:
       enable-all: true
