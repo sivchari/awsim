@@ -21,6 +21,7 @@ import (
 	_ "github.com/sivchari/awsim/internal/service/cloudwatch"
 	_ "github.com/sivchari/awsim/internal/service/cloudwatchlogs"
 	_ "github.com/sivchari/awsim/internal/service/codeconnections"
+	_ "github.com/sivchari/awsim/internal/service/codeguruprofiler"
 	_ "github.com/sivchari/awsim/internal/service/codegurureviewer"
 	_ "github.com/sivchari/awsim/internal/service/cognito"
 	_ "github.com/sivchari/awsim/internal/service/comprehend"

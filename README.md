@@ -18,7 +18,7 @@
 - **Lightweight** - Fast startup, minimal resource usage
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 
-## Supported Services (70 services)
+## Supported Services (71 services)
 
 ### Storage
 | Service | Description |
@@ -129,6 +129,7 @@
 ### Developer Tools
 | Service | Description |
 |---------|-------------|
+| CodeGuru Profiler | Application profiling |
 | CodeGuru Reviewer | Automated code review |
 
 ### Other Services
