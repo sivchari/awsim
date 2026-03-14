@@ -30,10 +30,9 @@ func (s *Service) CreateProfilingGroup(w http.ResponseWriter, r *http.Request) {
 
 	group := s.storage.CreateProfilingGroup(&input)
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, &CreateProfilingGroupResponse{
-		ProfilingGroup: group,
-	})
+	_ = json.NewEncoder(w).Encode(group)
 }
 
 // DescribeProfilingGroup handles GET /profilingGroups/{profilingGroupName}.
@@ -47,9 +46,7 @@ func (s *Service) DescribeProfilingGroup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, &CreateProfilingGroupResponse{
-		ProfilingGroup: group,
-	})
+	writeJSON(w, group)
 }
 
 // UpdateProfilingGroup handles PUT /profilingGroups/{profilingGroupName}.
@@ -70,9 +67,7 @@ func (s *Service) UpdateProfilingGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, &CreateProfilingGroupResponse{
-		ProfilingGroup: group,
-	})
+	writeJSON(w, group)
 }
 
 // DeleteProfilingGroup handles DELETE /profilingGroups/{profilingGroupName}.

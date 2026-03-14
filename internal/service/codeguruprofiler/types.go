@@ -29,7 +29,7 @@ type ProfilingStatus struct {
 // AggregatedProfileTime represents an aggregated profile time.
 type AggregatedProfileTime struct {
 	Period string    `json:"period,omitempty"`
-	Start  time.Time `json:"start,omitempty"`
+	Start  time.Time `json:"start,omitzero"`
 }
 
 // CreateProfilingGroupInput represents the request body for CreateProfilingGroup.
@@ -43,11 +43,6 @@ type CreateProfilingGroupInput struct {
 // UpdateProfilingGroupInput represents the request body for UpdateProfilingGroup.
 type UpdateProfilingGroupInput struct {
 	AgentOrchestrationConfig *AgentOrchestrationConfig `json:"agentOrchestrationConfig"`
-}
-
-// CreateProfilingGroupResponse represents the response for CreateProfilingGroup.
-type CreateProfilingGroupResponse struct {
-	ProfilingGroup *ProfilingGroup `json:"profilingGroup"`
 }
 
 // ListProfilingGroupsResponse represents the response for ListProfilingGroups.
