@@ -64,7 +64,7 @@ func TestCodeGuruProfiler_CreateProfilingGroupWithConfig(t *testing.T) {
 
 	result, err := client.CreateProfilingGroup(ctx, &codeguruprofiler.CreateProfilingGroupInput{
 		ProfilingGroupName: aws.String("config-group"),
-		ComputePlatform:    types.ComputePlatformAWSLambda,
+		ComputePlatform:    types.ComputePlatformAwslambda,
 		AgentOrchestrationConfig: &types.AgentOrchestrationConfig{
 			ProfilingEnabled: aws.Bool(false),
 		},
@@ -73,7 +73,7 @@ func TestCodeGuruProfiler_CreateProfilingGroupWithConfig(t *testing.T) {
 		t.Fatalf("failed to create profiling group: %v", err)
 	}
 
-	if result.ProfilingGroup.ComputePlatform != types.ComputePlatformAWSLambda {
+	if result.ProfilingGroup.ComputePlatform != types.ComputePlatformAwslambda {
 		t.Errorf("expected compute platform AWSLambda, got %s", result.ProfilingGroup.ComputePlatform)
 	}
 
