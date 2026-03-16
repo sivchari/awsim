@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.3.0](https://github.com/sivchari/awsim/compare/v0.2.0...v0.3.0) - 2026-03-16
+- feat(kafka): implement AWS MSK service by @sivchari in https://github.com/sivchari/awsim/pull/305
+- feat(rds): add ModifyDBCluster for DocumentDB support by @sivchari in https://github.com/sivchari/awsim/pull/307
+- feat(entityresolution): implement AWS Entity Resolution service by @sivchari in https://github.com/sivchari/awsim/pull/308
+- feat(memorydb): implement AWS MemoryDB service by @sivchari in https://github.com/sivchari/awsim/pull/309
+- feat(glacier): implement AWS Glacier service by @sivchari in https://github.com/sivchari/awsim/pull/310
+- feat(elasticbeanstalk): implement AWS Elastic Beanstalk service by @sivchari in https://github.com/sivchari/awsim/pull/311
+- feat(ebs): implement AWS EBS direct API service by @sivchari in https://github.com/sivchari/awsim/pull/312
+- feat(sts): implement AWS Security Token Service by @sivchari in https://github.com/sivchari/awsim/pull/313
+- feat(amplify): implement AWS Amplify service by @sivchari in https://github.com/sivchari/awsim/pull/314
+- feat(backup): implement AWS Backup service by @sivchari in https://github.com/sivchari/awsim/pull/315
+- feat(dataexchange): implement AWS Data Exchange service by @sivchari in https://github.com/sivchari/awsim/pull/316
+- docs: add logo and update service list by @sivchari in https://github.com/sivchari/awsim/pull/317
+- feat(codeguru-reviewer): implement AWS CodeGuru Reviewer service by @sivchari in https://github.com/sivchari/awsim/pull/318
+- feat(codeguru-profiler): implement AWS CodeGuru Profiler service by @sivchari in https://github.com/sivchari/awsim/pull/319
+- release v0.3.0 by @sivchari in https://github.com/sivchari/awsim/pull/320
+
 ## [v0.2.0](https://github.com/sivchari/awsim/compare/v0.1.3...v0.2.0) - 2026-03-06
 - feat(mq): implement Amazon MQ service by @sivchari in https://github.com/sivchari/awsim/pull/290
 - feat(ds): implement AWS Directory Service by @sivchari in https://github.com/sivchari/awsim/pull/292
