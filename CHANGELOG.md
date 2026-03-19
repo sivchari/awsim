@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.0](https://github.com/sivchari/awsim/compare/v0.3.0...v0.4.0) - 2026-03-19
+- feat(ebs): implement EBS Direct API remaining operations by @sivchari in https://github.com/sivchari/awsim/pull/356
+
 ## [v0.3.0](https://github.com/sivchari/awsim/compare/v0.2.0...v0.3.0) - 2026-03-16
 - feat(kafka): implement AWS MSK service by @sivchari in https://github.com/sivchari/awsim/pull/305
 - feat(rds): add ModifyDBCluster for DocumentDB support by @sivchari in https://github.com/sivchari/awsim/pull/307
