@@ -26,6 +26,9 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("POST", "/snapshots", s.StartSnapshotHandler)
 	r.Handle("POST", "/snapshots/completion/{snapshotId}", s.CompleteSnapshotHandler)
 	r.Handle("GET", "/snapshots/{snapshotId}/blocks", s.ListSnapshotBlocksHandler)
+	r.Handle("PUT", "/snapshots/{snapshotId}/blocks/{blockIndex}", s.PutSnapshotBlockHandler)
+	r.Handle("GET", "/snapshots/{snapshotId}/blocks/{blockIndex}", s.GetSnapshotBlockHandler)
+	r.Handle("GET", "/snapshots/{secondSnapshotId}/changedblocks", s.ListChangedBlocksHandler)
 }
 
 func init() {

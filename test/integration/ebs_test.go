@@ -3,12 +3,18 @@
 package integration
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"io"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ebs"
+	"github.com/aws/aws-sdk-go-v2/service/ebs/types"
+	"github.com/sivchari/golden"
 )
 
 func newEBSClient(t *testing.T) *ebs.Client {
@@ -38,24 +44,10 @@ func TestEBS_StartSnapshot(t *testing.T) {
 		Description: aws.String("test snapshot"),
 	})
 	if err != nil {
-		t.Fatalf("failed to start snapshot: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.SnapshotId == nil || *result.SnapshotId == "" {
-		t.Error("expected snapshot ID to be set")
-	}
-
-	if result.Status != "pending" {
-		t.Errorf("expected status pending, got %s", string(result.Status))
-	}
-
-	if *result.VolumeSize != 100 {
-		t.Errorf("expected volume size 100, got %d", *result.VolumeSize)
-	}
-
-	if *result.Description != "test snapshot" {
-		t.Errorf("expected description 'test snapshot', got %s", *result.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("SnapshotId", "StartTime", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestEBS_CompleteSnapshot(t *testing.T) {
@@ -66,23 +58,21 @@ func TestEBS_CompleteSnapshot(t *testing.T) {
 		VolumeSize: aws.Int64(50),
 	})
 	if err != nil {
-		t.Fatalf("failed to start snapshot: %v", err)
+		t.Fatal(err)
 	}
 
-	completeResult, err := client.CompleteSnapshot(ctx, &ebs.CompleteSnapshotInput{
+	result, err := client.CompleteSnapshot(ctx, &ebs.CompleteSnapshotInput{
 		SnapshotId:         startResult.SnapshotId,
 		ChangedBlocksCount: aws.Int32(0),
 	})
 	if err != nil {
-		t.Fatalf("failed to complete snapshot: %v", err)
+		t.Fatal(err)
 	}
 
-	if completeResult.Status != "completed" {
-		t.Errorf("expected status completed, got %s", string(completeResult.Status))
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 }
 
-func TestEBS_ListSnapshotBlocks(t *testing.T) {
+func TestEBS_ListSnapshotBlocks_Empty(t *testing.T) {
 	client := newEBSClient(t)
 	ctx := t.Context()
 
@@ -90,7 +80,7 @@ func TestEBS_ListSnapshotBlocks(t *testing.T) {
 		VolumeSize: aws.Int64(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to start snapshot: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CompleteSnapshot(ctx, &ebs.CompleteSnapshotInput{
@@ -98,23 +88,243 @@ func TestEBS_ListSnapshotBlocks(t *testing.T) {
 		ChangedBlocksCount: aws.Int32(0),
 	})
 	if err != nil {
-		t.Fatalf("failed to complete snapshot: %v", err)
+		t.Fatal(err)
 	}
 
+	result, err := client.ListSnapshotBlocks(ctx, &ebs.ListSnapshotBlocksInput{
+		SnapshotId: startResult.SnapshotId,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
+}
+
+func TestEBS_PutSnapshotBlock(t *testing.T) {
+	client := newEBSClient(t)
+	ctx := t.Context()
+
+	startResult, err := client.StartSnapshot(ctx, &ebs.StartSnapshotInput{
+		VolumeSize: aws.Int64(10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockData := make([]byte, 524288)
+	for i := range blockData {
+		blockData[i] = byte(i % 256)
+	}
+
+	sum := sha256.Sum256(blockData)
+	checksum := base64.StdEncoding.EncodeToString(sum[:])
+
+	result, err := client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        startResult.SnapshotId,
+		BlockIndex:        aws.Int32(0),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("Checksum", "ResultMetadata")).Assert(t.Name(), result)
+}
+
+func TestEBS_GetSnapshotBlock(t *testing.T) {
+	client := newEBSClient(t)
+	ctx := t.Context()
+
+	startResult, err := client.StartSnapshot(ctx, &ebs.StartSnapshotInput{
+		VolumeSize: aws.Int64(10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockData := make([]byte, 524288)
+	for i := range blockData {
+		blockData[i] = byte(i % 256)
+	}
+
+	sum := sha256.Sum256(blockData)
+	checksum := base64.StdEncoding.EncodeToString(sum[:])
+
+	_, err = client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        startResult.SnapshotId,
+		BlockIndex:        aws.Int32(0),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// List blocks to get a block token.
 	listResult, err := client.ListSnapshotBlocks(ctx, &ebs.ListSnapshotBlocksInput{
 		SnapshotId: startResult.SnapshotId,
 	})
 	if err != nil {
-		t.Fatalf("failed to list snapshot blocks: %v", err)
+		t.Fatal(err)
 	}
 
-	if listResult.Blocks == nil {
-		t.Error("expected blocks to be non-nil")
+	if len(listResult.Blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(listResult.Blocks))
 	}
 
-	if *listResult.VolumeSize != 10 {
-		t.Errorf("expected volume size 10, got %d", *listResult.VolumeSize)
+	// Get the block using the token.
+	getResult, err := client.GetSnapshotBlock(ctx, &ebs.GetSnapshotBlockInput{
+		SnapshotId: startResult.SnapshotId,
+		BlockIndex: aws.Int32(0),
+		BlockToken: listResult.Blocks[0].BlockToken,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	gotData, err := io.ReadAll(getResult.BlockData)
+	if err != nil {
+		t.Fatalf("failed to read block data: %v", err)
+	}
+
+	if !bytes.Equal(gotData, blockData) {
+		t.Error("block data mismatch")
+	}
+
+	if getResult.Checksum == nil || *getResult.Checksum != checksum {
+		t.Errorf("expected checksum %s, got %v", checksum, getResult.Checksum)
+	}
+}
+
+func TestEBS_ListSnapshotBlocks_WithBlocks(t *testing.T) {
+	client := newEBSClient(t)
+	ctx := t.Context()
+
+	startResult, err := client.StartSnapshot(ctx, &ebs.StartSnapshotInput{
+		VolumeSize: aws.Int64(10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockData := make([]byte, 524288)
+	sum := sha256.Sum256(blockData)
+	checksum := base64.StdEncoding.EncodeToString(sum[:])
+
+	_, err = client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        startResult.SnapshotId,
+		BlockIndex:        aws.Int32(0),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        startResult.SnapshotId,
+		BlockIndex:        aws.Int32(1),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := client.ListSnapshotBlocks(ctx, &ebs.ListSnapshotBlocksInput{
+		SnapshotId: startResult.SnapshotId,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("BlockToken", "ResultMetadata")).Assert(t.Name(), result)
+}
+
+func TestEBS_ListChangedBlocks(t *testing.T) {
+	client := newEBSClient(t)
+	ctx := t.Context()
+
+	// Create first snapshot with a block.
+	first, err := client.StartSnapshot(ctx, &ebs.StartSnapshotInput{
+		VolumeSize: aws.Int64(10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockData := make([]byte, 524288)
+	sum := sha256.Sum256(blockData)
+	checksum := base64.StdEncoding.EncodeToString(sum[:])
+
+	_, err = client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        first.SnapshotId,
+		BlockIndex:        aws.Int32(0),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.CompleteSnapshot(ctx, &ebs.CompleteSnapshotInput{
+		SnapshotId:         first.SnapshotId,
+		ChangedBlocksCount: aws.Int32(1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create second snapshot with a different block index.
+	second, err := client.StartSnapshot(ctx, &ebs.StartSnapshotInput{
+		VolumeSize: aws.Int64(10),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.PutSnapshotBlock(ctx, &ebs.PutSnapshotBlockInput{
+		SnapshotId:        second.SnapshotId,
+		BlockIndex:        aws.Int32(1),
+		BlockData:         bytes.NewReader(blockData),
+		DataLength:        aws.Int32(524288),
+		Checksum:          aws.String(checksum),
+		ChecksumAlgorithm: types.ChecksumAlgorithmChecksumAlgorithmSha256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.CompleteSnapshot(ctx, &ebs.CompleteSnapshotInput{
+		SnapshotId:         second.SnapshotId,
+		ChangedBlocksCount: aws.Int32(1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// List changed blocks between the two snapshots.
+	result, err := client.ListChangedBlocks(ctx, &ebs.ListChangedBlocksInput{
+		FirstSnapshotId:  first.SnapshotId,
+		SecondSnapshotId: second.SnapshotId,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("FirstBlockToken", "SecondBlockToken", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestEBS_SnapshotNotFound(t *testing.T) {

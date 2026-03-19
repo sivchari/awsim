@@ -52,6 +52,28 @@ type ListSnapshotBlocksResponse struct {
 	VolumeSize int64   `json:"VolumeSize,omitempty"`
 }
 
+// PutSnapshotBlockResponse represents a PutSnapshotBlock response.
+type PutSnapshotBlockResponse struct {
+	Checksum          string `json:"Checksum"`
+	ChecksumAlgorithm string `json:"ChecksumAlgorithm"`
+}
+
+// ChangedBlock represents a changed block between two snapshots.
+type ChangedBlock struct {
+	BlockIndex       int32  `json:"BlockIndex"`
+	FirstBlockToken  string `json:"FirstBlockToken,omitempty"`
+	SecondBlockToken string `json:"SecondBlockToken,omitempty"`
+}
+
+// ListChangedBlocksResponse represents a ListChangedBlocks response.
+type ListChangedBlocksResponse struct {
+	BlockSize     int32          `json:"BlockSize,omitempty"`
+	ChangedBlocks []ChangedBlock `json:"ChangedBlocks"`
+	ExpiryTime    int64          `json:"ExpiryTime,omitempty"`
+	NextToken     string         `json:"NextToken,omitempty"`
+	VolumeSize    int64          `json:"VolumeSize,omitempty"`
+}
+
 // ErrorResponse represents an error response.
 type ErrorResponse struct {
 	Message string `json:"Message"`
