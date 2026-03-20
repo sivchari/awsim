@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/sivchari/golden"
 )
 
 func newCognitoClient(t *testing.T) *cognitoidentityprovider.Client {
@@ -48,33 +49,22 @@ func TestCognito_CreateAndDescribeUserPool(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.UserPool == nil || createOutput.UserPool.Id == nil {
-		t.Fatal("user pool is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "CreationDate", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	userPoolID := *createOutput.UserPool.Id
-	t.Logf("Created user pool: %s", userPoolID)
 
 	// Describe user pool.
 	describeOutput, err := client.DescribeUserPool(ctx, &cognitoidentityprovider.DescribeUserPoolInput{
 		UserPoolId: aws.String(userPoolID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe user pool: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.UserPool.Id != userPoolID {
-		t.Errorf("user pool ID mismatch: got %s, want %s", *describeOutput.UserPool.Id, userPoolID)
-	}
-
-	if *describeOutput.UserPool.Name != "test-user-pool" {
-		t.Errorf("name mismatch: got %s, want test-user-pool", *describeOutput.UserPool.Name)
-	}
-
-	t.Logf("Described user pool: %s", userPoolID)
+	golden.New(t, golden.WithIgnoreFields("Id", "CreationDate", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestCognito_ListUserPools(t *testing.T) {
@@ -82,43 +72,22 @@ func TestCognito_ListUserPools(t *testing.T) {
 	ctx := t.Context()
 
 	// Create a user pool first.
-	createOutput, err := client.CreateUserPool(ctx, &cognitoidentityprovider.CreateUserPoolInput{
+	_, err := client.CreateUserPool(ctx, &cognitoidentityprovider.CreateUserPoolInput{
 		PoolName: aws.String("test-list-user-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
-
-	userPoolID := *createOutput.UserPool.Id
 
 	// List user pools.
 	listOutput, err := client.ListUserPools(ctx, &cognitoidentityprovider.ListUserPoolsInput{
 		MaxResults: aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to list user pools: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.UserPools) == 0 {
-		t.Fatal("no user pools returned")
-	}
-
-	// Find our user pool.
-	found := false
-
-	for _, pool := range listOutput.UserPools {
-		if *pool.Id == userPoolID {
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("created user pool %s not found in list", userPoolID)
-	}
-
-	t.Logf("Listed %d user pools", len(listOutput.UserPools))
+	golden.New(t, golden.WithIgnoreFields("Id", "CreationDate", "LastModifiedDate", "ResultMetadata")).Assert(t.Name(), listOutput)
 }
 
 func TestCognito_CreateAndDescribeUserPoolClient(t *testing.T) {
@@ -130,7 +99,7 @@ func TestCognito_CreateAndDescribeUserPoolClient(t *testing.T) {
 		PoolName: aws.String("test-client-user-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *poolOutput.UserPool.Id
@@ -145,11 +114,12 @@ func TestCognito_CreateAndDescribeUserPoolClient(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool client: %v", err)
+		t.Fatal(err)
 	}
 
+	golden.New(t, golden.WithIgnoreFields("ClientId", "UserPoolId", "CreationDate", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_create", clientOutput)
+
 	clientID := *clientOutput.UserPoolClient.ClientId
-	t.Logf("Created user pool client: %s", clientID)
 
 	// Describe user pool client.
 	describeOutput, err := client.DescribeUserPoolClient(ctx, &cognitoidentityprovider.DescribeUserPoolClientInput{
@@ -157,18 +127,10 @@ func TestCognito_CreateAndDescribeUserPoolClient(t *testing.T) {
 		ClientId:   aws.String(clientID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe user pool client: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.UserPoolClient.ClientId != clientID {
-		t.Errorf("client ID mismatch: got %s, want %s", *describeOutput.UserPoolClient.ClientId, clientID)
-	}
-
-	if *describeOutput.UserPoolClient.ClientName != "test-client" {
-		t.Errorf("client name mismatch: got %s, want test-client", *describeOutput.UserPoolClient.ClientName)
-	}
-
-	t.Logf("Described user pool client: %s", clientID)
+	golden.New(t, golden.WithIgnoreFields("ClientId", "UserPoolId", "CreationDate", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestCognito_AdminCreateAndGetUser(t *testing.T) {
@@ -180,7 +142,7 @@ func TestCognito_AdminCreateAndGetUser(t *testing.T) {
 		PoolName: aws.String("test-admin-user-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *poolOutput.UserPool.Id
@@ -198,14 +160,10 @@ func TestCognito_AdminCreateAndGetUser(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to admin create user: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createUserOutput.User.Username != "testuser" {
-		t.Errorf("username mismatch: got %s, want testuser", *createUserOutput.User.Username)
-	}
-
-	t.Logf("Created user: %s", *createUserOutput.User.Username)
+	golden.New(t, golden.WithIgnoreFields("UserCreateDate", "UserLastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_create", createUserOutput)
 
 	// Admin get user.
 	getUserOutput, err := client.AdminGetUser(ctx, &cognitoidentityprovider.AdminGetUserInput{
@@ -213,14 +171,10 @@ func TestCognito_AdminCreateAndGetUser(t *testing.T) {
 		Username:   aws.String("testuser"),
 	})
 	if err != nil {
-		t.Fatalf("failed to admin get user: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getUserOutput.Username != "testuser" {
-		t.Errorf("username mismatch: got %s, want testuser", *getUserOutput.Username)
-	}
-
-	t.Logf("Got user: %s", *getUserOutput.Username)
+	golden.New(t, golden.WithIgnoreFields("UserCreateDate", "UserLastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_get", getUserOutput)
 }
 
 func TestCognito_ListUsers(t *testing.T) {
@@ -232,7 +186,7 @@ func TestCognito_ListUsers(t *testing.T) {
 		PoolName: aws.String("test-list-users-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *poolOutput.UserPool.Id
@@ -244,7 +198,7 @@ func TestCognito_ListUsers(t *testing.T) {
 		TemporaryPassword: aws.String("TempPass123!"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	// List users.
@@ -252,28 +206,10 @@ func TestCognito_ListUsers(t *testing.T) {
 		UserPoolId: aws.String(userPoolID),
 	})
 	if err != nil {
-		t.Fatalf("failed to list users: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.Users) == 0 {
-		t.Fatal("no users returned")
-	}
-
-	found := false
-
-	for _, user := range listOutput.Users {
-		if *user.Username == "listuser1" {
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
-		t.Error("created user not found in list")
-	}
-
-	t.Logf("Listed %d users", len(listOutput.Users))
+	golden.New(t, golden.WithIgnoreFields("UserCreateDate", "UserLastModifiedDate", "ResultMetadata")).Assert(t.Name(), listOutput)
 }
 
 func TestCognito_SignUpAndConfirm(t *testing.T) {
@@ -285,7 +221,7 @@ func TestCognito_SignUpAndConfirm(t *testing.T) {
 		PoolName: aws.String("test-signup-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *poolOutput.UserPool.Id
@@ -299,7 +235,7 @@ func TestCognito_SignUpAndConfirm(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool client: %v", err)
+		t.Fatal(err)
 	}
 
 	clientID := *clientOutput.UserPoolClient.ClientId
@@ -317,14 +253,10 @@ func TestCognito_SignUpAndConfirm(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to sign up: %v", err)
+		t.Fatal(err)
 	}
 
-	if signUpOutput.UserConfirmed {
-		t.Error("user should not be confirmed yet")
-	}
-
-	t.Logf("Signed up user: %s", *signUpOutput.UserSub)
+	golden.New(t, golden.WithIgnoreFields("UserSub", "ResultMetadata")).Assert(t.Name()+"_signup", signUpOutput)
 
 	// Confirm sign up.
 	_, err = client.ConfirmSignUp(ctx, &cognitoidentityprovider.ConfirmSignUpInput{
@@ -333,10 +265,8 @@ func TestCognito_SignUpAndConfirm(t *testing.T) {
 		ConfirmationCode: aws.String("123456"),
 	})
 	if err != nil {
-		t.Fatalf("failed to confirm sign up: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Log("Confirmed sign up")
 }
 
 func TestCognito_InitiateAuth(t *testing.T) {
@@ -348,7 +278,7 @@ func TestCognito_InitiateAuth(t *testing.T) {
 		PoolName: aws.String("test-auth-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *poolOutput.UserPool.Id
@@ -362,7 +292,7 @@ func TestCognito_InitiateAuth(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool client: %v", err)
+		t.Fatal(err)
 	}
 
 	clientID := *clientOutput.UserPoolClient.ClientId
@@ -374,7 +304,7 @@ func TestCognito_InitiateAuth(t *testing.T) {
 		Password: aws.String("Password123!"),
 	})
 	if err != nil {
-		t.Fatalf("failed to sign up: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.ConfirmSignUp(ctx, &cognitoidentityprovider.ConfirmSignUpInput{
@@ -383,7 +313,7 @@ func TestCognito_InitiateAuth(t *testing.T) {
 		ConfirmationCode: aws.String("123456"),
 	})
 	if err != nil {
-		t.Fatalf("failed to confirm sign up: %v", err)
+		t.Fatal(err)
 	}
 
 	// Initiate auth.
@@ -396,22 +326,10 @@ func TestCognito_InitiateAuth(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to initiate auth: %v", err)
+		t.Fatal(err)
 	}
 
-	if authOutput.AuthenticationResult == nil {
-		t.Fatal("authentication result is nil")
-	}
-
-	if authOutput.AuthenticationResult.AccessToken == nil {
-		t.Error("access token is nil")
-	}
-
-	if authOutput.AuthenticationResult.IdToken == nil {
-		t.Error("id token is nil")
-	}
-
-	t.Log("Successfully authenticated user")
+	golden.New(t, golden.WithIgnoreFields("AccessToken", "IdToken", "RefreshToken", "NewDeviceMetadata", "ResultMetadata")).Assert(t.Name(), authOutput)
 }
 
 func TestCognito_UserPoolNotFound(t *testing.T) {
@@ -436,7 +354,7 @@ func TestCognito_DeleteUserPool(t *testing.T) {
 		PoolName: aws.String("test-delete-pool"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	userPoolID := *createOutput.UserPool.Id
@@ -446,7 +364,7 @@ func TestCognito_DeleteUserPool(t *testing.T) {
 		UserPoolId: aws.String(userPoolID),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete user pool: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify deletion.
@@ -456,6 +374,4 @@ func TestCognito_DeleteUserPool(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for deleted user pool")
 	}
-
-	t.Logf("Deleted user pool: %s", userPoolID)
 }

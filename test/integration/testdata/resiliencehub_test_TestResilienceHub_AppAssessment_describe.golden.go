@@ -1,9 +1,9 @@
 {
   "Assessment": {
-    "AssessmentArn": "arn:aws:resiliencehub:us-east-1:123456789012:app-assessment/a86053d3-5218-440f-9e39-ac751bf19eac",
+    "AssessmentArn": "arn:aws:resiliencehub:us-east-1:123456789012:app-assessment/9919b456-7794-44be-b199-9b9a9b74e9bf",
     "AssessmentStatus": "Success",
     "Invoker": "User",
-    "AppArn": "arn:aws:resiliencehub:us-east-1:123456789012:app/ac0727ea-a939-4f47-83b0-48e63bd7a2f5",
+    "AppArn": "arn:aws:resiliencehub:us-east-1:123456789012:app/ed7409db-79a3-4b7d-8b9e-3e46865aeba8",
     "AppVersion": "release",
     "AssessmentName": "test-assessment",
     "Compliance": {
@@ -35,7 +35,7 @@
     "ComplianceStatus": "PolicyBreached",
     "Cost": null,
     "DriftStatus": "",
-    "EndTime": "2026-03-01T15:05:15Z",
+    "EndTime": "2026-03-23T07:45:26Z",
     "Message": null,
     "Policy": null,
     "ResiliencyScore": {
@@ -47,7 +47,7 @@
       "ComponentScore": null
     },
     "ResourceErrorsDetails": null,
-    "StartTime": "2026-03-01T15:05:15Z",
+    "StartTime": "2026-03-23T07:45:26Z",
     "Summary": null,
     "Tags": null,
     "VersionName": null

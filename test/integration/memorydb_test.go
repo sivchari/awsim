@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/memorydb"
 	"github.com/aws/aws-sdk-go-v2/service/memorydb/types"
+	"github.com/sivchari/golden"
 )
 
 func newMemoryDBClient(t *testing.T) *memorydb.Client {
@@ -41,32 +42,20 @@ func TestMemoryDB_CreateAndDeleteCluster(t *testing.T) {
 		ACLName:     aws.String("open-access"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.Cluster.Name != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *createResult.Cluster.Name)
-	}
-
-	if createResult.Cluster.ARN == nil || *createResult.Cluster.ARN == "" {
-		t.Error("expected cluster ARN to be set")
-	}
-
-	if *createResult.Cluster.Status != "available" {
-		t.Errorf("expected status available, got %s", *createResult.Cluster.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	deleteResult, err := client.DeleteCluster(ctx, &memorydb.DeleteClusterInput{
 		ClusterName: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.Cluster.Name != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *deleteResult.Cluster.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestMemoryDB_DescribeClusters(t *testing.T) {
@@ -81,7 +70,7 @@ func TestMemoryDB_DescribeClusters(t *testing.T) {
 		Description: aws.String("test description"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -94,21 +83,10 @@ func TestMemoryDB_DescribeClusters(t *testing.T) {
 		ClusterName: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe clusters: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(describeResult.Clusters) != 1 {
-		t.Fatalf("expected 1 cluster, got %d", len(describeResult.Clusters))
-	}
-
-	cluster := describeResult.Clusters[0]
-	if *cluster.Name != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *cluster.Name)
-	}
-
-	if *cluster.Description != "test description" {
-		t.Errorf("expected description 'test description', got %s", *cluster.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_describe", describeResult)
 }
 
 func TestMemoryDB_UpdateCluster(t *testing.T) {
@@ -122,7 +100,7 @@ func TestMemoryDB_UpdateCluster(t *testing.T) {
 		ACLName:     aws.String("open-access"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -136,12 +114,10 @@ func TestMemoryDB_UpdateCluster(t *testing.T) {
 		Description: aws.String("updated description"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateResult.Cluster.Description != "updated description" {
-		t.Errorf("expected description 'updated description', got %s", *updateResult.Cluster.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_update", updateResult)
 }
 
 func TestMemoryDB_CreateAndDeleteUser(t *testing.T) {
@@ -158,28 +134,20 @@ func TestMemoryDB_CreateAndDeleteUser(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.User.Name != userName {
-		t.Errorf("expected user name %s, got %s", userName, *createResult.User.Name)
-	}
-
-	if createResult.User.ARN == nil || *createResult.User.ARN == "" {
-		t.Error("expected user ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	deleteResult, err := client.DeleteUser(ctx, &memorydb.DeleteUserInput{
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete user: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.User.Name != userName {
-		t.Errorf("expected user name %s, got %s", userName, *deleteResult.User.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestMemoryDB_DescribeUsers(t *testing.T) {
@@ -196,7 +164,7 @@ func TestMemoryDB_DescribeUsers(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -209,16 +177,10 @@ func TestMemoryDB_DescribeUsers(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe users: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(describeResult.Users) != 1 {
-		t.Fatalf("expected 1 user, got %d", len(describeResult.Users))
-	}
-
-	if *describeResult.Users[0].Name != userName {
-		t.Errorf("expected user name %s, got %s", userName, *describeResult.Users[0].Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_describe", describeResult)
 }
 
 func TestMemoryDB_CreateAndDeleteACL(t *testing.T) {
@@ -230,28 +192,20 @@ func TestMemoryDB_CreateAndDeleteACL(t *testing.T) {
 		ACLName: aws.String(aclName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create ACL: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.ACL.Name != aclName {
-		t.Errorf("expected ACL name %s, got %s", aclName, *createResult.ACL.Name)
-	}
-
-	if createResult.ACL.ARN == nil || *createResult.ACL.ARN == "" {
-		t.Error("expected ACL ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	deleteResult, err := client.DeleteACL(ctx, &memorydb.DeleteACLInput{
 		ACLName: aws.String(aclName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete ACL: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.ACL.Name != aclName {
-		t.Errorf("expected ACL name %s, got %s", aclName, *deleteResult.ACL.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestMemoryDB_DescribeACLs(t *testing.T) {
@@ -264,7 +218,7 @@ func TestMemoryDB_DescribeACLs(t *testing.T) {
 		UserNames: []string{"default"},
 	})
 	if err != nil {
-		t.Fatalf("failed to create ACL: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -277,16 +231,10 @@ func TestMemoryDB_DescribeACLs(t *testing.T) {
 		ACLName: aws.String(aclName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe ACLs: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(describeResult.ACLs) != 1 {
-		t.Fatalf("expected 1 ACL, got %d", len(describeResult.ACLs))
-	}
-
-	if *describeResult.ACLs[0].Name != aclName {
-		t.Errorf("expected ACL name %s, got %s", aclName, *describeResult.ACLs[0].Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ARN")).Assert(t.Name()+"_describe", describeResult)
 }
 
 func TestMemoryDB_ClusterNotFound(t *testing.T) {
@@ -312,7 +260,7 @@ func TestMemoryDB_DuplicateCluster(t *testing.T) {
 		ACLName:     aws.String("open-access"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {

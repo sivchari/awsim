@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/sivchari/golden"
 )
 
 func newSecretsManagerClient(t *testing.T) *secretsmanager.Client {
@@ -43,14 +44,9 @@ func TestSecretsManager_CreateAndDeleteSecret(t *testing.T) {
 		SecretString: aws.String(secretValue),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.ARN == nil {
-		t.Fatal("secret ARN is nil")
-	}
-
-	t.Logf("Created secret: %s", *createOutput.ARN)
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete secret.
 	deleteOutput, err := client.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
@@ -58,12 +54,9 @@ func TestSecretsManager_CreateAndDeleteSecret(t *testing.T) {
 		ForceDeleteWithoutRecovery: aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteOutput.ARN == nil {
-		t.Fatal("deleted secret ARN is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "DeletionDate", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestSecretsManager_GetSecretValue(t *testing.T) {
@@ -78,8 +71,9 @@ func TestSecretsManager_GetSecretValue(t *testing.T) {
 		SecretString: aws.String(secretValue),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
@@ -93,16 +87,9 @@ func TestSecretsManager_GetSecretValue(t *testing.T) {
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get secret value: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.SecretString != secretValue {
-		t.Errorf("secret value mismatch: got %s, want %s", *getOutput.SecretString, secretValue)
-	}
-
-	if *getOutput.ARN != *createOutput.ARN {
-		t.Errorf("ARN mismatch: got %s, want %s", *getOutput.ARN, *createOutput.ARN)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "SecretString", "CreatedDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSecretsManager_PutSecretValue(t *testing.T) {
@@ -118,7 +105,7 @@ func TestSecretsManager_PutSecretValue(t *testing.T) {
 		SecretString: aws.String(initialValue),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -134,24 +121,18 @@ func TestSecretsManager_PutSecretValue(t *testing.T) {
 		SecretString: aws.String(updatedValue),
 	})
 	if err != nil {
-		t.Fatalf("failed to put secret value: %v", err)
+		t.Fatal(err)
 	}
-
-	if putOutput.VersionId == nil {
-		t.Fatal("version ID is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "ResultMetadata")).Assert(t.Name()+"_put", putOutput)
 
 	// Get and verify updated value.
 	getOutput, err := client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get secret value: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.SecretString != updatedValue {
-		t.Errorf("secret value mismatch: got %s, want %s", *getOutput.SecretString, updatedValue)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "SecretString", "CreatedDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSecretsManager_ListSecrets(t *testing.T) {
@@ -165,7 +146,7 @@ func TestSecretsManager_ListSecrets(t *testing.T) {
 		SecretString: aws.String("test-value"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -178,7 +159,7 @@ func TestSecretsManager_ListSecrets(t *testing.T) {
 	// List secrets.
 	listOutput, err := client.ListSecrets(ctx, &secretsmanager.ListSecretsInput{})
 	if err != nil {
-		t.Fatalf("failed to list secrets: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -203,13 +184,13 @@ func TestSecretsManager_DescribeSecret(t *testing.T) {
 	description := "This is a test secret"
 
 	// Create secret with description.
-	createOutput, err := client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
+	_, err := client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
 		Name:         aws.String(secretName),
 		SecretString: aws.String("test-value"),
 		Description:  aws.String(description),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -224,20 +205,9 @@ func TestSecretsManager_DescribeSecret(t *testing.T) {
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if *describeOutput.Name != secretName {
-		t.Errorf("name mismatch: got %s, want %s", *describeOutput.Name, secretName)
-	}
-
-	if *describeOutput.ARN != *createOutput.ARN {
-		t.Errorf("ARN mismatch: got %s, want %s", *describeOutput.ARN, *createOutput.ARN)
-	}
-
-	if describeOutput.Description == nil || *describeOutput.Description != description {
-		t.Errorf("description mismatch: got %v, want %s", describeOutput.Description, description)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "CreatedDate", "LastChangedDate", "VersionIdsToStages", "ResultMetadata")).Assert(t.Name(), describeOutput)
 }
 
 func TestSecretsManager_UpdateSecret(t *testing.T) {
@@ -255,7 +225,7 @@ func TestSecretsManager_UpdateSecret(t *testing.T) {
 		Description:  aws.String(initialDescription),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -272,36 +242,27 @@ func TestSecretsManager_UpdateSecret(t *testing.T) {
 		SecretString: aws.String(updatedValue),
 	})
 	if err != nil {
-		t.Fatalf("failed to update secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if updateOutput.ARN == nil {
-		t.Fatal("updated secret ARN is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "ResultMetadata")).Assert(t.Name()+"_update", updateOutput)
 
 	// Verify description updated.
 	describeOutput, err := client.DescribeSecret(ctx, &secretsmanager.DescribeSecretInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if describeOutput.Description == nil || *describeOutput.Description != updatedDescription {
-		t.Errorf("description mismatch: got %v, want %s", describeOutput.Description, updatedDescription)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "CreatedDate", "LastChangedDate", "VersionIdsToStages", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 
 	// Verify value updated.
 	getOutput, err := client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get secret value: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.SecretString != updatedValue {
-		t.Errorf("secret value mismatch: got %s, want %s", *getOutput.SecretString, updatedValue)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "SecretString", "CreatedDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSecretsManager_DeleteWithRecoveryWindow(t *testing.T) {
@@ -315,7 +276,7 @@ func TestSecretsManager_DeleteWithRecoveryWindow(t *testing.T) {
 		SecretString: aws.String("test-value"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete with recovery window.
@@ -324,14 +285,9 @@ func TestSecretsManager_DeleteWithRecoveryWindow(t *testing.T) {
 		RecoveryWindowInDays: aws.Int64(7),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete secret: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteOutput.DeletionDate == nil {
-		t.Fatal("deletion date is nil")
-	}
-
-	t.Logf("Secret scheduled for deletion at: %v", *deleteOutput.DeletionDate)
+	golden.New(t, golden.WithIgnoreFields("ARN", "DeletionDate", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 
 	// Verify secret is not accessible.
 	_, err = client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
@@ -360,7 +316,7 @@ func TestSecretsManager_SecretWithBinary(t *testing.T) {
 		SecretBinary: secretBinary,
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -375,7 +331,7 @@ func TestSecretsManager_SecretWithBinary(t *testing.T) {
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get secret value: %v", err)
+		t.Fatal(err)
 	}
 
 	if string(getOutput.SecretBinary) != string(secretBinary) {
@@ -396,7 +352,7 @@ func TestSecretsManager_SecretWithJSON(t *testing.T) {
 
 	secretJSON, err := json.Marshal(secretData)
 	if err != nil {
-		t.Fatalf("failed to marshal secret data: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create secret with JSON value.
@@ -405,7 +361,7 @@ func TestSecretsManager_SecretWithJSON(t *testing.T) {
 		SecretString: aws.String(string(secretJSON)),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -420,13 +376,13 @@ func TestSecretsManager_SecretWithJSON(t *testing.T) {
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get secret value: %v", err)
+		t.Fatal(err)
 	}
 
 	// Parse and verify JSON.
 	var retrievedData map[string]string
 	if err := json.Unmarshal([]byte(*getOutput.SecretString), &retrievedData); err != nil {
-		t.Fatalf("failed to unmarshal secret JSON: %v", err)
+		t.Fatal(err)
 	}
 
 	if retrievedData["username"] != secretData["username"] {
@@ -449,7 +405,7 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 		SecretString: aws.String("version-1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create secret: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -465,7 +421,7 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 		SecretString: aws.String("version-2"),
 	})
 	if err != nil {
-		t.Fatalf("failed to put secret value: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get current version (should be version-2).
@@ -474,7 +430,7 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 		VersionStage: aws.String("AWSCURRENT"),
 	})
 	if err != nil {
-		t.Fatalf("failed to get current version: %v", err)
+		t.Fatal(err)
 	}
 
 	if *currentOutput.SecretString != "version-2" {
@@ -487,7 +443,7 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 		VersionStage: aws.String("AWSPREVIOUS"),
 	})
 	if err != nil {
-		t.Fatalf("failed to get previous version: %v", err)
+		t.Fatal(err)
 	}
 
 	if *previousOutput.SecretString != "version-1" {

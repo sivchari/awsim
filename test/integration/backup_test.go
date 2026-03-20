@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/backup"
 	"github.com/aws/aws-sdk-go-v2/service/backup/types"
+	"github.com/sivchari/golden"
 )
 
 func newBackupClient(t *testing.T) *backup.Client {
@@ -38,20 +39,10 @@ func TestBackup_CreateBackupVault(t *testing.T) {
 		BackupVaultName: aws.String("test-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup vault: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.BackupVaultName == nil || *result.BackupVaultName != "test-vault" {
-		t.Errorf("expected vault name 'test-vault', got %v", result.BackupVaultName)
-	}
-
-	if result.BackupVaultArn == nil || *result.BackupVaultArn == "" {
-		t.Error("expected BackupVaultArn to be set")
-	}
-
-	if result.CreationDate == nil {
-		t.Error("expected CreationDate to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("BackupVaultArn", "CreationDate", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_DescribeBackupVault(t *testing.T) {
@@ -62,19 +53,17 @@ func TestBackup_DescribeBackupVault(t *testing.T) {
 		BackupVaultName: aws.String("describe-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup vault: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.DescribeBackupVault(ctx, &backup.DescribeBackupVaultInput{
 		BackupVaultName: aws.String("describe-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe backup vault: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.BackupVaultName != "describe-vault" {
-		t.Errorf("expected vault name 'describe-vault', got %s", *result.BackupVaultName)
-	}
+	golden.New(t, golden.WithIgnoreFields("BackupVaultArn", "CreationDate", "CreatorRequestId", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_ListBackupVaults(t *testing.T) {
@@ -85,12 +74,12 @@ func TestBackup_ListBackupVaults(t *testing.T) {
 		BackupVaultName: aws.String("list-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup vault: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListBackupVaults(ctx, &backup.ListBackupVaultsInput{})
 	if err != nil {
-		t.Fatalf("failed to list backup vaults: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(result.BackupVaultList) == 0 {
@@ -106,14 +95,14 @@ func TestBackup_DeleteBackupVault(t *testing.T) {
 		BackupVaultName: aws.String("delete-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup vault: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteBackupVault(ctx, &backup.DeleteBackupVaultInput{
 		BackupVaultName: aws.String("delete-vault"),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete backup vault: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DescribeBackupVault(ctx, &backup.DescribeBackupVaultInput{
@@ -140,20 +129,10 @@ func TestBackup_CreateBackupPlan(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.BackupPlanId == nil || *result.BackupPlanId == "" {
-		t.Error("expected BackupPlanId to be set")
-	}
-
-	if result.BackupPlanArn == nil || *result.BackupPlanArn == "" {
-		t.Error("expected BackupPlanArn to be set")
-	}
-
-	if result.CreationDate == nil {
-		t.Error("expected CreationDate to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("BackupPlanId", "BackupPlanArn", "CreationDate", "VersionId", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_GetBackupPlan(t *testing.T) {
@@ -172,31 +151,17 @@ func TestBackup_GetBackupPlan(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.GetBackupPlan(ctx, &backup.GetBackupPlanInput{
 		BackupPlanId: createResult.BackupPlanId,
 	})
 	if err != nil {
-		t.Fatalf("failed to get backup plan: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.BackupPlan == nil {
-		t.Fatal("expected BackupPlan to be set")
-	}
-
-	if *result.BackupPlan.BackupPlanName != "get-plan" {
-		t.Errorf("expected plan name 'get-plan', got %s", *result.BackupPlan.BackupPlanName)
-	}
-
-	if len(result.BackupPlan.Rules) != 1 {
-		t.Fatalf("expected 1 rule, got %d", len(result.BackupPlan.Rules))
-	}
-
-	if *result.BackupPlan.Rules[0].RuleName != "rule-1" {
-		t.Errorf("expected rule name 'rule-1', got %s", *result.BackupPlan.Rules[0].RuleName)
-	}
+	golden.New(t, golden.WithIgnoreFields("BackupPlanId", "BackupPlanArn", "CreationDate", "LastExecutionDate", "VersionId", "RuleId", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_ListBackupPlans(t *testing.T) {
@@ -215,12 +180,12 @@ func TestBackup_ListBackupPlans(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListBackupPlans(ctx, &backup.ListBackupPlansInput{})
 	if err != nil {
-		t.Fatalf("failed to list backup plans: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(result.BackupPlansList) == 0 {
@@ -244,14 +209,14 @@ func TestBackup_DeleteBackupPlan(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteBackupPlan(ctx, &backup.DeleteBackupPlanInput{
 		BackupPlanId: createResult.BackupPlanId,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetBackupPlan(ctx, &backup.GetBackupPlanInput{
@@ -278,7 +243,7 @@ func TestBackup_CreateBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.CreateBackupSelection(ctx, &backup.CreateBackupSelectionInput{
@@ -290,16 +255,10 @@ func TestBackup_CreateBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup selection: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.SelectionId == nil || *result.SelectionId == "" {
-		t.Error("expected SelectionId to be set")
-	}
-
-	if result.BackupPlanId == nil || *result.BackupPlanId == "" {
-		t.Error("expected BackupPlanId to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("SelectionId", "BackupPlanId", "CreationDate", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_GetBackupSelection(t *testing.T) {
@@ -318,7 +277,7 @@ func TestBackup_GetBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	selResult, err := client.CreateBackupSelection(ctx, &backup.CreateBackupSelectionInput{
@@ -329,7 +288,7 @@ func TestBackup_GetBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup selection: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.GetBackupSelection(ctx, &backup.GetBackupSelectionInput{
@@ -337,16 +296,10 @@ func TestBackup_GetBackupSelection(t *testing.T) {
 		SelectionId:  selResult.SelectionId,
 	})
 	if err != nil {
-		t.Fatalf("failed to get backup selection: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.BackupSelection == nil {
-		t.Fatal("expected BackupSelection to be set")
-	}
-
-	if *result.BackupSelection.SelectionName != "get-selection" {
-		t.Errorf("expected selection name 'get-selection', got %s", *result.BackupSelection.SelectionName)
-	}
+	golden.New(t, golden.WithIgnoreFields("SelectionId", "BackupPlanId", "CreationDate", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_ListBackupSelections(t *testing.T) {
@@ -365,7 +318,7 @@ func TestBackup_ListBackupSelections(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateBackupSelection(ctx, &backup.CreateBackupSelectionInput{
@@ -376,19 +329,17 @@ func TestBackup_ListBackupSelections(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup selection: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListBackupSelections(ctx, &backup.ListBackupSelectionsInput{
 		BackupPlanId: planResult.BackupPlanId,
 	})
 	if err != nil {
-		t.Fatalf("failed to list backup selections: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.BackupSelectionsList) != 1 {
-		t.Errorf("expected 1 selection, got %d", len(result.BackupSelectionsList))
-	}
+	golden.New(t, golden.WithIgnoreFields("SelectionId", "BackupPlanId", "CreationDate", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestBackup_DeleteBackupSelection(t *testing.T) {
@@ -407,7 +358,7 @@ func TestBackup_DeleteBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup plan: %v", err)
+		t.Fatal(err)
 	}
 
 	selResult, err := client.CreateBackupSelection(ctx, &backup.CreateBackupSelectionInput{
@@ -418,7 +369,7 @@ func TestBackup_DeleteBackupSelection(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create backup selection: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteBackupSelection(ctx, &backup.DeleteBackupSelectionInput{
@@ -426,7 +377,7 @@ func TestBackup_DeleteBackupSelection(t *testing.T) {
 		SelectionId:  selResult.SelectionId,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete backup selection: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetBackupSelection(ctx, &backup.GetBackupSelectionInput{

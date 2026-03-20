@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/sivchari/golden"
 )
 
 func newSSMClient(t *testing.T) *ssm.Client {
@@ -44,12 +45,9 @@ func TestSSM_PutAndGetParameter(t *testing.T) {
 		Type:  types.ParameterTypeString,
 	})
 	if err != nil {
-		t.Fatalf("failed to put parameter: %v", err)
+		t.Fatal(err)
 	}
-
-	if putOutput.Version != 1 {
-		t.Errorf("expected version 1, got %d", putOutput.Version)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_put", putOutput)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
@@ -62,16 +60,9 @@ func TestSSM_PutAndGetParameter(t *testing.T) {
 		Name: aws.String(paramName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get parameter: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.Parameter.Name != paramName {
-		t.Errorf("expected name %s, got %s", paramName, *getOutput.Parameter.Name)
-	}
-
-	if *getOutput.Parameter.Value != paramValue {
-		t.Errorf("expected value %s, got %s", paramValue, *getOutput.Parameter.Value)
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSSM_PutParameter_Update(t *testing.T) {
@@ -86,7 +77,7 @@ func TestSSM_PutParameter_Update(t *testing.T) {
 		Type:  types.ParameterTypeString,
 	})
 	if err != nil {
-		t.Fatalf("failed to put parameter: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -113,12 +104,9 @@ func TestSSM_PutParameter_Update(t *testing.T) {
 		Overwrite: aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to update parameter: %v", err)
+		t.Fatal(err)
 	}
-
-	if putOutput.Version != 2 {
-		t.Errorf("expected version 2, got %d", putOutput.Version)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), putOutput)
 }
 
 func TestSSM_GetParameters(t *testing.T) {
@@ -142,7 +130,7 @@ func TestSSM_GetParameters(t *testing.T) {
 			Type:  types.ParameterTypeString,
 		})
 		if err != nil {
-			t.Fatalf("failed to put parameter %s: %v", p.name, err)
+			t.Fatal(err)
 		}
 	}
 
@@ -163,20 +151,9 @@ func TestSSM_GetParameters(t *testing.T) {
 		Names: names,
 	})
 	if err != nil {
-		t.Fatalf("failed to get parameters: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(getOutput.Parameters) != 2 {
-		t.Errorf("expected 2 parameters, got %d", len(getOutput.Parameters))
-	}
-
-	if len(getOutput.InvalidParameters) != 1 {
-		t.Errorf("expected 1 invalid parameter, got %d", len(getOutput.InvalidParameters))
-	}
-
-	if getOutput.InvalidParameters[0] != "/test/multi/nonexistent" {
-		t.Errorf("expected invalid parameter /test/multi/nonexistent, got %s", getOutput.InvalidParameters[0])
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestSSM_GetParametersByPath(t *testing.T) {
@@ -200,7 +177,7 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 			Type:  types.ParameterTypeString,
 		})
 		if err != nil {
-			t.Fatalf("failed to put parameter %s: %v", p.name, err)
+			t.Fatal(err)
 		}
 	}
 
@@ -220,12 +197,9 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 		Path: aws.String("/myapp/config"),
 	})
 	if err != nil {
-		t.Fatalf("failed to get parameters by path: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(getOutput.Parameters) != 2 {
-		t.Errorf("expected 2 parameters (non-recursive), got %d", len(getOutput.Parameters))
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_nonrecursive", getOutput)
 
 	// Get by path recursive.
 	getOutput, err = client.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
@@ -233,12 +207,9 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 		Recursive: aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to get parameters by path: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(getOutput.Parameters) != 3 {
-		t.Errorf("expected 3 parameters (recursive), got %d", len(getOutput.Parameters))
-	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_recursive", getOutput)
 }
 
 func TestSSM_DeleteParameter(t *testing.T) {
@@ -253,7 +224,7 @@ func TestSSM_DeleteParameter(t *testing.T) {
 		Type:  types.ParameterTypeString,
 	})
 	if err != nil {
-		t.Fatalf("failed to put parameter: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete parameter.
@@ -261,7 +232,7 @@ func TestSSM_DeleteParameter(t *testing.T) {
 		Name: aws.String(paramName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete parameter: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get parameter - should fail.
@@ -287,7 +258,7 @@ func TestSSM_DeleteParameters(t *testing.T) {
 			Type:  types.ParameterTypeString,
 		})
 		if err != nil {
-			t.Fatalf("failed to put parameter %s: %v", name, err)
+			t.Fatal(err)
 		}
 	}
 
@@ -297,16 +268,9 @@ func TestSSM_DeleteParameters(t *testing.T) {
 		Names: names,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete parameters: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(deleteOutput.DeletedParameters) != 2 {
-		t.Errorf("expected 2 deleted parameters, got %d", len(deleteOutput.DeletedParameters))
-	}
-
-	if len(deleteOutput.InvalidParameters) != 1 {
-		t.Errorf("expected 1 invalid parameter, got %d", len(deleteOutput.InvalidParameters))
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), deleteOutput)
 }
 
 func TestSSM_DescribeParameters(t *testing.T) {
@@ -331,7 +295,7 @@ func TestSSM_DescribeParameters(t *testing.T) {
 			Description: aws.String(p.description),
 		})
 		if err != nil {
-			t.Fatalf("failed to put parameter %s: %v", p.name, err)
+			t.Fatal(err)
 		}
 	}
 
@@ -349,7 +313,7 @@ func TestSSM_DescribeParameters(t *testing.T) {
 	// Describe parameters.
 	descOutput, err := client.DescribeParameters(ctx, &ssm.DescribeParametersInput{})
 	if err != nil {
-		t.Fatalf("failed to describe parameters: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(descOutput.Parameters) < 2 {

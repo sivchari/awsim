@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kafka"
 	"github.com/aws/aws-sdk-go-v2/service/kafka/types"
+	"github.com/sivchari/golden"
 )
 
 func newKafkaClient(t *testing.T) *kafka.Client {
@@ -46,28 +47,20 @@ func TestKafka_CreateAndDeleteCluster(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.ClusterArn == nil || *createResult.ClusterArn == "" {
-		t.Fatal("expected cluster ARN to be set")
-	}
-
-	if *createResult.ClusterName != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *createResult.ClusterName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ClusterArn")).Assert(t.Name()+"_create", createResult)
 
 	// Delete cluster
 	deleteResult, err := client.DeleteCluster(ctx, &kafka.DeleteClusterInput{
 		ClusterArn: createResult.ClusterArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.ClusterArn != *createResult.ClusterArn {
-		t.Errorf("expected cluster ARN %s, got %s", *createResult.ClusterArn, *deleteResult.ClusterArn)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ClusterArn")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestKafka_DescribeCluster(t *testing.T) {
@@ -85,7 +78,7 @@ func TestKafka_DescribeCluster(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -98,24 +91,10 @@ func TestKafka_DescribeCluster(t *testing.T) {
 		ClusterArn: createResult.ClusterArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeResult.ClusterInfo == nil {
-		t.Fatal("expected cluster info in describe response")
-	}
-
-	if *describeResult.ClusterInfo.ClusterName != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *describeResult.ClusterInfo.ClusterName)
-	}
-
-	if describeResult.ClusterInfo.CurrentBrokerSoftwareInfo == nil || *describeResult.ClusterInfo.CurrentBrokerSoftwareInfo.KafkaVersion != "3.6.0" {
-		t.Error("expected kafka version 3.6.0 in current broker software info")
-	}
-
-	if describeResult.ClusterInfo.State != types.ClusterStateActive {
-		t.Errorf("expected cluster state ACTIVE, got %s", describeResult.ClusterInfo.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ClusterArn", "CreationTime", "CurrentVersion")).Assert(t.Name()+"_describe", describeResult)
 }
 
 func TestKafka_ListClusters(t *testing.T) {
@@ -133,7 +112,7 @@ func TestKafka_ListClusters(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -144,7 +123,7 @@ func TestKafka_ListClusters(t *testing.T) {
 
 	listResult, err := client.ListClusters(ctx, &kafka.ListClustersInput{})
 	if err != nil {
-		t.Fatalf("failed to list clusters: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -176,7 +155,7 @@ func TestKafka_GetBootstrapBrokers(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -189,16 +168,10 @@ func TestKafka_GetBootstrapBrokers(t *testing.T) {
 		ClusterArn: createResult.ClusterArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to get bootstrap brokers: %v", err)
+		t.Fatal(err)
 	}
 
-	if bootstrapResult.BootstrapBrokerString == nil || *bootstrapResult.BootstrapBrokerString == "" {
-		t.Error("expected bootstrap broker string to be set")
-	}
-
-	if bootstrapResult.BootstrapBrokerStringTls == nil || *bootstrapResult.BootstrapBrokerStringTls == "" {
-		t.Error("expected bootstrap broker TLS string to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "BootstrapBrokerString", "BootstrapBrokerStringTls")).Assert(t.Name()+"_bootstrap", bootstrapResult)
 }
 
 func TestKafka_ClusterNotFound(t *testing.T) {
@@ -228,7 +201,7 @@ func TestKafka_DuplicateCluster(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {

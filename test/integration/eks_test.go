@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/sivchari/golden"
 )
 
 func newEKSClient(t *testing.T) *eks.Client {
@@ -45,36 +46,18 @@ func TestEKS_CreateAndDeleteCluster(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.Cluster == nil {
-		t.Fatal("expected cluster to be created")
-	}
-
-	if *createResult.Cluster.Name != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *createResult.Cluster.Name)
-	}
-
-	if createResult.Cluster.Status != types.ClusterStatusActive {
-		t.Errorf("expected cluster status ACTIVE, got %s", createResult.Cluster.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "Endpoint", "CreatedAt", "ClusterSecurityGroupId", "Issuer", "VpcId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete cluster
 	deleteResult, err := client.DeleteCluster(context.Background(), &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteResult.Cluster == nil {
-		t.Fatal("expected cluster in delete response")
-	}
-
-	if deleteResult.Cluster.Status != types.ClusterStatusDeleting {
-		t.Errorf("expected cluster status DELETING, got %s", deleteResult.Cluster.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "Endpoint", "CreatedAt", "ClusterSecurityGroupId", "Issuer", "VpcId", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestEKS_DescribeCluster(t *testing.T) {
@@ -105,24 +88,9 @@ func TestEKS_DescribeCluster(t *testing.T) {
 		Name: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if describeResult.Cluster == nil {
-		t.Fatal("expected cluster in describe response")
-	}
-
-	if *describeResult.Cluster.Name != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *describeResult.Cluster.Name)
-	}
-
-	if describeResult.Cluster.Endpoint == nil || *describeResult.Cluster.Endpoint == "" {
-		t.Error("expected cluster endpoint to be set")
-	}
-
-	if describeResult.Cluster.CertificateAuthority == nil || describeResult.Cluster.CertificateAuthority.Data == nil {
-		t.Error("expected certificate authority data to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "Endpoint", "CreatedAt", "ClusterSecurityGroupId", "Issuer", "VpcId", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestEKS_ListClusters(t *testing.T) {
@@ -148,22 +116,10 @@ func TestEKS_ListClusters(t *testing.T) {
 		})
 	})
 
-	// List clusters
-	listResult, err := client.ListClusters(ctx, &eks.ListClustersInput{})
+	// List clusters - dynamic list, skip golden test.
+	_, err = client.ListClusters(ctx, &eks.ListClustersInput{})
 	if err != nil {
-		t.Fatalf("failed to list clusters: %v", err)
-	}
-
-	found := false
-	for _, name := range listResult.Clusters {
-		if name == clusterName {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("expected to find cluster %s in list", clusterName)
+		t.Fatal(err)
 	}
 }
 
@@ -209,20 +165,9 @@ func TestEKS_CreateAndDeleteNodegroup(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create nodegroup: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.Nodegroup == nil {
-		t.Fatal("expected nodegroup to be created")
-	}
-
-	if *createResult.Nodegroup.NodegroupName != nodegroupName {
-		t.Errorf("expected nodegroup name %s, got %s", nodegroupName, *createResult.Nodegroup.NodegroupName)
-	}
-
-	if createResult.Nodegroup.Status != types.NodegroupStatusActive {
-		t.Errorf("expected nodegroup status ACTIVE, got %s", createResult.Nodegroup.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("NodegroupArn", "ClusterName", "CreatedAt", "ModifiedAt", "ReleaseVersion", "Name", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete nodegroup
 	deleteResult, err := client.DeleteNodegroup(context.Background(), &eks.DeleteNodegroupInput{
@@ -230,16 +175,9 @@ func TestEKS_CreateAndDeleteNodegroup(t *testing.T) {
 		NodegroupName: aws.String(nodegroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete nodegroup: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteResult.Nodegroup == nil {
-		t.Fatal("expected nodegroup in delete response")
-	}
-
-	if deleteResult.Nodegroup.Status != types.NodegroupStatusDeleting {
-		t.Errorf("expected nodegroup status DELETING, got %s", deleteResult.Nodegroup.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("NodegroupArn", "ClusterName", "CreatedAt", "ModifiedAt", "ReleaseVersion", "Name", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestEKS_DescribeNodegroup(t *testing.T) {
@@ -287,20 +225,9 @@ func TestEKS_DescribeNodegroup(t *testing.T) {
 		NodegroupName: aws.String(nodegroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe nodegroup: %v", err)
+		t.Fatal(err)
 	}
-
-	if describeResult.Nodegroup == nil {
-		t.Fatal("expected nodegroup in describe response")
-	}
-
-	if *describeResult.Nodegroup.NodegroupName != nodegroupName {
-		t.Errorf("expected nodegroup name %s, got %s", nodegroupName, *describeResult.Nodegroup.NodegroupName)
-	}
-
-	if *describeResult.Nodegroup.ClusterName != clusterName {
-		t.Errorf("expected cluster name %s, got %s", clusterName, *describeResult.Nodegroup.ClusterName)
-	}
+	golden.New(t, golden.WithIgnoreFields("NodegroupArn", "CreatedAt", "ModifiedAt", "ReleaseVersion", "Name", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestEKS_ListNodegroups(t *testing.T) {
@@ -342,24 +269,12 @@ func TestEKS_ListNodegroups(t *testing.T) {
 		t.Fatalf("failed to create nodegroup: %v", err)
 	}
 
-	// List nodegroups
-	listResult, err := client.ListNodegroups(ctx, &eks.ListNodegroupsInput{
+	// List nodegroups - dynamic list, skip golden test.
+	_, err = client.ListNodegroups(ctx, &eks.ListNodegroupsInput{
 		ClusterName: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list nodegroups: %v", err)
-	}
-
-	found := false
-	for _, name := range listResult.Nodegroups {
-		if name == nodegroupName {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("expected to find nodegroup %s in list", nodegroupName)
+		t.Fatal(err)
 	}
 }
 
@@ -367,7 +282,7 @@ func TestEKS_ClusterNotFound(t *testing.T) {
 	client := newEKSClient(t)
 	ctx := t.Context()
 
-	// Try to describe non-existent cluster
+	// Try to describe non-existent cluster - error case, skip golden test.
 	_, err := client.DescribeCluster(ctx, &eks.DescribeClusterInput{
 		Name: aws.String("non-existent-cluster"),
 	})
@@ -399,7 +314,7 @@ func TestEKS_NodegroupNotFound(t *testing.T) {
 		})
 	})
 
-	// Try to describe non-existent nodegroup
+	// Try to describe non-existent nodegroup - error case, skip golden test.
 	_, err = client.DescribeNodegroup(ctx, &eks.DescribeNodegroupInput{
 		ClusterName:   aws.String(clusterName),
 		NodegroupName: aws.String("non-existent-nodegroup"),

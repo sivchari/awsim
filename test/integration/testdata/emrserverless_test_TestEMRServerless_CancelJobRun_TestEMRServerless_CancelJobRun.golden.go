@@ -1,8 +1,8 @@
 {
   "JobRun": {
-    "ApplicationId": "0306d29ae6c344",
-    "Arn": "arn:aws:emr-serverless:us-east-1:123456789012:/applications/0306d29ae6c344/jobruns/d819ffb3274747",
-    "CreatedAt": "2026-02-26T16:00:39.005Z",
+    "ApplicationId": "6900551ac92146",
+    "Arn": "arn:aws:emr-serverless:us-east-1:123456789012:/applications/6900551ac92146/jobruns/75a25bdd12a44d",
+    "CreatedAt": "2026-03-23T07:45:25.806Z",
     "CreatedBy": "arn:aws:iam::123456789012:user/test-user",
     "ExecutionRole": "arn:aws:iam::123456789012:role/test-execution-role",
     "JobDriver": {
@@ -12,11 +12,11 @@
         "SparkSubmitParameters": null
       }
     },
-    "JobRunId": "d819ffb3274747",
+    "JobRunId": "75a25bdd12a44d",
     "ReleaseLabel": "emr-6.9.0",
     "State": "CANCELLED",
     "StateDetails": null,
-    "UpdatedAt": "2026-02-26T16:00:39.005Z",
+    "UpdatedAt": "2026-03-23T07:45:25.807Z",
     "Attempt": null,
     "AttemptCreatedAt": null,
     "AttemptUpdatedAt": null,

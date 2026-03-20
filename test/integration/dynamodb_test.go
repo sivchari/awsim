@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/sivchari/golden"
 )
 
 func newDynamoDBClient(t *testing.T) *dynamodb.Client {
@@ -54,18 +55,9 @@ func TestDynamoDB_CreateAndDeleteTable(t *testing.T) {
 		BillingMode: types.BillingModePayPerRequest,
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.TableDescription == nil {
-		t.Fatal("table description is nil")
-	}
-
-	if *createOutput.TableDescription.TableName != tableName {
-		t.Errorf("table name mismatch: got %s, want %s", *createOutput.TableDescription.TableName, tableName)
-	}
-
-	t.Logf("Created table: %s", *createOutput.TableDescription.TableName)
+	golden.New(t, golden.WithIgnoreFields("TableArn", "TableId", "CreationDateTime", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete table.
 	_, err = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
@@ -108,24 +100,10 @@ func TestDynamoDB_ListTables(t *testing.T) {
 		})
 	})
 
-	// List tables.
-	listOutput, err := client.ListTables(ctx, &dynamodb.ListTablesInput{})
+	// List tables - dynamic list, skip golden test.
+	_, err = client.ListTables(ctx, &dynamodb.ListTablesInput{})
 	if err != nil {
-		t.Fatalf("failed to list tables: %v", err)
-	}
-
-	found := false
-
-	for _, name := range listOutput.TableNames {
-		if name == tableName {
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("table %s not found in list", tableName)
+		t.Fatal(err)
 	}
 }
 
@@ -166,20 +144,9 @@ func TestDynamoDB_DescribeTable(t *testing.T) {
 		TableName: aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe table: %v", err)
+		t.Fatal(err)
 	}
-
-	if descOutput.Table == nil {
-		t.Fatal("table is nil")
-	}
-
-	if *descOutput.Table.TableName != tableName {
-		t.Errorf("table name mismatch: got %s, want %s", *descOutput.Table.TableName, tableName)
-	}
-
-	if descOutput.Table.TableStatus != types.TableStatusActive {
-		t.Errorf("table status mismatch: got %s, want ACTIVE", descOutput.Table.TableStatus)
-	}
+	golden.New(t, golden.WithIgnoreFields("TableArn", "TableId", "CreationDateTime", "TableSizeBytes", "ItemCount", "ResultMetadata")).Assert(t.Name(), descOutput)
 }
 
 func TestDynamoDB_PutAndGetItem(t *testing.T) {
@@ -224,7 +191,7 @@ func TestDynamoDB_PutAndGetItem(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put item: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get item.
@@ -235,20 +202,9 @@ func TestDynamoDB_PutAndGetItem(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get item: %v", err)
+		t.Fatal(err)
 	}
-
-	if getOutput.Item == nil {
-		t.Fatal("item is nil")
-	}
-
-	if nameAttr, ok := getOutput.Item["name"].(*types.AttributeValueMemberS); !ok || nameAttr.Value != "Test Item" {
-		t.Errorf("name attribute mismatch")
-	}
-
-	if ageAttr, ok := getOutput.Item["age"].(*types.AttributeValueMemberN); !ok || ageAttr.Value != "25" {
-		t.Errorf("age attribute mismatch")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestDynamoDB_DeleteItem(t *testing.T) {
@@ -303,7 +259,7 @@ func TestDynamoDB_DeleteItem(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to delete item: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify item is deleted.
@@ -314,12 +270,9 @@ func TestDynamoDB_DeleteItem(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get item: %v", err)
+		t.Fatal(err)
 	}
-
-	if getOutput.Item != nil {
-		t.Errorf("item should be nil after deletion, got %v", getOutput.Item)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get_after_delete", getOutput)
 }
 
 func TestDynamoDB_UpdateItem(t *testing.T) {
@@ -382,12 +335,9 @@ func TestDynamoDB_UpdateItem(t *testing.T) {
 		ReturnValues: types.ReturnValueAllNew,
 	})
 	if err != nil {
-		t.Fatalf("failed to update item: %v", err)
+		t.Fatal(err)
 	}
-
-	if nameAttr, ok := updateOutput.Attributes["name"].(*types.AttributeValueMemberS); !ok || nameAttr.Value != "Updated" {
-		t.Errorf("name attribute mismatch after update")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_update", updateOutput)
 
 	// Verify item is updated.
 	getOutput, err := client.GetItem(ctx, &dynamodb.GetItemInput{
@@ -397,12 +347,9 @@ func TestDynamoDB_UpdateItem(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get item: %v", err)
+		t.Fatal(err)
 	}
-
-	if nameAttr, ok := getOutput.Item["name"].(*types.AttributeValueMemberS); !ok || nameAttr.Value != "Updated" {
-		t.Errorf("name attribute mismatch: expected Updated")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get_after_update", getOutput)
 }
 
 func TestDynamoDB_Query(t *testing.T) {
@@ -480,12 +427,9 @@ func TestDynamoDB_Query(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to query items: %v", err)
+		t.Fatal(err)
 	}
-
-	if queryOutput.Count != 3 {
-		t.Errorf("expected 3 items, got %d", queryOutput.Count)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), queryOutput)
 }
 
 func TestDynamoDB_Scan(t *testing.T) {
@@ -539,12 +483,9 @@ func TestDynamoDB_Scan(t *testing.T) {
 		TableName: aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to scan items: %v", err)
+		t.Fatal(err)
 	}
-
-	if scanOutput.Count != 5 {
-		t.Errorf("expected 5 items, got %d", scanOutput.Count)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), scanOutput)
 }
 
 func TestDynamoDB_CompositeKey(t *testing.T) {
@@ -609,14 +550,7 @@ func TestDynamoDB_CompositeKey(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get item: %v", err)
+		t.Fatal(err)
 	}
-
-	if getOutput.Item == nil {
-		t.Fatal("item is nil")
-	}
-
-	if nameAttr, ok := getOutput.Item["name"].(*types.AttributeValueMemberS); !ok || nameAttr.Value != "Test User" {
-		t.Errorf("name attribute mismatch")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }

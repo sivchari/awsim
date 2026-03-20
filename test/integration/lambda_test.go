@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/sivchari/golden"
 )
 
 func newLambdaClient(t *testing.T) *lambda.Client {
@@ -52,21 +53,17 @@ func TestLambda_CreateAndDeleteFunction(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.FunctionArn == nil {
-		t.Fatal("function ARN is nil")
-	}
-
-	t.Logf("Created function: %s", *createOutput.FunctionArn)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "FunctionArn", "CodeSha256", "LastModified")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete function.
 	_, err = client.DeleteFunction(context.Background(), &lambda.DeleteFunctionInput{
 		FunctionName: aws.String(functionName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete function: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -86,7 +83,7 @@ func TestLambda_GetFunction(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -100,17 +97,10 @@ func TestLambda_GetFunction(t *testing.T) {
 		FunctionName: aws.String(functionName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get function: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Configuration == nil {
-		t.Fatal("function configuration is nil")
-	}
-
-	if *getOutput.Configuration.FunctionName != functionName {
-		t.Errorf("function name mismatch: got %s, want %s",
-			*getOutput.Configuration.FunctionName, functionName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "FunctionArn", "CodeSha256", "LastModified")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestLambda_ListFunctions(t *testing.T) {
@@ -129,7 +119,7 @@ func TestLambda_ListFunctions(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -141,7 +131,7 @@ func TestLambda_ListFunctions(t *testing.T) {
 	// List functions.
 	listOutput, err := client.ListFunctions(ctx, &lambda.ListFunctionsInput{})
 	if err != nil {
-		t.Fatalf("failed to list functions: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -188,7 +178,7 @@ func TestLambda_Invoke(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -202,7 +192,7 @@ func TestLambda_Invoke(t *testing.T) {
 		FunctionName: aws.String(functionName),
 	})
 	if err != nil {
-		t.Fatalf("failed to update function configuration: %v", err)
+		t.Fatal(err)
 	}
 
 	// Note: Since AWS SDK doesn't support custom InvokeEndpoint field,
@@ -288,7 +278,6 @@ func TestLambda_InvokeWithEndpoint(t *testing.T) {
 	}
 
 	respBody, _ := io.ReadAll(invokeResp.Body)
-	t.Logf("Invoke response: %s", string(respBody))
 
 	// Verify response contains our payload.
 	var result map[string]any
@@ -307,7 +296,7 @@ func TestLambda_UpdateFunctionCode(t *testing.T) {
 	functionName := "test-function-update-code"
 
 	// Create function.
-	createOutput, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
+	_, err := client.CreateFunction(ctx, &lambda.CreateFunctionInput{
 		FunctionName: aws.String(functionName),
 		Runtime:      types.RuntimePython312,
 		Role:         aws.String("arn:aws:iam::000000000000:role/test-role"),
@@ -317,7 +306,7 @@ func TestLambda_UpdateFunctionCode(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -326,20 +315,16 @@ func TestLambda_UpdateFunctionCode(t *testing.T) {
 		})
 	})
 
-	originalCodeSha := *createOutput.CodeSha256
-
 	// Update function code.
 	updateOutput, err := client.UpdateFunctionCode(ctx, &lambda.UpdateFunctionCodeInput{
 		FunctionName: aws.String(functionName),
 		ZipFile:      []byte("new-fake-zip-content"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update function code: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateOutput.CodeSha256 == originalCodeSha {
-		t.Error("code SHA256 should have changed after update")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "FunctionArn", "CodeSha256", "LastModified")).Assert(t.Name()+"_update", updateOutput)
 }
 
 func TestLambda_UpdateFunctionConfiguration(t *testing.T) {
@@ -360,7 +345,7 @@ func TestLambda_UpdateFunctionConfiguration(t *testing.T) {
 		Timeout:    aws.Int32(3),
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -377,20 +362,10 @@ func TestLambda_UpdateFunctionConfiguration(t *testing.T) {
 		Description:  aws.String("Updated description"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update function configuration: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateOutput.MemorySize != 256 {
-		t.Errorf("memory size mismatch: got %d, want 256", *updateOutput.MemorySize)
-	}
-
-	if *updateOutput.Timeout != 30 {
-		t.Errorf("timeout mismatch: got %d, want 30", *updateOutput.Timeout)
-	}
-
-	if *updateOutput.Description != "Updated description" {
-		t.Errorf("description mismatch: got %s, want 'Updated description'", *updateOutput.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "FunctionArn", "CodeSha256", "LastModified")).Assert(t.Name()+"_update", updateOutput)
 }
 
 func TestLambda_CreateFunctionIdempotent(t *testing.T) {
@@ -409,7 +384,7 @@ func TestLambda_CreateFunctionIdempotent(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -449,7 +424,7 @@ func TestLambda_EventSourceMapping_CreateAndDelete(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -466,26 +441,20 @@ func TestLambda_EventSourceMapping_CreateAndDelete(t *testing.T) {
 		Enabled:        aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to create event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.UUID == nil {
-		t.Fatal("event source mapping UUID is nil")
-	}
-
-	t.Logf("Created event source mapping: %s", *createOutput.UUID)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UUID", "FunctionArn", "LastModified", "LastProcessingResult")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete event source mapping.
 	deleteOutput, err := client.DeleteEventSourceMapping(context.Background(), &lambda.DeleteEventSourceMappingInput{
 		UUID: createOutput.UUID,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteOutput.State != "Deleting" {
-		t.Errorf("expected state to be Deleting, got %s", *deleteOutput.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UUID", "FunctionArn", "LastModified", "LastProcessingResult")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
@@ -504,7 +473,7 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -521,7 +490,7 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 		Enabled:        aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to create event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -535,12 +504,10 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 		UUID: createOutput.UUID,
 	})
 	if err != nil {
-		t.Fatalf("failed to get event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getOutput.BatchSize != 10 {
-		t.Errorf("batch size mismatch: got %d, want 10", *getOutput.BatchSize)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UUID", "FunctionArn", "LastModified", "LastProcessingResult")).Assert(t.Name()+"_get", getOutput)
 
 	// Update event source mapping.
 	updateOutput, err := client.UpdateEventSourceMapping(ctx, &lambda.UpdateEventSourceMappingInput{
@@ -549,16 +516,10 @@ func TestLambda_EventSourceMapping_GetAndUpdate(t *testing.T) {
 		Enabled:   aws.Bool(false),
 	})
 	if err != nil {
-		t.Fatalf("failed to update event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateOutput.BatchSize != 50 {
-		t.Errorf("batch size mismatch after update: got %d, want 50", *updateOutput.BatchSize)
-	}
-
-	if *updateOutput.State != "Disabled" {
-		t.Errorf("state mismatch after update: got %s, want Disabled", *updateOutput.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UUID", "FunctionArn", "LastModified", "LastProcessingResult")).Assert(t.Name()+"_update", updateOutput)
 }
 
 func TestLambda_EventSourceMapping_List(t *testing.T) {
@@ -577,7 +538,7 @@ func TestLambda_EventSourceMapping_List(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create function: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -593,7 +554,7 @@ func TestLambda_EventSourceMapping_List(t *testing.T) {
 		BatchSize:      aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to create event source mapping: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -607,7 +568,7 @@ func TestLambda_EventSourceMapping_List(t *testing.T) {
 		FunctionName: aws.String(functionName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list event source mappings: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -636,6 +597,6 @@ func TestLambda_EventSourceMapping_FunctionNotFound(t *testing.T) {
 		BatchSize:      aws.Int32(10),
 	})
 	if err == nil {
-		t.Error("expected error when creating event source mapping for non-existent function")
+		t.Fatal("expected error when creating event source mapping for non-existent function")
 	}
 }

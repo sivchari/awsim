@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
+	"github.com/sivchari/golden"
 )
 
 func newCloudWatchClient(t *testing.T) *cloudwatch.Client {
@@ -54,10 +55,8 @@ func TestCloudWatch_PutMetricData(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric data: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Log("Successfully put metric data")
 }
 
 func TestCloudWatch_ListMetrics(t *testing.T) {
@@ -79,7 +78,7 @@ func TestCloudWatch_ListMetrics(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric data: %v", err)
+		t.Fatal(err)
 	}
 
 	// List metrics.
@@ -88,11 +87,7 @@ func TestCloudWatch_ListMetrics(t *testing.T) {
 		MetricName: aws.String(metricName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list metrics: %v", err)
-	}
-
-	if len(output.Metrics) == 0 {
-		t.Fatal("expected at least one metric, got none")
+		t.Fatal(err)
 	}
 
 	found := false
@@ -139,7 +134,7 @@ func TestCloudWatch_GetMetricStatistics(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric data: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get metric statistics.
@@ -159,16 +154,10 @@ func TestCloudWatch_GetMetricStatistics(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get metric statistics: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(output.Datapoints) == 0 {
-		t.Fatal("expected at least one datapoint, got none")
-	}
-
-	dp := output.Datapoints[0]
-	t.Logf("Datapoint: Sum=%.2f, Average=%.2f, Min=%.2f, Max=%.2f, Count=%.0f",
-		*dp.Sum, *dp.Average, *dp.Minimum, *dp.Maximum, *dp.SampleCount)
+	golden.New(t, golden.WithIgnoreFields("Timestamp", "ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestCloudWatch_PutMetricAlarm(t *testing.T) {
@@ -190,7 +179,7 @@ func TestCloudWatch_PutMetricAlarm(t *testing.T) {
 		ActionsEnabled:     aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric alarm: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -198,8 +187,6 @@ func TestCloudWatch_PutMetricAlarm(t *testing.T) {
 			AlarmNames: []string{alarmName},
 		})
 	})
-
-	t.Log("Successfully put metric alarm")
 }
 
 func TestCloudWatch_DescribeAlarms(t *testing.T) {
@@ -220,7 +207,7 @@ func TestCloudWatch_DescribeAlarms(t *testing.T) {
 		ComparisonOperator: types.ComparisonOperatorGreaterThanOrEqualToThreshold,
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric alarm: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -234,22 +221,10 @@ func TestCloudWatch_DescribeAlarms(t *testing.T) {
 		AlarmNames: []string{alarmName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe alarms: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(output.MetricAlarms) == 0 {
-		t.Fatal("expected at least one alarm, got none")
-	}
-
-	alarm := output.MetricAlarms[0]
-
-	if *alarm.AlarmName != alarmName {
-		t.Errorf("alarm name mismatch: got %s, want %s", *alarm.AlarmName, alarmName)
-	}
-
-	if *alarm.Threshold != 90.0 {
-		t.Errorf("threshold mismatch: got %.2f, want 90.0", *alarm.Threshold)
-	}
+	golden.New(t, golden.WithIgnoreFields("AlarmArn", "AlarmConfigurationUpdatedTimestamp", "StateTransitionedTimestamp", "StateUpdatedTimestamp", "ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestCloudWatch_DeleteAlarms(t *testing.T) {
@@ -270,7 +245,7 @@ func TestCloudWatch_DeleteAlarms(t *testing.T) {
 		ComparisonOperator: types.ComparisonOperatorLessThanThreshold,
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric alarm: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete alarm.
@@ -278,7 +253,7 @@ func TestCloudWatch_DeleteAlarms(t *testing.T) {
 		AlarmNames: []string{alarmName},
 	})
 	if err != nil {
-		t.Fatalf("failed to delete alarm: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify alarm is deleted.
@@ -286,7 +261,7 @@ func TestCloudWatch_DeleteAlarms(t *testing.T) {
 		AlarmNames: []string{alarmName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe alarms: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(output.MetricAlarms) != 0 {
@@ -313,7 +288,7 @@ func TestCloudWatch_GetMetricData(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric data: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get metric data.
@@ -336,21 +311,10 @@ func TestCloudWatch_GetMetricData(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get metric data: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(output.MetricDataResults) == 0 {
-		t.Fatal("expected at least one metric data result, got none")
-	}
-
-	result := output.MetricDataResults[0]
-
-	if *result.Id != "m1" {
-		t.Errorf("result ID mismatch: got %s, want m1", *result.Id)
-	}
-
-	t.Logf("Got metric data result: ID=%s, Label=%s, Values=%v",
-		*result.Id, *result.Label, result.Values)
+	golden.New(t, golden.WithIgnoreFields("Timestamps", "ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestCloudWatch_PutMetricDataWithDimensions(t *testing.T) {
@@ -382,7 +346,7 @@ func TestCloudWatch_PutMetricDataWithDimensions(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put metric data with dimensions: %v", err)
+		t.Fatal(err)
 	}
 
 	// List metrics with dimension filter.
@@ -397,7 +361,7 @@ func TestCloudWatch_PutMetricDataWithDimensions(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to list metrics: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(output.Metrics) == 0 {

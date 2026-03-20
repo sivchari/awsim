@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/globalaccelerator"
 	"github.com/aws/aws-sdk-go-v2/service/globalaccelerator/types"
+	"github.com/sivchari/golden"
 )
 
 func newGlobalAcceleratorClient(t *testing.T) *globalaccelerator.Client {
@@ -42,33 +43,22 @@ func TestGlobalAccelerator_CreateAndDescribeAccelerator(t *testing.T) {
 		IpAddressType:    types.IpAddressTypeIpv4,
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.Accelerator == nil || createOutput.Accelerator.AcceleratorArn == nil {
-		t.Fatal("accelerator is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("AcceleratorArn", "DnsName", "DualStackDnsName", "CreatedTime", "LastModifiedTime", "IpSets", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	acceleratorArn := *createOutput.Accelerator.AcceleratorArn
-	t.Logf("Created accelerator: %s", acceleratorArn)
 
 	// Describe accelerator.
 	describeOutput, err := client.DescribeAccelerator(ctx, &globalaccelerator.DescribeAcceleratorInput{
 		AcceleratorArn: aws.String(acceleratorArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe accelerator: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.Accelerator.AcceleratorArn != acceleratorArn {
-		t.Errorf("accelerator ARN mismatch: got %s, want %s", *describeOutput.Accelerator.AcceleratorArn, acceleratorArn)
-	}
-
-	if *describeOutput.Accelerator.Name != "test-accelerator" {
-		t.Errorf("name mismatch: got %s, want test-accelerator", *describeOutput.Accelerator.Name)
-	}
-
-	t.Logf("Described accelerator: %s", acceleratorArn)
+	golden.New(t, golden.WithIgnoreFields("AcceleratorArn", "DnsName", "DualStackDnsName", "CreatedTime", "LastModifiedTime", "IpSets", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestGlobalAccelerator_ListAccelerators(t *testing.T) {
@@ -81,7 +71,7 @@ func TestGlobalAccelerator_ListAccelerators(t *testing.T) {
 		IdempotencyToken: aws.String("test-token-2"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *createOutput.Accelerator.AcceleratorArn
@@ -91,11 +81,7 @@ func TestGlobalAccelerator_ListAccelerators(t *testing.T) {
 		MaxResults: aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to list accelerators: %v", err)
-	}
-
-	if len(listOutput.Accelerators) == 0 {
-		t.Fatal("no accelerators returned")
+		t.Fatal(err)
 	}
 
 	// Find our accelerator.
@@ -111,8 +97,6 @@ func TestGlobalAccelerator_ListAccelerators(t *testing.T) {
 	if !found {
 		t.Errorf("created accelerator %s not found in list", acceleratorArn)
 	}
-
-	t.Logf("Listed %d accelerators", len(listOutput.Accelerators))
 }
 
 func TestGlobalAccelerator_UpdateAccelerator(t *testing.T) {
@@ -126,7 +110,7 @@ func TestGlobalAccelerator_UpdateAccelerator(t *testing.T) {
 		Enabled:          aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *createOutput.Accelerator.AcceleratorArn
@@ -138,18 +122,10 @@ func TestGlobalAccelerator_UpdateAccelerator(t *testing.T) {
 		Enabled:        aws.Bool(false),
 	})
 	if err != nil {
-		t.Fatalf("failed to update accelerator: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateOutput.Accelerator.Name != "updated-accelerator" {
-		t.Errorf("name not updated: got %s, want updated-accelerator", *updateOutput.Accelerator.Name)
-	}
-
-	if *updateOutput.Accelerator.Enabled {
-		t.Error("accelerator should be disabled")
-	}
-
-	t.Logf("Updated accelerator: %s", acceleratorArn)
+	golden.New(t, golden.WithIgnoreFields("AcceleratorArn", "DnsName", "DualStackDnsName", "CreatedTime", "LastModifiedTime", "IpSets", "ResultMetadata")).Assert(t.Name(), updateOutput)
 }
 
 func TestGlobalAccelerator_DeleteAccelerator(t *testing.T) {
@@ -163,7 +139,7 @@ func TestGlobalAccelerator_DeleteAccelerator(t *testing.T) {
 		Enabled:          aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *createOutput.Accelerator.AcceleratorArn
@@ -174,7 +150,7 @@ func TestGlobalAccelerator_DeleteAccelerator(t *testing.T) {
 		Enabled:        aws.Bool(false),
 	})
 	if err != nil {
-		t.Fatalf("failed to disable accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete accelerator.
@@ -182,7 +158,7 @@ func TestGlobalAccelerator_DeleteAccelerator(t *testing.T) {
 		AcceleratorArn: aws.String(acceleratorArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify deletion.
@@ -192,8 +168,6 @@ func TestGlobalAccelerator_DeleteAccelerator(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for deleted accelerator")
 	}
-
-	t.Logf("Deleted accelerator: %s", acceleratorArn)
 }
 
 func TestGlobalAccelerator_CreateAndDescribeListener(t *testing.T) {
@@ -206,7 +180,7 @@ func TestGlobalAccelerator_CreateAndDescribeListener(t *testing.T) {
 		IdempotencyToken: aws.String("test-token-5"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *accOutput.Accelerator.AcceleratorArn
@@ -223,29 +197,22 @@ func TestGlobalAccelerator_CreateAndDescribeListener(t *testing.T) {
 		IdempotencyToken: aws.String("listener-token-1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
+	golden.New(t, golden.WithIgnoreFields("ListenerArn", "ResultMetadata")).Assert(t.Name()+"_create", listenerOutput)
+
 	listenerArn := *listenerOutput.Listener.ListenerArn
-	t.Logf("Created listener: %s", listenerArn)
 
 	// Describe listener.
 	describeOutput, err := client.DescribeListener(ctx, &globalaccelerator.DescribeListenerInput{
 		ListenerArn: aws.String(listenerArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe listener: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.Listener.ListenerArn != listenerArn {
-		t.Errorf("listener ARN mismatch: got %s, want %s", *describeOutput.Listener.ListenerArn, listenerArn)
-	}
-
-	if len(describeOutput.Listener.PortRanges) != 2 {
-		t.Errorf("expected 2 port ranges, got %d", len(describeOutput.Listener.PortRanges))
-	}
-
-	t.Logf("Described listener: %s", listenerArn)
+	golden.New(t, golden.WithIgnoreFields("ListenerArn", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestGlobalAccelerator_ListListeners(t *testing.T) {
@@ -258,7 +225,7 @@ func TestGlobalAccelerator_ListListeners(t *testing.T) {
 		IdempotencyToken: aws.String("test-token-6"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *accOutput.Accelerator.AcceleratorArn
@@ -273,7 +240,7 @@ func TestGlobalAccelerator_ListListeners(t *testing.T) {
 		IdempotencyToken: aws.String("listener-token-2"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
 	// List listeners.
@@ -281,14 +248,10 @@ func TestGlobalAccelerator_ListListeners(t *testing.T) {
 		AcceleratorArn: aws.String(acceleratorArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to list listeners: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.Listeners) == 0 {
-		t.Fatal("no listeners returned")
-	}
-
-	t.Logf("Listed %d listeners", len(listOutput.Listeners))
+	golden.New(t, golden.WithIgnoreFields("ListenerArn", "ResultMetadata")).Assert(t.Name(), listOutput)
 }
 
 func TestGlobalAccelerator_CreateAndDescribeEndpointGroup(t *testing.T) {
@@ -301,7 +264,7 @@ func TestGlobalAccelerator_CreateAndDescribeEndpointGroup(t *testing.T) {
 		IdempotencyToken: aws.String("test-token-7"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *accOutput.Accelerator.AcceleratorArn
@@ -316,7 +279,7 @@ func TestGlobalAccelerator_CreateAndDescribeEndpointGroup(t *testing.T) {
 		IdempotencyToken: aws.String("listener-token-3"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
 	listenerArn := *listenerOutput.Listener.ListenerArn
@@ -330,29 +293,22 @@ func TestGlobalAccelerator_CreateAndDescribeEndpointGroup(t *testing.T) {
 		IdempotencyToken:      aws.String("endpoint-group-token-1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create endpoint group: %v", err)
+		t.Fatal(err)
 	}
 
+	golden.New(t, golden.WithIgnoreFields("EndpointGroupArn", "ResultMetadata")).Assert(t.Name()+"_create", egOutput)
+
 	endpointGroupArn := *egOutput.EndpointGroup.EndpointGroupArn
-	t.Logf("Created endpoint group: %s", endpointGroupArn)
 
 	// Describe endpoint group.
 	describeOutput, err := client.DescribeEndpointGroup(ctx, &globalaccelerator.DescribeEndpointGroupInput{
 		EndpointGroupArn: aws.String(endpointGroupArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe endpoint group: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.EndpointGroup.EndpointGroupArn != endpointGroupArn {
-		t.Errorf("endpoint group ARN mismatch: got %s, want %s", *describeOutput.EndpointGroup.EndpointGroupArn, endpointGroupArn)
-	}
-
-	if *describeOutput.EndpointGroup.EndpointGroupRegion != "us-east-1" {
-		t.Errorf("region mismatch: got %s, want us-east-1", *describeOutput.EndpointGroup.EndpointGroupRegion)
-	}
-
-	t.Logf("Described endpoint group: %s", endpointGroupArn)
+	golden.New(t, golden.WithIgnoreFields("EndpointGroupArn", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestGlobalAccelerator_ListEndpointGroups(t *testing.T) {
@@ -365,7 +321,7 @@ func TestGlobalAccelerator_ListEndpointGroups(t *testing.T) {
 		IdempotencyToken: aws.String("test-token-8"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create accelerator: %v", err)
+		t.Fatal(err)
 	}
 
 	acceleratorArn := *accOutput.Accelerator.AcceleratorArn
@@ -380,7 +336,7 @@ func TestGlobalAccelerator_ListEndpointGroups(t *testing.T) {
 		IdempotencyToken: aws.String("listener-token-4"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
 	listenerArn := *listenerOutput.Listener.ListenerArn
@@ -392,7 +348,7 @@ func TestGlobalAccelerator_ListEndpointGroups(t *testing.T) {
 		IdempotencyToken:    aws.String("endpoint-group-token-2"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create endpoint group: %v", err)
+		t.Fatal(err)
 	}
 
 	// List endpoint groups.
@@ -400,14 +356,10 @@ func TestGlobalAccelerator_ListEndpointGroups(t *testing.T) {
 		ListenerArn: aws.String(listenerArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to list endpoint groups: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.EndpointGroups) == 0 {
-		t.Fatal("no endpoint groups returned")
-	}
-
-	t.Logf("Listed %d endpoint groups", len(listOutput.EndpointGroups))
+	golden.New(t, golden.WithIgnoreFields("EndpointGroupArn", "ResultMetadata")).Assert(t.Name(), listOutput)
 }
 
 func TestGlobalAccelerator_AcceleratorNotFound(t *testing.T) {

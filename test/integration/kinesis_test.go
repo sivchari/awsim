@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
+	"github.com/sivchari/golden"
 )
 
 func newKinesisClient(t *testing.T) *kinesis.Client {
@@ -42,28 +43,18 @@ func TestKinesis_CreateAndDescribeStream(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Created stream: %s", streamName)
 
 	// Describe stream.
 	describeOutput, err := client.DescribeStream(ctx, &kinesis.DescribeStreamInput{
 		StreamName: aws.String(streamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe stream: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.StreamDescription.StreamName != streamName {
-		t.Errorf("stream name mismatch: got %s, want %s", *describeOutput.StreamDescription.StreamName, streamName)
-	}
-
-	if describeOutput.StreamDescription.StreamStatus != types.StreamStatusActive {
-		t.Errorf("stream status mismatch: got %s, want ACTIVE", describeOutput.StreamDescription.StreamStatus)
-	}
-
-	t.Logf("Described stream: %s, status: %s", *describeOutput.StreamDescription.StreamName, describeOutput.StreamDescription.StreamStatus)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "StreamARN", "StreamCreationTimestamp")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestKinesis_ListStreams(t *testing.T) {
@@ -78,7 +69,7 @@ func TestKinesis_ListStreams(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// List streams.
@@ -86,7 +77,7 @@ func TestKinesis_ListStreams(t *testing.T) {
 		Limit: aws.Int32(100),
 	})
 	if err != nil {
-		t.Fatalf("failed to list streams: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -102,8 +93,6 @@ func TestKinesis_ListStreams(t *testing.T) {
 	if !found {
 		t.Error("created stream not found in list")
 	}
-
-	t.Logf("Listed %d streams", len(listOutput.StreamNames))
 }
 
 func TestKinesis_ListShards(t *testing.T) {
@@ -118,7 +107,7 @@ func TestKinesis_ListShards(t *testing.T) {
 		ShardCount: aws.Int32(2),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// List shards.
@@ -126,14 +115,10 @@ func TestKinesis_ListShards(t *testing.T) {
 		StreamName: aws.String(streamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list shards: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.Shards) != 2 {
-		t.Errorf("shard count mismatch: got %d, want 2", len(listOutput.Shards))
-	}
-
-	t.Logf("Listed %d shards", len(listOutput.Shards))
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_list", listOutput)
 }
 
 func TestKinesis_PutAndGetRecords(t *testing.T) {
@@ -148,7 +133,7 @@ func TestKinesis_PutAndGetRecords(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Put record.
@@ -158,18 +143,10 @@ func TestKinesis_PutAndGetRecords(t *testing.T) {
 		PartitionKey: aws.String("partition-1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to put record: %v", err)
+		t.Fatal(err)
 	}
 
-	if putOutput.ShardId == nil {
-		t.Error("shard ID is nil")
-	}
-
-	if putOutput.SequenceNumber == nil {
-		t.Error("sequence number is nil")
-	}
-
-	t.Logf("Put record to shard %s with sequence number %s", *putOutput.ShardId, *putOutput.SequenceNumber)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "SequenceNumber")).Assert(t.Name()+"_put", putOutput)
 
 	// Get shard iterator.
 	iteratorOutput, err := client.GetShardIterator(ctx, &kinesis.GetShardIteratorInput{
@@ -178,11 +155,7 @@ func TestKinesis_PutAndGetRecords(t *testing.T) {
 		ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
 	})
 	if err != nil {
-		t.Fatalf("failed to get shard iterator: %v", err)
-	}
-
-	if iteratorOutput.ShardIterator == nil {
-		t.Error("shard iterator is nil")
+		t.Fatal(err)
 	}
 
 	// Get records.
@@ -191,18 +164,10 @@ func TestKinesis_PutAndGetRecords(t *testing.T) {
 		Limit:         aws.Int32(100),
 	})
 	if err != nil {
-		t.Fatalf("failed to get records: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(getOutput.Records) != 1 {
-		t.Errorf("record count mismatch: got %d, want 1", len(getOutput.Records))
-	}
-
-	if string(getOutput.Records[0].Data) != "test data" {
-		t.Errorf("record data mismatch: got %s, want 'test data'", string(getOutput.Records[0].Data))
-	}
-
-	t.Logf("Got %d records", len(getOutput.Records))
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "NextShardIterator", "SequenceNumber", "ApproximateArrivalTimestamp")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestKinesis_PutRecords(t *testing.T) {
@@ -217,7 +182,7 @@ func TestKinesis_PutRecords(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Put multiple records.
@@ -235,18 +200,10 @@ func TestKinesis_PutRecords(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put records: %v", err)
+		t.Fatal(err)
 	}
 
-	if putOutput.FailedRecordCount != nil && *putOutput.FailedRecordCount != 0 {
-		t.Errorf("failed record count: got %d, want 0", *putOutput.FailedRecordCount)
-	}
-
-	if len(putOutput.Records) != 2 {
-		t.Errorf("record count mismatch: got %d, want 2", len(putOutput.Records))
-	}
-
-	t.Logf("Put %d records", len(putOutput.Records))
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "SequenceNumber")).Assert(t.Name()+"_put", putOutput)
 }
 
 func TestKinesis_DeleteStream(t *testing.T) {
@@ -261,7 +218,7 @@ func TestKinesis_DeleteStream(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete stream.
@@ -269,7 +226,7 @@ func TestKinesis_DeleteStream(t *testing.T) {
 		StreamName: aws.String(streamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify deletion.
@@ -279,8 +236,6 @@ func TestKinesis_DeleteStream(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for deleted stream")
 	}
-
-	t.Log("Deleted stream successfully")
 }
 
 func TestKinesis_StreamNotFound(t *testing.T) {
@@ -294,8 +249,6 @@ func TestKinesis_StreamNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent stream")
 	}
-
-	t.Log("Got expected error for non-existent stream")
 }
 
 func TestKinesis_GetShardIteratorTypes(t *testing.T) {
@@ -310,7 +263,7 @@ func TestKinesis_GetShardIteratorTypes(t *testing.T) {
 		ShardCount: aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Put a record to get shard ID.
@@ -320,7 +273,7 @@ func TestKinesis_GetShardIteratorTypes(t *testing.T) {
 		PartitionKey: aws.String("key"),
 	})
 	if err != nil {
-		t.Fatalf("failed to put record: %v", err)
+		t.Fatal(err)
 	}
 
 	tests := []struct {
@@ -348,14 +301,10 @@ func TestKinesis_GetShardIteratorTypes(t *testing.T) {
 
 			output, err := client.GetShardIterator(ctx, input)
 			if err != nil {
-				t.Fatalf("failed to get shard iterator: %v", err)
+				t.Fatal(err)
 			}
 
-			if output.ShardIterator == nil {
-				t.Error("shard iterator is nil")
-			}
-
-			t.Logf("Got shard iterator for type %s", tt.name)
+			golden.New(t, golden.WithIgnoreFields("ResultMetadata", "ShardIterator")).Assert(t.Name()+"_iterator", output)
 		})
 	}
 }

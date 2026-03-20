@@ -9,7 +9,7 @@
       },
       "LifecycleConfiguration": null,
       "ReplicationConfiguration": null,
-      "S3BucketArn": "arn:aws:s3:::aws-security-data-lake-us-east-1-123456789012-3e283d26",
+      "S3BucketArn": "arn:aws:s3:::aws-security-data-lake-us-east-1-123456789012-9e99e5ae",
       "UpdateStatus": null
     }
   ],

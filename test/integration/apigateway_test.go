@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
+	"github.com/sivchari/golden"
 )
 
 func newAPIGatewayClient(t *testing.T) *apigateway.Client {
@@ -42,32 +43,20 @@ func TestAPIGateway_CreateAndGetRestApi(t *testing.T) {
 		Description: aws.String("Test REST API"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.Id == nil {
-		t.Fatal("REST API ID is nil")
-	}
-
-	if *createOutput.Name != apiName {
-		t.Errorf("REST API name mismatch: got %s, want %s", *createOutput.Name, apiName)
-	}
-
-	t.Logf("Created REST API: %s", *createOutput.Id)
+	golden.New(t, golden.WithIgnoreFields("Id", "CreatedDate", "RootResourceId", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Get REST API.
 	getOutput, err := client.GetRestApi(ctx, &apigateway.GetRestApiInput{
 		RestApiId: createOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get REST API: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getOutput.Name != apiName {
-		t.Errorf("REST API name mismatch: got %s, want %s", *getOutput.Name, apiName)
-	}
-
-	t.Logf("Got REST API: %s", *getOutput.Name)
+	golden.New(t, golden.WithIgnoreFields("Id", "CreatedDate", "RootResourceId", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestAPIGateway_GetRestApis(t *testing.T) {
@@ -79,13 +68,13 @@ func TestAPIGateway_GetRestApis(t *testing.T) {
 		Name: aws.String("test-list-api"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get REST APIs.
 	listOutput, err := client.GetRestApis(ctx, &apigateway.GetRestApisInput{})
 	if err != nil {
-		t.Fatalf("failed to get REST APIs: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -101,8 +90,6 @@ func TestAPIGateway_GetRestApis(t *testing.T) {
 	if !found {
 		t.Error("created REST API not found in list")
 	}
-
-	t.Logf("Listed %d REST APIs", len(listOutput.Items))
 }
 
 func TestAPIGateway_CreateAndGetResource(t *testing.T) {
@@ -114,7 +101,7 @@ func TestAPIGateway_CreateAndGetResource(t *testing.T) {
 		Name: aws.String("test-resource-api"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get resources to find root resource.
@@ -122,7 +109,7 @@ func TestAPIGateway_CreateAndGetResource(t *testing.T) {
 		RestApiId: apiOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get resources: %v", err)
+		t.Fatal(err)
 	}
 
 	var rootResourceID string
@@ -146,18 +133,10 @@ func TestAPIGateway_CreateAndGetResource(t *testing.T) {
 		PathPart:  aws.String("users"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create resource: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createOutput.PathPart != "users" {
-		t.Errorf("resource path part mismatch: got %s, want users", *createOutput.PathPart)
-	}
-
-	if *createOutput.Path != "/users" {
-		t.Errorf("resource path mismatch: got %s, want /users", *createOutput.Path)
-	}
-
-	t.Logf("Created resource: %s", *createOutput.Id)
+	golden.New(t, golden.WithIgnoreFields("Id", "ParentId", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Get resource.
 	getOutput, err := client.GetResource(ctx, &apigateway.GetResourceInput{
@@ -165,14 +144,10 @@ func TestAPIGateway_CreateAndGetResource(t *testing.T) {
 		ResourceId: createOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get resource: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getOutput.Path != "/users" {
-		t.Errorf("resource path mismatch: got %s, want /users", *getOutput.Path)
-	}
-
-	t.Logf("Got resource: %s", *getOutput.Path)
+	golden.New(t, golden.WithIgnoreFields("Id", "ParentId", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestAPIGateway_PutMethodAndIntegration(t *testing.T) {
@@ -184,7 +159,7 @@ func TestAPIGateway_PutMethodAndIntegration(t *testing.T) {
 		Name: aws.String("test-method-api"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get root resource.
@@ -192,7 +167,7 @@ func TestAPIGateway_PutMethodAndIntegration(t *testing.T) {
 		RestApiId: apiOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get resources: %v", err)
+		t.Fatal(err)
 	}
 
 	var rootResourceID string
@@ -213,14 +188,10 @@ func TestAPIGateway_PutMethodAndIntegration(t *testing.T) {
 		AuthorizationType: aws.String("NONE"),
 	})
 	if err != nil {
-		t.Fatalf("failed to put method: %v", err)
+		t.Fatal(err)
 	}
 
-	if *methodOutput.HttpMethod != "GET" {
-		t.Errorf("method HTTP method mismatch: got %s, want GET", *methodOutput.HttpMethod)
-	}
-
-	t.Logf("Put method: %s", *methodOutput.HttpMethod)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_method", methodOutput)
 
 	// Put integration.
 	integrationOutput, err := client.PutIntegration(ctx, &apigateway.PutIntegrationInput{
@@ -230,14 +201,10 @@ func TestAPIGateway_PutMethodAndIntegration(t *testing.T) {
 		Type:       types.IntegrationTypeMock,
 	})
 	if err != nil {
-		t.Fatalf("failed to put integration: %v", err)
+		t.Fatal(err)
 	}
 
-	if integrationOutput.Type != types.IntegrationTypeMock {
-		t.Errorf("integration type mismatch: got %s, want MOCK", integrationOutput.Type)
-	}
-
-	t.Logf("Put integration: %s", integrationOutput.Type)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_integration", integrationOutput)
 }
 
 func TestAPIGateway_CreateDeploymentAndStage(t *testing.T) {
@@ -249,7 +216,7 @@ func TestAPIGateway_CreateDeploymentAndStage(t *testing.T) {
 		Name: aws.String("test-deployment-api"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create deployment.
@@ -258,14 +225,10 @@ func TestAPIGateway_CreateDeploymentAndStage(t *testing.T) {
 		Description: aws.String("Test deployment"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create deployment: %v", err)
+		t.Fatal(err)
 	}
 
-	if deploymentOutput.Id == nil {
-		t.Fatal("deployment ID is nil")
-	}
-
-	t.Logf("Created deployment: %s", *deploymentOutput.Id)
+	golden.New(t, golden.WithIgnoreFields("Id", "CreatedDate", "ResultMetadata")).Assert(t.Name()+"_deployment", deploymentOutput)
 
 	// Create stage.
 	stageOutput, err := client.CreateStage(ctx, &apigateway.CreateStageInput{
@@ -274,14 +237,10 @@ func TestAPIGateway_CreateDeploymentAndStage(t *testing.T) {
 		DeploymentId: deploymentOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to create stage: %v", err)
+		t.Fatal(err)
 	}
 
-	if *stageOutput.StageName != "prod" {
-		t.Errorf("stage name mismatch: got %s, want prod", *stageOutput.StageName)
-	}
-
-	t.Logf("Created stage: %s", *stageOutput.StageName)
+	golden.New(t, golden.WithIgnoreFields("DeploymentId", "CreatedDate", "LastUpdatedDate", "ResultMetadata")).Assert(t.Name()+"_stage", stageOutput)
 
 	// Get stage.
 	getStageOutput, err := client.GetStage(ctx, &apigateway.GetStageInput{
@@ -289,14 +248,10 @@ func TestAPIGateway_CreateDeploymentAndStage(t *testing.T) {
 		StageName: aws.String("prod"),
 	})
 	if err != nil {
-		t.Fatalf("failed to get stage: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getStageOutput.StageName != "prod" {
-		t.Errorf("stage name mismatch: got %s, want prod", *getStageOutput.StageName)
-	}
-
-	t.Logf("Got stage: %s", *getStageOutput.StageName)
+	golden.New(t, golden.WithIgnoreFields("DeploymentId", "CreatedDate", "LastUpdatedDate", "ResultMetadata")).Assert(t.Name()+"_get_stage", getStageOutput)
 }
 
 func TestAPIGateway_DeleteRestApi(t *testing.T) {
@@ -308,7 +263,7 @@ func TestAPIGateway_DeleteRestApi(t *testing.T) {
 		Name: aws.String("test-delete-api"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create REST API: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete REST API.
@@ -316,10 +271,8 @@ func TestAPIGateway_DeleteRestApi(t *testing.T) {
 		RestApiId: createOutput.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete REST API: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Log("Deleted REST API successfully")
 
 	// Verify deletion.
 	_, err = client.GetRestApi(ctx, &apigateway.GetRestApiInput{
@@ -328,8 +281,6 @@ func TestAPIGateway_DeleteRestApi(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for deleted REST API")
 	}
-
-	t.Log("Verified REST API deletion")
 }
 
 func TestAPIGateway_RestApiNotFound(t *testing.T) {
@@ -343,6 +294,4 @@ func TestAPIGateway_RestApiNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent REST API")
 	}
-
-	t.Log("Got expected error for non-existent REST API")
 }

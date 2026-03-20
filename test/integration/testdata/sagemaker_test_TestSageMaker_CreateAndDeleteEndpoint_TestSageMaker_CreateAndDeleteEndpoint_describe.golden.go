@@ -1,9 +1,9 @@
 {
-  "CreationTime": "2026-02-26T16:00:39Z",
+  "CreationTime": "2026-03-23T07:45:28Z",
   "EndpointArn": "arn:aws:sagemaker:us-east-1:123456789012:endpoint/test-endpoint",
   "EndpointName": "test-endpoint",
   "EndpointStatus": "InService",
-  "LastModifiedTime": "2026-02-26T16:00:39Z",
+  "LastModifiedTime": "2026-03-23T07:45:28Z",
   "AsyncInferenceConfig": null,
   "DataCaptureConfig": null,
   "EndpointConfigName": "test-endpoint-config",

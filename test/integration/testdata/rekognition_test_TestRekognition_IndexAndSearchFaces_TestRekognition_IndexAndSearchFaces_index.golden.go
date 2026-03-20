@@ -11,8 +11,8 @@
         },
         "Confidence": 99.99,
         "ExternalImageId": "test-person-1",
-        "FaceId": "0a7fdd08-c9ea-4105-9a66-5488e93acc4c",
-        "ImageId": "0bb46040-5223-4b05-8197-bf9dc557c41b",
+        "FaceId": "b6052187-9484-4a6b-9cea-0a0b471ed935",
+        "ImageId": "01c3a36f-b5f9-4253-ae06-a819c38e02d6",
         "IndexFacesModelVersion": "6.0",
         "UserId": null
       },

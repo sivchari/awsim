@@ -1,6 +1,6 @@
 {
   "ContainsOldGroupVersions": false,
-  "EndTime": "2026-02-26T17:00:39.43Z",
+  "EndTime": "2026-03-23T08:45:28.786Z",
   "NextToken": null,
   "Services": [
     {
@@ -10,48 +10,6 @@
       "EndTime": null,
       "Name": "graph-test-service",
       "Names": null,
-      "ReferenceId": 1,
-      "ResponseTimeHistogram": null,
-      "Root": true,
-      "StartTime": null,
-      "State": null,
-      "SummaryStatistics": {
-        "ErrorStatistics": null,
-        "FaultStatistics": null,
-        "OkCount": 2,
-        "TotalCount": 2,
-        "TotalResponseTime": null
-      },
-      "Type": "AWS::EC2::Instance"
-    },
-    {
-      "AccountId": null,
-      "DurationHistogram": null,
-      "Edges": null,
-      "EndTime": null,
-      "Name": "summary-test-service",
-      "Names": null,
-      "ReferenceId": 2,
-      "ResponseTimeHistogram": null,
-      "Root": true,
-      "StartTime": null,
-      "State": null,
-      "SummaryStatistics": {
-        "ErrorStatistics": null,
-        "FaultStatistics": null,
-        "OkCount": 2,
-        "TotalCount": 2,
-        "TotalResponseTime": null
-      },
-      "Type": null
-    },
-    {
-      "AccountId": null,
-      "DurationHistogram": null,
-      "Edges": null,
-      "EndTime": null,
-      "Name": "test-service",
-      "Names": null,
       "ReferenceId": 3,
       "ResponseTimeHistogram": null,
       "Root": true,
@@ -60,11 +18,11 @@
       "SummaryStatistics": {
         "ErrorStatistics": null,
         "FaultStatistics": null,
-        "OkCount": 2,
-        "TotalCount": 2,
+        "OkCount": 1,
+        "TotalCount": 1,
         "TotalResponseTime": null
       },
-      "Type": null
+      "Type": "AWS::EC2::Instance"
     },
     {
       "AccountId": null,
@@ -81,13 +39,55 @@
       "SummaryStatistics": {
         "ErrorStatistics": null,
         "FaultStatistics": null,
-        "OkCount": 2,
-        "TotalCount": 2,
+        "OkCount": 1,
+        "TotalCount": 1,
+        "TotalResponseTime": null
+      },
+      "Type": null
+    },
+    {
+      "AccountId": null,
+      "DurationHistogram": null,
+      "Edges": null,
+      "EndTime": null,
+      "Name": "summary-test-service",
+      "Names": null,
+      "ReferenceId": 1,
+      "ResponseTimeHistogram": null,
+      "Root": true,
+      "StartTime": null,
+      "State": null,
+      "SummaryStatistics": {
+        "ErrorStatistics": null,
+        "FaultStatistics": null,
+        "OkCount": 1,
+        "TotalCount": 1,
+        "TotalResponseTime": null
+      },
+      "Type": null
+    },
+    {
+      "AccountId": null,
+      "DurationHistogram": null,
+      "Edges": null,
+      "EndTime": null,
+      "Name": "test-service",
+      "Names": null,
+      "ReferenceId": 2,
+      "ResponseTimeHistogram": null,
+      "Root": true,
+      "StartTime": null,
+      "State": null,
+      "SummaryStatistics": {
+        "ErrorStatistics": null,
+        "FaultStatistics": null,
+        "OkCount": 1,
+        "TotalCount": 1,
         "TotalResponseTime": null
       },
       "Type": null
     }
   ],
-  "StartTime": "2026-02-26T15:00:39.43Z",
+  "StartTime": "2026-03-23T06:45:28.786Z",
   "ResultMetadata": {}
 }

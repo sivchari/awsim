@@ -3,11 +3,11 @@
     "MeshName": "vs-mesh",
     "Metadata": {
       "Arn": "arn:aws:appmesh:us-east-1:123456789012:mesh/vs-mesh/virtualService/test-vs.local",
-      "CreatedAt": "2026-02-26T15:21:04.382Z",
-      "LastUpdatedAt": "2026-02-26T15:21:04.382Z",
+      "CreatedAt": "2026-03-23T07:45:24.9Z",
+      "LastUpdatedAt": "2026-03-23T07:45:24.9Z",
       "MeshOwner": "123456789012",
       "ResourceOwner": "123456789012",
-      "Uid": "e77bd93d-0f8a-4cd6-8b30-6712467f1709",
+      "Uid": "9b771cb5-419b-4a36-85be-3db10db86c4e",
       "Version": 1
     },
     "Spec": {

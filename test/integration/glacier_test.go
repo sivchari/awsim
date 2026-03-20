@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/glacier"
+	"github.com/sivchari/golden"
 )
 
 func newGlacierClient(t *testing.T) *glacier.Client {
@@ -39,7 +40,7 @@ func TestGlacier_CreateAndDeleteVault(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create vault: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete
@@ -48,7 +49,7 @@ func TestGlacier_CreateAndDeleteVault(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete vault: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -62,7 +63,7 @@ func TestGlacier_DescribeVault(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create vault: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -77,20 +78,10 @@ func TestGlacier_DescribeVault(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe vault: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeResult.VaultName != vaultName {
-		t.Errorf("expected vault name %s, got %s", vaultName, *describeResult.VaultName)
-	}
-
-	if describeResult.VaultARN == nil || *describeResult.VaultARN == "" {
-		t.Error("expected vault ARN to be set")
-	}
-
-	if describeResult.NumberOfArchives != 0 {
-		t.Errorf("expected 0 archives, got %d", describeResult.NumberOfArchives)
-	}
+	golden.New(t, golden.WithIgnoreFields("VaultARN", "CreationDate", "LastInventoryDate", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestGlacier_ListVaults(t *testing.T) {
@@ -103,7 +94,7 @@ func TestGlacier_ListVaults(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create vault: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -117,7 +108,7 @@ func TestGlacier_ListVaults(t *testing.T) {
 		AccountId: aws.String("-"),
 	})
 	if err != nil {
-		t.Fatalf("failed to list vaults: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -158,7 +149,7 @@ func TestGlacier_CreateVaultIdempotent(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create vault: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -174,6 +165,6 @@ func TestGlacier_CreateVaultIdempotent(t *testing.T) {
 		VaultName: aws.String(vaultName),
 	})
 	if err != nil {
-		t.Fatalf("expected idempotent create to succeed, got error: %v", err)
+		t.Fatal(err)
 	}
 }

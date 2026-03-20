@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/docdb"
+	"github.com/sivchari/golden"
 )
 
 func newDocDBClient(t *testing.T) *docdb.Client {
@@ -42,20 +43,10 @@ func TestDocDB_CreateAndDeleteCluster(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.DBCluster == nil {
-		t.Fatal("expected DBCluster in response, got nil")
-	}
-
-	if *createResult.DBCluster.DBClusterIdentifier != clusterID {
-		t.Errorf("expected cluster identifier %s, got %s", clusterID, *createResult.DBCluster.DBClusterIdentifier)
-	}
-
-	if *createResult.DBCluster.Engine != "docdb" {
-		t.Errorf("expected engine docdb, got %s", *createResult.DBCluster.Engine)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete cluster
 	deleteResult, err := client.DeleteDBCluster(ctx, &docdb.DeleteDBClusterInput{
@@ -63,12 +54,10 @@ func TestDocDB_CreateAndDeleteCluster(t *testing.T) {
 		SkipFinalSnapshot:   aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.DBCluster.DBClusterIdentifier != clusterID {
-		t.Errorf("expected cluster identifier %s, got %s", clusterID, *deleteResult.DBCluster.DBClusterIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestDocDB_DescribeClusters(t *testing.T) {
@@ -83,7 +72,7 @@ func TestDocDB_DescribeClusters(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -97,22 +86,10 @@ func TestDocDB_DescribeClusters(t *testing.T) {
 		DBClusterIdentifier: aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe clusters: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(describeResult.DBClusters) != 1 {
-		t.Fatalf("expected 1 cluster, got %d", len(describeResult.DBClusters))
-	}
-
-	cluster := describeResult.DBClusters[0]
-
-	if *cluster.DBClusterIdentifier != clusterID {
-		t.Errorf("expected cluster identifier %s, got %s", clusterID, *cluster.DBClusterIdentifier)
-	}
-
-	if *cluster.Status != "available" {
-		t.Errorf("expected status available, got %s", *cluster.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestDocDB_ModifyCluster(t *testing.T) {
@@ -128,7 +105,7 @@ func TestDocDB_ModifyCluster(t *testing.T) {
 		DeletionProtection:  aws.Bool(false),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -143,12 +120,10 @@ func TestDocDB_ModifyCluster(t *testing.T) {
 		DeletionProtection:  aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to modify cluster: %v", err)
+		t.Fatal(err)
 	}
 
-	if !*modifyResult.DBCluster.DeletionProtection {
-		t.Error("expected deletion protection to be true after modify")
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_modify", modifyResult)
 
 	// Disable deletion protection for cleanup
 	_, err = client.ModifyDBCluster(ctx, &docdb.ModifyDBClusterInput{
@@ -156,7 +131,7 @@ func TestDocDB_ModifyCluster(t *testing.T) {
 		DeletionProtection:  aws.Bool(false),
 	})
 	if err != nil {
-		t.Fatalf("failed to reset deletion protection: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -173,7 +148,7 @@ func TestDocDB_CreateAndDeleteInstance(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -190,28 +165,20 @@ func TestDocDB_CreateAndDeleteInstance(t *testing.T) {
 		DBClusterIdentifier:  aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create instance: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.DBInstance == nil {
-		t.Fatal("expected DBInstance in response, got nil")
-	}
-
-	if *createResult.DBInstance.DBInstanceIdentifier != instanceID {
-		t.Errorf("expected instance identifier %s, got %s", instanceID, *createResult.DBInstance.DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete instance
 	deleteResult, err := client.DeleteDBInstance(ctx, &docdb.DeleteDBInstanceInput{
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete instance: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteResult.DBInstance.DBInstanceIdentifier != instanceID {
-		t.Errorf("expected instance identifier %s, got %s", instanceID, *deleteResult.DBInstance.DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestDocDB_DescribeInstances(t *testing.T) {
@@ -227,7 +194,7 @@ func TestDocDB_DescribeInstances(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -247,23 +214,17 @@ func TestDocDB_DescribeInstances(t *testing.T) {
 		DBClusterIdentifier:  aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create instance: %v", err)
+		t.Fatal(err)
 	}
 
 	describeResult, err := client.DescribeDBInstances(ctx, &docdb.DescribeDBInstancesInput{
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe instances: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(describeResult.DBInstances) != 1 {
-		t.Fatalf("expected 1 instance, got %d", len(describeResult.DBInstances))
-	}
-
-	if *describeResult.DBInstances[0].DBInstanceIdentifier != instanceID {
-		t.Errorf("expected instance identifier %s, got %s", instanceID, *describeResult.DBInstances[0].DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestDocDB_ClusterNotFound(t *testing.T) {
@@ -290,7 +251,7 @@ func TestDocDB_DuplicateCluster(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {

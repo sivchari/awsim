@@ -1,0 +1,20 @@
+{
+  "BackupVaultArn": "arn:aws:backup:us-east-1:000000000000:backup-vault:describe-vault",
+  "BackupVaultName": "describe-vault",
+  "CreationDate": "2026-03-23T07:45:24Z",
+  "CreatorRequestId": "45f99f96-1b58-4971-9685-ff01f65e9e31",
+  "EncryptionKeyArn": null,
+  "EncryptionKeyType": "",
+  "LatestMpaApprovalTeamUpdate": null,
+  "LockDate": null,
+  "Locked": null,
+  "MaxRetentionDays": null,
+  "MinRetentionDays": null,
+  "MpaApprovalTeamArn": null,
+  "MpaSessionArn": null,
+  "NumberOfRecoveryPoints": 0,
+  "SourceBackupVaultArn": null,
+  "VaultState": "",
+  "VaultType": "",
+  "ResultMetadata": {}
+}

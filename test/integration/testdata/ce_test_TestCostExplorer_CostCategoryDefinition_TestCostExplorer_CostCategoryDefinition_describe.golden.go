@@ -1,7 +1,7 @@
 {
   "CostCategory": {
-    "CostCategoryArn": "arn:aws:ce::123456789012:costcategory/ef848357-b551-43c4-978e-019642cba0ec",
-    "EffectiveStart": "2026-03-02T02:06:47Z",
+    "CostCategoryArn": "arn:aws:ce::123456789012:costcategory/d9b7d908-3a4c-4085-a8fb-bf1d59a3ccb2",
+    "EffectiveStart": "2026-03-23T07:45:25Z",
     "Name": "test-cost-category",
     "RuleVersion": "CostCategoryExpression.v1",
     "Rules": [

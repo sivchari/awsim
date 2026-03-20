@@ -1,7 +1,7 @@
 {
   "ActionAfterCompletion": "NONE",
   "Arn": "arn:aws:scheduler:us-east-1:123456789012:schedule/default/test-schedule",
-  "CreationDate": "2026-02-26T16:00:39Z",
+  "CreationDate": "2026-03-23T07:45:28Z",
   "Description": null,
   "EndDate": null,
   "FlexibleTimeWindow": {
@@ -10,7 +10,7 @@
   },
   "GroupName": "default",
   "KmsKeyArn": null,
-  "LastModificationDate": "2026-02-26T16:00:39Z",
+  "LastModificationDate": "2026-03-23T07:45:28Z",
   "Name": "test-schedule",
   "ScheduleExpression": "rate(1 hour)",
   "ScheduleExpressionTimezone": "UTC",

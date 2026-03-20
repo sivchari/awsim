@@ -3,9 +3,9 @@
   "NextToken": null,
   "ResolverRuleAssociations": [
     {
-      "Id": "rslvr-rrassoc-8c673706",
+      "Id": "rslvr-rrassoc-991c8073",
       "Name": "test-association",
-      "ResolverRuleId": "rslvr-rr-555be086",
+      "ResolverRuleId": "rslvr-rr-11525db3",
       "Status": "COMPLETE",
       "StatusMessage": null,
       "VPCId": "vpc-12345678"

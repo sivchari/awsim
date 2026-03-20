@@ -1,13 +1,13 @@
 {
   "ResolverEndpoint": {
-    "Arn": "arn:aws:route53resolver:us-east-1:123456789012:resolver-endpoint/rslvr-IN-80f26297",
-    "CreationTime": "2026-02-27T08:35:03Z",
+    "Arn": "arn:aws:route53resolver:us-east-1:123456789012:resolver-endpoint/rslvr-IN-30dcac52",
+    "CreationTime": "2026-03-23T07:45:26Z",
     "CreatorRequestId": "test-request-id-1",
     "Direction": "INBOUND",
-    "HostVPCId": "vpc-0a2b87f6",
-    "Id": "rslvr-IN-80f26297",
+    "HostVPCId": "vpc-4da1d736",
+    "Id": "rslvr-IN-30dcac52",
     "IpAddressCount": 1,
-    "ModificationTime": "2026-02-27T08:35:03Z",
+    "ModificationTime": "2026-03-23T07:45:26Z",
     "Name": "test-endpoint",
     "OutpostArn": null,
     "PreferredInstanceType": null,

@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/entityresolution"
 	"github.com/aws/aws-sdk-go-v2/service/entityresolution/types"
+	"github.com/sivchari/golden"
 )
 
 func newEntityResolutionClient(t *testing.T) *entityresolution.Client {
@@ -50,23 +51,17 @@ func TestEntityResolution_CreateAndDeleteSchemaMapping(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create schema mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.SchemaName != schemaName {
-		t.Errorf("expected schema name %s, got %s", schemaName, *createResult.SchemaName)
-	}
-
-	if createResult.SchemaArn == nil || *createResult.SchemaArn == "" {
-		t.Error("expected schema ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("SchemaArn", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	_, err = client.DeleteSchemaMapping(ctx, &entityresolution.DeleteSchemaMappingInput{
 		SchemaName: aws.String(schemaName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete schema mapping: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -90,7 +85,7 @@ func TestEntityResolution_GetSchemaMapping(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create schema mapping: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -103,20 +98,10 @@ func TestEntityResolution_GetSchemaMapping(t *testing.T) {
 		SchemaName: aws.String(schemaName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get schema mapping: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getResult.SchemaName != schemaName {
-		t.Errorf("expected schema name %s, got %s", schemaName, *getResult.SchemaName)
-	}
-
-	if *getResult.Description != "test description" {
-		t.Errorf("expected description 'test description', got %s", *getResult.Description)
-	}
-
-	if len(getResult.MappedInputFields) != 2 {
-		t.Errorf("expected 2 mapped input fields, got %d", len(getResult.MappedInputFields))
-	}
+	golden.New(t, golden.WithIgnoreFields("SchemaArn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name()+"_get", getResult)
 }
 
 func TestEntityResolution_ListSchemaMappings(t *testing.T) {
@@ -138,7 +123,7 @@ func TestEntityResolution_ListSchemaMappings(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create schema mapping: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -149,7 +134,7 @@ func TestEntityResolution_ListSchemaMappings(t *testing.T) {
 
 	listResult, err := client.ListSchemaMappings(ctx, &entityresolution.ListSchemaMappingsInput{})
 	if err != nil {
-		t.Fatalf("failed to list schema mappings: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -195,23 +180,17 @@ func TestEntityResolution_CreateAndDeleteMatchingWorkflow(t *testing.T) {
 		RoleArn: aws.String("arn:aws:iam::000000000000:role/test-role"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create matching workflow: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.WorkflowName != workflowName {
-		t.Errorf("expected workflow name %s, got %s", workflowName, *createResult.WorkflowName)
-	}
-
-	if createResult.WorkflowArn == nil || *createResult.WorkflowArn == "" {
-		t.Error("expected workflow ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("WorkflowArn", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	_, err = client.DeleteMatchingWorkflow(ctx, &entityresolution.DeleteMatchingWorkflowInput{
 		WorkflowName: aws.String(workflowName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete matching workflow: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -242,7 +221,7 @@ func TestEntityResolution_GetMatchingWorkflow(t *testing.T) {
 		RoleArn: aws.String("arn:aws:iam::000000000000:role/test-role"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create matching workflow: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -255,12 +234,10 @@ func TestEntityResolution_GetMatchingWorkflow(t *testing.T) {
 		WorkflowName: aws.String(workflowName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get matching workflow: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getResult.WorkflowName != workflowName {
-		t.Errorf("expected workflow name %s, got %s", workflowName, *getResult.WorkflowName)
-	}
+	golden.New(t, golden.WithIgnoreFields("WorkflowArn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name()+"_get", getResult)
 }
 
 func TestEntityResolution_CreateAndDeleteIdMappingWorkflow(t *testing.T) {
@@ -280,23 +257,17 @@ func TestEntityResolution_CreateAndDeleteIdMappingWorkflow(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create ID mapping workflow: %v", err)
+		t.Fatal(err)
 	}
 
-	if *createResult.WorkflowName != workflowName {
-		t.Errorf("expected workflow name %s, got %s", workflowName, *createResult.WorkflowName)
-	}
-
-	if createResult.WorkflowArn == nil || *createResult.WorkflowArn == "" {
-		t.Error("expected workflow ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("WorkflowArn", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	_, err = client.DeleteIdMappingWorkflow(ctx, &entityresolution.DeleteIdMappingWorkflowInput{
 		WorkflowName: aws.String(workflowName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete ID mapping workflow: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -331,7 +302,7 @@ func TestEntityResolution_DuplicateSchema(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create schema mapping: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -364,10 +335,8 @@ func TestEntityResolution_ListProviderServices(t *testing.T) {
 
 	listResult, err := client.ListProviderServices(ctx, &entityresolution.ListProviderServicesInput{})
 	if err != nil {
-		t.Fatalf("failed to list provider services: %v", err)
+		t.Fatal(err)
 	}
 
-	if listResult.ProviderServiceSummaries == nil {
-		t.Error("expected non-nil provider service summaries")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), listResult)
 }

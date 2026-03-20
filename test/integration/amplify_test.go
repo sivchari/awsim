@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/amplify"
+	"github.com/sivchari/golden"
 )
 
 func newAmplifyClient(t *testing.T) *amplify.Client {
@@ -37,20 +38,10 @@ func TestAmplify_CreateApp(t *testing.T) {
 		Name: aws.String("test-app"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.App == nil {
-		t.Fatal("expected App to be set")
-	}
-
-	if result.App.AppId == nil || *result.App.AppId == "" {
-		t.Error("expected AppId to be set")
-	}
-
-	if *result.App.Name != "test-app" {
-		t.Errorf("expected name 'test-app', got %s", *result.App.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("AppId", "AppArn", "CreateTime", "UpdateTime", "DefaultDomain", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestAmplify_GetApp(t *testing.T) {
@@ -61,19 +52,17 @@ func TestAmplify_GetApp(t *testing.T) {
 		Name: aws.String("get-app-test"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	getResult, err := client.GetApp(ctx, &amplify.GetAppInput{
 		AppId: createResult.App.AppId,
 	})
 	if err != nil {
-		t.Fatalf("failed to get app: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getResult.App.Name != "get-app-test" {
-		t.Errorf("expected name 'get-app-test', got %s", *getResult.App.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("AppId", "AppArn", "CreateTime", "UpdateTime", "DefaultDomain", "ResultMetadata")).Assert(t.Name(), getResult)
 }
 
 func TestAmplify_ListApps(t *testing.T) {
@@ -84,12 +73,12 @@ func TestAmplify_ListApps(t *testing.T) {
 		Name: aws.String("list-app-test"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	listResult, err := client.ListApps(ctx, &amplify.ListAppsInput{})
 	if err != nil {
-		t.Fatalf("failed to list apps: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(listResult.Apps) == 0 {
@@ -105,14 +94,14 @@ func TestAmplify_DeleteApp(t *testing.T) {
 		Name: aws.String("delete-app-test"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteApp(ctx, &amplify.DeleteAppInput{
 		AppId: createResult.App.AppId,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete app: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetApp(ctx, &amplify.GetAppInput{
@@ -131,7 +120,7 @@ func TestAmplify_UpdateApp(t *testing.T) {
 		Name: aws.String("update-app-test"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	updateResult, err := client.UpdateApp(ctx, &amplify.UpdateAppInput{
@@ -139,12 +128,10 @@ func TestAmplify_UpdateApp(t *testing.T) {
 		Description: aws.String("updated description"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update app: %v", err)
+		t.Fatal(err)
 	}
 
-	if *updateResult.App.Description != "updated description" {
-		t.Errorf("expected description 'updated description', got %s", *updateResult.App.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("AppId", "AppArn", "CreateTime", "UpdateTime", "DefaultDomain", "ResultMetadata")).Assert(t.Name(), updateResult)
 }
 
 func TestAmplify_CreateBranch(t *testing.T) {
@@ -155,7 +142,7 @@ func TestAmplify_CreateBranch(t *testing.T) {
 		Name: aws.String("branch-test-app"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	branchResult, err := client.CreateBranch(ctx, &amplify.CreateBranchInput{
@@ -163,16 +150,10 @@ func TestAmplify_CreateBranch(t *testing.T) {
 		BranchName: aws.String("main"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create branch: %v", err)
+		t.Fatal(err)
 	}
 
-	if branchResult.Branch == nil {
-		t.Fatal("expected Branch to be set")
-	}
-
-	if *branchResult.Branch.BranchName != "main" {
-		t.Errorf("expected branch name 'main', got %s", *branchResult.Branch.BranchName)
-	}
+	golden.New(t, golden.WithIgnoreFields("BranchArn", "CreateTime", "UpdateTime", "ResultMetadata")).Assert(t.Name(), branchResult)
 }
 
 func TestAmplify_ListBranches(t *testing.T) {
@@ -183,7 +164,7 @@ func TestAmplify_ListBranches(t *testing.T) {
 		Name: aws.String("list-branches-app"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateBranch(ctx, &amplify.CreateBranchInput{
@@ -191,19 +172,17 @@ func TestAmplify_ListBranches(t *testing.T) {
 		BranchName: aws.String("develop"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create branch: %v", err)
+		t.Fatal(err)
 	}
 
 	listResult, err := client.ListBranches(ctx, &amplify.ListBranchesInput{
 		AppId: appResult.App.AppId,
 	})
 	if err != nil {
-		t.Fatalf("failed to list branches: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listResult.Branches) != 1 {
-		t.Errorf("expected 1 branch, got %d", len(listResult.Branches))
-	}
+	golden.New(t, golden.WithIgnoreFields("BranchArn", "CreateTime", "UpdateTime", "ResultMetadata")).Assert(t.Name(), listResult)
 }
 
 func TestAmplify_DeleteBranch(t *testing.T) {
@@ -214,7 +193,7 @@ func TestAmplify_DeleteBranch(t *testing.T) {
 		Name: aws.String("delete-branch-app"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create app: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateBranch(ctx, &amplify.CreateBranchInput{
@@ -222,7 +201,7 @@ func TestAmplify_DeleteBranch(t *testing.T) {
 		BranchName: aws.String("feature"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create branch: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteBranch(ctx, &amplify.DeleteBranchInput{
@@ -230,7 +209,7 @@ func TestAmplify_DeleteBranch(t *testing.T) {
 		BranchName: aws.String("feature"),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete branch: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetBranch(ctx, &amplify.GetBranchInput{

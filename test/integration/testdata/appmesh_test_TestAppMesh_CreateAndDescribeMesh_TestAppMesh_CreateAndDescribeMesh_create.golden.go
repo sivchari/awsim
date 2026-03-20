@@ -3,11 +3,11 @@
     "MeshName": "test-mesh",
     "Metadata": {
       "Arn": "arn:aws:appmesh:us-east-1:123456789012:mesh/test-mesh",
-      "CreatedAt": "2026-02-26T15:21:04.36Z",
-      "LastUpdatedAt": "2026-02-26T15:21:04.36Z",
+      "CreatedAt": "2026-03-23T07:45:24.876Z",
+      "LastUpdatedAt": "2026-03-23T07:45:24.876Z",
       "MeshOwner": "123456789012",
       "ResourceOwner": "123456789012",
-      "Uid": "78235cda-2fa9-44b3-a892-6bd6ff9b3047",
+      "Uid": "f31dfe71-3378-4ff1-80a7-6b2734182dc4",
       "Version": 1
     },
     "Spec": {

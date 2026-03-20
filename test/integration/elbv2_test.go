@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"github.com/sivchari/golden"
 )
 
 func newELBv2Client(t *testing.T) *elasticloadbalancingv2.Client {
@@ -43,21 +44,12 @@ func TestELBv2_CreateAndDeleteLoadBalancer(t *testing.T) {
 		Type:    types.LoadBalancerTypeEnumApplication,
 	})
 	if err != nil {
-		t.Fatalf("failed to create load balancer: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(createResult.LoadBalancers) != 1 {
-		t.Fatalf("expected 1 load balancer, got %d", len(createResult.LoadBalancers))
-	}
+	golden.New(t, golden.WithIgnoreFields("LoadBalancerArn", "DNSName", "CanonicalHostedZoneId", "CreatedTime", "VpcId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	lb := createResult.LoadBalancers[0]
-	if *lb.LoadBalancerName != lbName {
-		t.Errorf("expected load balancer name %s, got %s", lbName, *lb.LoadBalancerName)
-	}
-
-	if lb.LoadBalancerArn == nil {
-		t.Error("expected load balancer ARN to be set")
-	}
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteLoadBalancer(context.Background(), &elasticloadbalancingv2.DeleteLoadBalancerInput{
@@ -70,7 +62,7 @@ func TestELBv2_CreateAndDeleteLoadBalancer(t *testing.T) {
 		LoadBalancerArn: lb.LoadBalancerArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete load balancer: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -85,7 +77,7 @@ func TestELBv2_DescribeLoadBalancers(t *testing.T) {
 		Subnets: []string{"subnet-12345678"},
 	})
 	if err != nil {
-		t.Fatalf("failed to create load balancer: %v", err)
+		t.Fatal(err)
 	}
 
 	lbArn := createResult.LoadBalancers[0].LoadBalancerArn
@@ -101,16 +93,10 @@ func TestELBv2_DescribeLoadBalancers(t *testing.T) {
 		LoadBalancerArns: []string{*lbArn},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe load balancers: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descResult.LoadBalancers) != 1 {
-		t.Errorf("expected 1 load balancer, got %d", len(descResult.LoadBalancers))
-	}
-
-	if *descResult.LoadBalancers[0].LoadBalancerName != lbName {
-		t.Errorf("expected load balancer name %s, got %s", lbName, *descResult.LoadBalancers[0].LoadBalancerName)
-	}
+	golden.New(t, golden.WithIgnoreFields("LoadBalancerArn", "DNSName", "CanonicalHostedZoneId", "CreatedTime", "VpcId", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestELBv2_CreateAndDeleteTargetGroup(t *testing.T) {
@@ -127,17 +113,12 @@ func TestELBv2_CreateAndDeleteTargetGroup(t *testing.T) {
 		TargetType: types.TargetTypeEnumInstance,
 	})
 	if err != nil {
-		t.Fatalf("failed to create target group: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(createResult.TargetGroups) != 1 {
-		t.Fatalf("expected 1 target group, got %d", len(createResult.TargetGroups))
-	}
+	golden.New(t, golden.WithIgnoreFields("TargetGroupArn", "LoadBalancerArns", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	tg := createResult.TargetGroups[0]
-	if *tg.TargetGroupName != tgName {
-		t.Errorf("expected target group name %s, got %s", tgName, *tg.TargetGroupName)
-	}
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteTargetGroup(context.Background(), &elasticloadbalancingv2.DeleteTargetGroupInput{
@@ -150,7 +131,7 @@ func TestELBv2_CreateAndDeleteTargetGroup(t *testing.T) {
 		TargetGroupArn: tg.TargetGroupArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete target group: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -168,7 +149,7 @@ func TestELBv2_DescribeTargetGroups(t *testing.T) {
 		TargetType: types.TargetTypeEnumInstance,
 	})
 	if err != nil {
-		t.Fatalf("failed to create target group: %v", err)
+		t.Fatal(err)
 	}
 
 	tgArn := createResult.TargetGroups[0].TargetGroupArn
@@ -184,12 +165,10 @@ func TestELBv2_DescribeTargetGroups(t *testing.T) {
 		TargetGroupArns: []string{*tgArn},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe target groups: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descResult.TargetGroups) != 1 {
-		t.Errorf("expected 1 target group, got %d", len(descResult.TargetGroups))
-	}
+	golden.New(t, golden.WithIgnoreFields("TargetGroupArn", "LoadBalancerArns", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestELBv2_RegisterAndDeregisterTargets(t *testing.T) {
@@ -206,7 +185,7 @@ func TestELBv2_RegisterAndDeregisterTargets(t *testing.T) {
 		TargetType: types.TargetTypeEnumInstance,
 	})
 	if err != nil {
-		t.Fatalf("failed to create target group: %v", err)
+		t.Fatal(err)
 	}
 
 	tgArn := createResult.TargetGroups[0].TargetGroupArn
@@ -226,7 +205,7 @@ func TestELBv2_RegisterAndDeregisterTargets(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to register targets: %v", err)
+		t.Fatal(err)
 	}
 
 	// Deregister targets
@@ -237,7 +216,7 @@ func TestELBv2_RegisterAndDeregisterTargets(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to deregister targets: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -253,7 +232,7 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 		Subnets: []string{"subnet-12345678"},
 	})
 	if err != nil {
-		t.Fatalf("failed to create load balancer: %v", err)
+		t.Fatal(err)
 	}
 
 	lbArn := lbResult.LoadBalancers[0].LoadBalancerArn
@@ -267,7 +246,7 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 		TargetType: types.TargetTypeEnumInstance,
 	})
 	if err != nil {
-		t.Fatalf("failed to create target group: %v", err)
+		t.Fatal(err)
 	}
 
 	tgArn := tgResult.TargetGroups[0].TargetGroupArn
@@ -294,12 +273,10 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listenerResult.Listeners) != 1 {
-		t.Fatalf("expected 1 listener, got %d", len(listenerResult.Listeners))
-	}
+	golden.New(t, golden.WithIgnoreFields("ListenerArn", "LoadBalancerArn", "TargetGroupArn", "ResultMetadata")).Assert(t.Name()+"_create", listenerResult)
 
 	listenerArn := listenerResult.Listeners[0].ListenerArn
 
@@ -308,7 +285,7 @@ func TestELBv2_CreateAndDeleteListener(t *testing.T) {
 		ListenerArn: listenerArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete listener: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -323,7 +300,7 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 		Type:    types.LoadBalancerTypeEnumApplication,
 	})
 	if err != nil {
-		t.Fatalf("failed to create load balancer: %v", err)
+		t.Fatal(err)
 	}
 
 	lbArn := lbResult.LoadBalancers[0].LoadBalancerArn
@@ -337,7 +314,7 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 		TargetType: types.TargetTypeEnumInstance,
 	})
 	if err != nil {
-		t.Fatalf("failed to create target group: %v", err)
+		t.Fatal(err)
 	}
 
 	tgArn := tgResult.TargetGroups[0].TargetGroupArn
@@ -350,7 +327,7 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to register targets: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create listener
@@ -366,7 +343,7 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
+		t.Fatal(err)
 	}
 
 	listenerArn := listenerResult.Listeners[0].ListenerArn
@@ -389,21 +366,17 @@ func TestELBv2_LoadBalancerWithTargetGroupAndListener(t *testing.T) {
 		LoadBalancerArns: []string{*lbArn},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe load balancers: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descLbResult.LoadBalancers) != 1 {
-		t.Errorf("expected 1 load balancer, got %d", len(descLbResult.LoadBalancers))
-	}
+	golden.New(t, golden.WithIgnoreFields("LoadBalancerArn", "DNSName", "CanonicalHostedZoneId", "CreatedTime", "VpcId", "SubnetId", "ResultMetadata")).Assert(t.Name()+"_describe_lb", descLbResult)
 
 	descTgResult, err := client.DescribeTargetGroups(ctx, &elasticloadbalancingv2.DescribeTargetGroupsInput{
 		TargetGroupArns: []string{*tgArn},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe target groups: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descTgResult.TargetGroups) != 1 {
-		t.Errorf("expected 1 target group, got %d", len(descTgResult.TargetGroups))
-	}
+	golden.New(t, golden.WithIgnoreFields("TargetGroupArn", "LoadBalancerArns", "ResultMetadata")).Assert(t.Name()+"_describe_tg", descTgResult)
 }

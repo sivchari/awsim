@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/elasticbeanstalk"
+	"github.com/sivchari/golden"
 )
 
 func newElasticBeanstalkClient(t *testing.T) *elasticbeanstalk.Client {
@@ -39,16 +40,9 @@ func TestElasticBeanstalk_CreateAndDeleteApplication(t *testing.T) {
 		Description:     aws.String("test application"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create application: %v", err)
+		t.Fatal(err)
 	}
-
-	if *createResult.Application.ApplicationName != appName {
-		t.Errorf("expected app name %s, got %s", appName, *createResult.Application.ApplicationName)
-	}
-
-	if createResult.Application.ApplicationArn == nil || *createResult.Application.ApplicationArn == "" {
-		t.Error("expected application ARN to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("ApplicationArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete
 	_, err = client.DeleteApplication(ctx, &elasticbeanstalk.DeleteApplicationInput{
@@ -82,16 +76,9 @@ func TestElasticBeanstalk_DescribeApplications(t *testing.T) {
 		ApplicationNames: []string{appName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe applications: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(describeResult.Applications) != 1 {
-		t.Fatalf("expected 1 application, got %d", len(describeResult.Applications))
-	}
-
-	if *describeResult.Applications[0].ApplicationName != appName {
-		t.Errorf("expected app name %s, got %s", appName, *describeResult.Applications[0].ApplicationName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ApplicationArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestElasticBeanstalk_UpdateApplication(t *testing.T) {
@@ -117,12 +104,9 @@ func TestElasticBeanstalk_UpdateApplication(t *testing.T) {
 		Description:     aws.String("updated description"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update application: %v", err)
+		t.Fatal(err)
 	}
-
-	if *updateResult.Application.Description != "updated description" {
-		t.Errorf("expected description 'updated description', got %s", *updateResult.Application.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("ApplicationArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name(), updateResult)
 }
 
 func TestElasticBeanstalk_CreateAndTerminateEnvironment(t *testing.T) {
@@ -149,28 +133,18 @@ func TestElasticBeanstalk_CreateAndTerminateEnvironment(t *testing.T) {
 		EnvironmentName: aws.String(envName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create environment: %v", err)
+		t.Fatal(err)
 	}
-
-	if *createResult.EnvironmentName != envName {
-		t.Errorf("expected env name %s, got %s", envName, *createResult.EnvironmentName)
-	}
-
-	if createResult.EnvironmentId == nil || *createResult.EnvironmentId == "" {
-		t.Error("expected environment ID to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("EnvironmentId", "EnvironmentArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Terminate
 	terminateResult, err := client.TerminateEnvironment(ctx, &elasticbeanstalk.TerminateEnvironmentInput{
 		EnvironmentName: aws.String(envName),
 	})
 	if err != nil {
-		t.Fatalf("failed to terminate environment: %v", err)
+		t.Fatal(err)
 	}
-
-	if *terminateResult.EnvironmentName != envName {
-		t.Errorf("expected env name %s, got %s", envName, *terminateResult.EnvironmentName)
-	}
+	golden.New(t, golden.WithIgnoreFields("EnvironmentId", "EnvironmentArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name()+"_terminate", terminateResult)
 }
 
 func TestElasticBeanstalk_DescribeEnvironments(t *testing.T) {
@@ -207,16 +181,9 @@ func TestElasticBeanstalk_DescribeEnvironments(t *testing.T) {
 		EnvironmentNames: []string{envName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe environments: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(describeResult.Environments) != 1 {
-		t.Fatalf("expected 1 environment, got %d", len(describeResult.Environments))
-	}
-
-	if *describeResult.Environments[0].EnvironmentName != envName {
-		t.Errorf("expected env name %s, got %s", envName, *describeResult.Environments[0].EnvironmentName)
-	}
+	golden.New(t, golden.WithIgnoreFields("EnvironmentId", "EnvironmentArn", "DateCreated", "DateUpdated", "ResultMetadata")).Assert(t.Name(), describeResult)
 }
 
 func TestElasticBeanstalk_DuplicateApplication(t *testing.T) {
@@ -237,6 +204,7 @@ func TestElasticBeanstalk_DuplicateApplication(t *testing.T) {
 		})
 	})
 
+	// Duplicate application - error case, skip golden test.
 	_, err = client.CreateApplication(ctx, &elasticbeanstalk.CreateApplicationInput{
 		ApplicationName: aws.String(appName),
 	})

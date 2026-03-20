@@ -1,9 +1,9 @@
 {
   "GraphqlApi": {
     "AdditionalAuthenticationProviders": null,
-    "ApiId": "7719bbbf-e432-4bcb-94f6-092b4c7652e2",
+    "ApiId": "588c32c1-f3d4-475c-a39f-9604d69c231b",
     "ApiType": "",
-    "Arn": "arn:aws:appsync:us-east-1:000000000000:apis/7719bbbf-e432-4bcb-94f6-092b4c7652e2",
+    "Arn": "arn:aws:appsync:us-east-1:000000000000:apis/588c32c1-f3d4-475c-a39f-9604d69c231b",
     "AuthenticationType": "AWS_IAM",
     "Dns": null,
     "EnhancedMetricsConfig": null,
@@ -19,8 +19,8 @@
     "ResolverCountLimit": 0,
     "Tags": null,
     "Uris": {
-      "GRAPHQL": "https://7719bbbf-e432-4bcb-94f6-092b4c7652e2.appsync-api.us-east-1.amazonaws.com/graphql",
-      "REALTIME": "wss://7719bbbf-e432-4bcb-94f6-092b4c7652e2.appsync-realtime-api.us-east-1.amazonaws.com/graphql"
+      "GRAPHQL": "https://588c32c1-f3d4-475c-a39f-9604d69c231b.appsync-api.us-east-1.amazonaws.com/graphql",
+      "REALTIME": "wss://588c32c1-f3d4-475c-a39f-9604d69c231b.appsync-realtime-api.us-east-1.amazonaws.com/graphql"
     },
     "UserPoolConfig": null,
     "Visibility": "",

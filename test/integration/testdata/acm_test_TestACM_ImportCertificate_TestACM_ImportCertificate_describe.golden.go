@@ -1,0 +1,32 @@
+{
+  "Certificate": {
+    "CertificateArn": "arn:aws:acm:us-east-1:000000000000:certificate/b2a75372-01cb-4c8f-88d3-93d0971db62d",
+    "CertificateAuthorityArn": null,
+    "CreatedAt": "2026-03-23T07:45:24.811Z",
+    "DomainName": "imported.example.com",
+    "DomainValidationOptions": null,
+    "ExtendedKeyUsages": null,
+    "FailureReason": "",
+    "ImportedAt": "2026-03-23T07:45:24.811Z",
+    "InUseBy": null,
+    "IssuedAt": "2026-03-23T07:45:24.811Z",
+    "Issuer": null,
+    "KeyAlgorithm": "RSA_2048",
+    "KeyUsages": null,
+    "ManagedBy": "",
+    "NotAfter": null,
+    "NotBefore": null,
+    "Options": null,
+    "RenewalEligibility": "INELIGIBLE",
+    "RenewalSummary": null,
+    "RevocationReason": "",
+    "RevokedAt": null,
+    "Serial": "bc31d7b122ac861f742817730f0dcb9e",
+    "SignatureAlgorithm": null,
+    "Status": "ISSUED",
+    "Subject": "CN=imported.example.com",
+    "SubjectAlternativeNames": null,
+    "Type": "IMPORTED"
+  },
+  "ResultMetadata": {}
+}

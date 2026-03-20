@@ -3,11 +3,11 @@
     "MeshName": "delete-mesh",
     "Metadata": {
       "Arn": "arn:aws:appmesh:us-east-1:123456789012:mesh/delete-mesh",
-      "CreatedAt": "2026-02-26T16:00:38.704Z",
-      "LastUpdatedAt": "2026-02-26T16:00:38.704Z",
+      "CreatedAt": "2026-03-23T07:45:24.887Z",
+      "LastUpdatedAt": "2026-03-23T07:45:24.887Z",
       "MeshOwner": "123456789012",
       "ResourceOwner": "123456789012",
-      "Uid": "fc009318-1fd9-4f81-8bb2-cb5f3e296372",
+      "Uid": "21107ace-fb05-47a3-9a2c-f71404db9d97",
       "Version": 1
     },
     "Spec": {

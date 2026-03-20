@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	"github.com/aws/aws-sdk-go-v2/service/acm/types"
+	"github.com/sivchari/golden"
 )
 
 func newACMClient(t *testing.T) *acm.Client {
@@ -44,71 +45,22 @@ func TestACM_RequestAndDescribeCertificate(t *testing.T) {
 		ValidationMethod: types.ValidationMethodDns,
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if requestOutput.CertificateArn == nil {
-		t.Fatal("certificate ARN is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "ResultMetadata")).Assert(t.Name()+"_request", requestOutput)
 
 	arn := *requestOutput.CertificateArn
-	t.Logf("Requested certificate: %s", arn)
 
 	// Describe certificate.
 	describeOutput, err := client.DescribeCertificate(ctx, &acm.DescribeCertificateInput{
 		CertificateArn: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.Certificate == nil {
-		t.Fatal("certificate is nil")
-	}
-
-	cert := describeOutput.Certificate
-
-	if *cert.CertificateArn != arn {
-		t.Errorf("ARN mismatch: got %s, want %s", *cert.CertificateArn, arn)
-	}
-
-	if *cert.DomainName != "example.com" {
-		t.Errorf("domain mismatch: got %s, want example.com", *cert.DomainName)
-	}
-
-	if cert.Status != types.CertificateStatusPendingValidation {
-		t.Errorf("status mismatch: got %s, want PENDING_VALIDATION", cert.Status)
-	}
-
-	if cert.Type != types.CertificateTypeAmazonIssued {
-		t.Errorf("type mismatch: got %s, want AMAZON_ISSUED", cert.Type)
-	}
-
-	// Check domain validation options.
-	if len(cert.DomainValidationOptions) == 0 {
-		t.Fatal("no domain validation options")
-	}
-
-	// Should have validation options for main domain and SANs.
-	expectedDomains := map[string]bool{
-		"example.com":     false,
-		"www.example.com": false,
-		"api.example.com": false,
-	}
-
-	for _, dv := range cert.DomainValidationOptions {
-		if dv.DomainName != nil {
-			expectedDomains[*dv.DomainName] = true
-		}
-	}
-
-	for domain, found := range expectedDomains {
-		if !found {
-			t.Errorf("missing domain validation for: %s", domain)
-		}
-	}
-
-	t.Logf("Described certificate: %s", arn)
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "CreatedAt", "IssuedAt", "Serial", "Value", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestACM_ListCertificates(t *testing.T) {
@@ -120,7 +72,7 @@ func TestACM_ListCertificates(t *testing.T) {
 		DomainName: aws.String("list-test.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *requestOutput.CertificateArn
@@ -130,11 +82,7 @@ func TestACM_ListCertificates(t *testing.T) {
 		MaxItems: aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to list certificates: %v", err)
-	}
-
-	if len(listOutput.CertificateSummaryList) == 0 {
-		t.Fatal("no certificates returned")
+		t.Fatal(err)
 	}
 
 	// Find our certificate.
@@ -144,10 +92,6 @@ func TestACM_ListCertificates(t *testing.T) {
 		if cert.CertificateArn != nil && *cert.CertificateArn == arn {
 			found = true
 
-			if *cert.DomainName != "list-test.example.com" {
-				t.Errorf("domain mismatch: got %s, want list-test.example.com", *cert.DomainName)
-			}
-
 			break
 		}
 	}
@@ -155,8 +99,6 @@ func TestACM_ListCertificates(t *testing.T) {
 	if !found {
 		t.Errorf("certificate %s not found in list", arn)
 	}
-
-	t.Logf("Listed %d certificates", len(listOutput.CertificateSummaryList))
 }
 
 func TestACM_ListCertificatesWithStatusFilter(t *testing.T) {
@@ -168,7 +110,7 @@ func TestACM_ListCertificatesWithStatusFilter(t *testing.T) {
 		DomainName: aws.String("filter-test.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
 
 	// List with PENDING_VALIDATION filter.
@@ -178,7 +120,7 @@ func TestACM_ListCertificatesWithStatusFilter(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to list certificates: %v", err)
+		t.Fatal(err)
 	}
 
 	// All returned certificates should be PENDING_VALIDATION.
@@ -187,8 +129,6 @@ func TestACM_ListCertificatesWithStatusFilter(t *testing.T) {
 			t.Errorf("unexpected status: got %s, want PENDING_VALIDATION", cert.Status)
 		}
 	}
-
-	t.Logf("Listed %d certificates with PENDING_VALIDATION status", len(listOutput.CertificateSummaryList))
 }
 
 func TestACM_DeleteCertificate(t *testing.T) {
@@ -200,7 +140,7 @@ func TestACM_DeleteCertificate(t *testing.T) {
 		DomainName: aws.String("delete-test.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *requestOutput.CertificateArn
@@ -210,10 +150,8 @@ func TestACM_DeleteCertificate(t *testing.T) {
 		CertificateArn: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete certificate: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted certificate: %s", arn)
 
 	// Verify it's deleted by trying to describe it.
 	_, err = client.DescribeCertificate(ctx, &acm.DescribeCertificateInput{
@@ -222,8 +160,6 @@ func TestACM_DeleteCertificate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when describing deleted certificate")
 	}
-
-	t.Logf("Verified certificate is deleted")
 }
 
 func TestACM_ImportCertificate(t *testing.T) {
@@ -236,33 +172,22 @@ func TestACM_ImportCertificate(t *testing.T) {
 		PrivateKey:  []byte("-----BEGIN PRIVATE KEY-----\nMIIPrivateKey...\n-----END PRIVATE KEY-----"),
 	})
 	if err != nil {
-		t.Fatalf("failed to import certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if importOutput.CertificateArn == nil {
-		t.Fatal("certificate ARN is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "ResultMetadata")).Assert(t.Name()+"_import", importOutput)
 
 	arn := *importOutput.CertificateArn
-	t.Logf("Imported certificate: %s", arn)
 
 	// Describe the imported certificate.
 	describeOutput, err := client.DescribeCertificate(ctx, &acm.DescribeCertificateInput{
 		CertificateArn: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.Certificate.Type != types.CertificateTypeImported {
-		t.Errorf("type mismatch: got %s, want IMPORTED", describeOutput.Certificate.Type)
-	}
-
-	if describeOutput.Certificate.Status != types.CertificateStatusIssued {
-		t.Errorf("status mismatch: got %s, want ISSUED", describeOutput.Certificate.Status)
-	}
-
-	t.Logf("Verified imported certificate")
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "CreatedAt", "IssuedAt", "ImportedAt", "Serial", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestACM_RequestCertificateWithOptions(t *testing.T) {
@@ -278,8 +203,10 @@ func TestACM_RequestCertificateWithOptions(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
+
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "ResultMetadata")).Assert(t.Name()+"_request", requestOutput)
 
 	arn := *requestOutput.CertificateArn
 
@@ -288,14 +215,10 @@ func TestACM_RequestCertificateWithOptions(t *testing.T) {
 		CertificateArn: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.Certificate.KeyAlgorithm != types.KeyAlgorithmEcPrime256v1 {
-		t.Errorf("key algorithm mismatch: got %s, want EC_prime256v1", describeOutput.Certificate.KeyAlgorithm)
-	}
-
-	t.Logf("Requested certificate with options: %s", arn)
+	golden.New(t, golden.WithIgnoreFields("CertificateArn", "CreatedAt", "IssuedAt", "Serial", "Value", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestACM_DescribeNonExistentCertificate(t *testing.T) {
@@ -309,8 +232,6 @@ func TestACM_DescribeNonExistentCertificate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when describing non-existent certificate")
 	}
-
-	t.Logf("Got expected error: %v", err)
 }
 
 func TestACM_DeleteNonExistentCertificate(t *testing.T) {
@@ -324,8 +245,6 @@ func TestACM_DeleteNonExistentCertificate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when deleting non-existent certificate")
 	}
-
-	t.Logf("Got expected error: %v", err)
 }
 
 func TestACM_GetCertificate(t *testing.T) {
@@ -339,7 +258,7 @@ func TestACM_GetCertificate(t *testing.T) {
 		CertificateChain: []byte("-----BEGIN CERTIFICATE-----\nMIIChain...\n-----END CERTIFICATE-----"),
 	})
 	if err != nil {
-		t.Fatalf("failed to import certificate: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *importOutput.CertificateArn
@@ -349,14 +268,10 @@ func TestACM_GetCertificate(t *testing.T) {
 		CertificateArn: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to get certificate: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Certificate == nil {
-		t.Fatal("certificate body is nil")
-	}
-
-	t.Logf("Got certificate: %s", arn)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestACM_GetCertificatePendingValidation(t *testing.T) {
@@ -368,7 +283,7 @@ func TestACM_GetCertificatePendingValidation(t *testing.T) {
 		DomainName: aws.String("pending.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to request certificate: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *requestOutput.CertificateArn
@@ -380,6 +295,4 @@ func TestACM_GetCertificatePendingValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when getting pending certificate")
 	}
-
-	t.Logf("Got expected error for pending certificate: %v", err)
 }

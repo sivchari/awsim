@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sfn"
+	"github.com/sivchari/golden"
 )
 
 func newSFNClient(t *testing.T) *sfn.Client {
@@ -53,32 +54,18 @@ func TestSFN_CreateAndDescribeStateMachine(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.StateMachineArn == nil {
-		t.Fatal("state machine ARN is nil")
-	}
-
-	t.Logf("Created state machine: %s", *createOutput.StateMachineArn)
+	golden.New(t, golden.WithIgnoreFields("StateMachineArn", "CreationDate", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe state machine.
 	describeOutput, err := client.DescribeStateMachine(ctx, &sfn.DescribeStateMachineInput{
 		StateMachineArn: createOutput.StateMachineArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe state machine: %v", err)
+		t.Fatal(err)
 	}
-
-	if *describeOutput.Name != name {
-		t.Errorf("name mismatch: got %s, want %s", *describeOutput.Name, name)
-	}
-
-	if *describeOutput.Definition != definition {
-		t.Errorf("definition mismatch")
-	}
-
-	t.Logf("Described state machine: %s", *describeOutput.Name)
+	golden.New(t, golden.WithIgnoreFields("StateMachineArn", "CreationDate", "RevisionId", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestSFN_ListStateMachines(t *testing.T) {
@@ -96,7 +83,7 @@ func TestSFN_ListStateMachines(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// List state machines.
@@ -104,7 +91,7 @@ func TestSFN_ListStateMachines(t *testing.T) {
 		MaxResults: 100,
 	})
 	if err != nil {
-		t.Fatalf("failed to list state machines: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -120,8 +107,6 @@ func TestSFN_ListStateMachines(t *testing.T) {
 	if !found {
 		t.Error("created state machine not found in list")
 	}
-
-	t.Logf("Listed %d state machines", len(listOutput.StateMachines))
 }
 
 func TestSFN_StartAndDescribeExecution(t *testing.T) {
@@ -139,7 +124,7 @@ func TestSFN_StartAndDescribeExecution(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Start execution.
@@ -152,28 +137,18 @@ func TestSFN_StartAndDescribeExecution(t *testing.T) {
 		Input:           aws.String(input),
 	})
 	if err != nil {
-		t.Fatalf("failed to start execution: %v", err)
+		t.Fatal(err)
 	}
-
-	if startOutput.ExecutionArn == nil {
-		t.Fatal("execution ARN is nil")
-	}
-
-	t.Logf("Started execution: %s", *startOutput.ExecutionArn)
+	golden.New(t, golden.WithIgnoreFields("ExecutionArn", "StartDate", "ResultMetadata")).Assert(t.Name()+"_start", startOutput)
 
 	// Describe execution.
 	describeOutput, err := client.DescribeExecution(ctx, &sfn.DescribeExecutionInput{
 		ExecutionArn: startOutput.ExecutionArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe execution: %v", err)
+		t.Fatal(err)
 	}
-
-	if *describeOutput.Name != execName {
-		t.Errorf("name mismatch: got %s, want %s", *describeOutput.Name, execName)
-	}
-
-	t.Logf("Described execution: %s, status: %s", *describeOutput.Name, describeOutput.Status)
+	golden.New(t, golden.WithIgnoreFields("ExecutionArn", "StateMachineArn", "StartDate", "StopDate", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestSFN_ListExecutions(t *testing.T) {
@@ -191,7 +166,7 @@ func TestSFN_ListExecutions(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Start an execution.
@@ -200,7 +175,7 @@ func TestSFN_ListExecutions(t *testing.T) {
 		Name:            aws.String("list-test-execution"),
 	})
 	if err != nil {
-		t.Fatalf("failed to start execution: %v", err)
+		t.Fatal(err)
 	}
 
 	// List executions.
@@ -209,14 +184,12 @@ func TestSFN_ListExecutions(t *testing.T) {
 		MaxResults:      100,
 	})
 	if err != nil {
-		t.Fatalf("failed to list executions: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(listOutput.Executions) < 1 {
 		t.Error("expected at least one execution")
 	}
-
-	t.Logf("Listed %d executions", len(listOutput.Executions))
 }
 
 func TestSFN_GetExecutionHistory(t *testing.T) {
@@ -234,7 +207,7 @@ func TestSFN_GetExecutionHistory(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Start execution.
@@ -243,7 +216,7 @@ func TestSFN_GetExecutionHistory(t *testing.T) {
 		Name:            aws.String("history-test-execution"),
 	})
 	if err != nil {
-		t.Fatalf("failed to start execution: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get execution history.
@@ -252,14 +225,9 @@ func TestSFN_GetExecutionHistory(t *testing.T) {
 		MaxResults:   100,
 	})
 	if err != nil {
-		t.Fatalf("failed to get execution history: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(historyOutput.Events) < 2 {
-		t.Errorf("expected at least 2 events, got %d", len(historyOutput.Events))
-	}
-
-	t.Logf("Got %d history events", len(historyOutput.Events))
+	golden.New(t, golden.WithIgnoreFields("Id", "Timestamp", "ResultMetadata")).Assert(t.Name(), historyOutput)
 }
 
 func TestSFN_DeleteStateMachine(t *testing.T) {
@@ -277,7 +245,7 @@ func TestSFN_DeleteStateMachine(t *testing.T) {
 		RoleArn:    aws.String(roleArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to create state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete state machine.
@@ -285,7 +253,7 @@ func TestSFN_DeleteStateMachine(t *testing.T) {
 		StateMachineArn: createOutput.StateMachineArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify deletion.
@@ -295,8 +263,6 @@ func TestSFN_DeleteStateMachine(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for deleted state machine")
 	}
-
-	t.Log("Deleted state machine successfully")
 }
 
 func TestSFN_StateMachineNotFound(t *testing.T) {
@@ -310,8 +276,6 @@ func TestSFN_StateMachineNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent state machine")
 	}
-
-	t.Log("Got expected error for non-existent state machine")
 }
 
 func TestSFN_ExpressStateMachine(t *testing.T) {
@@ -330,7 +294,7 @@ func TestSFN_ExpressStateMachine(t *testing.T) {
 		Type:       "EXPRESS",
 	})
 	if err != nil {
-		t.Fatalf("failed to create express state machine: %v", err)
+		t.Fatal(err)
 	}
 
 	// Describe to verify type.
@@ -338,12 +302,7 @@ func TestSFN_ExpressStateMachine(t *testing.T) {
 		StateMachineArn: createOutput.StateMachineArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe state machine: %v", err)
+		t.Fatal(err)
 	}
-
-	if describeOutput.Type != "EXPRESS" {
-		t.Errorf("type mismatch: got %s, want EXPRESS", describeOutput.Type)
-	}
-
-	t.Logf("Created EXPRESS state machine: %s", *describeOutput.Name)
+	golden.New(t, golden.WithIgnoreFields("StateMachineArn", "CreationDate", "RevisionId", "ResultMetadata")).Assert(t.Name(), describeOutput)
 }

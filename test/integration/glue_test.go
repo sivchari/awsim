@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/glue/types"
+	"github.com/sivchari/golden"
 )
 
 func newGlueClient(t *testing.T) *glue.Client {
@@ -44,32 +45,18 @@ func TestGlue_CreateAndGetDatabase(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Created database: %s", dbName)
 
 	// Get database.
 	getOutput, err := client.GetDatabase(ctx, &glue.GetDatabaseInput{
 		Name: aws.String(dbName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get database: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Database == nil {
-		t.Fatal("database is nil")
-	}
-
-	if *getOutput.Database.Name != dbName {
-		t.Errorf("name mismatch: got %s, want %s", *getOutput.Database.Name, dbName)
-	}
-
-	if *getOutput.Database.Description != "Test database" {
-		t.Errorf("description mismatch: got %s, want Test database", *getOutput.Database.Description)
-	}
-
-	t.Logf("Retrieved database: %s", dbName)
+	golden.New(t, golden.WithIgnoreFields("CreateTime", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestGlue_GetDatabases(t *testing.T) {
@@ -84,7 +71,7 @@ func TestGlue_GetDatabases(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get databases.
@@ -92,11 +79,7 @@ func TestGlue_GetDatabases(t *testing.T) {
 		MaxResults: aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to get databases: %v", err)
-	}
-
-	if len(listOutput.DatabaseList) == 0 {
-		t.Fatal("no databases returned")
+		t.Fatal(err)
 	}
 
 	// Find our database.
@@ -113,8 +96,6 @@ func TestGlue_GetDatabases(t *testing.T) {
 	if !found {
 		t.Errorf("database %s not found in list", dbName)
 	}
-
-	t.Logf("Listed %d databases", len(listOutput.DatabaseList))
 }
 
 func TestGlue_DeleteDatabase(t *testing.T) {
@@ -130,7 +111,7 @@ func TestGlue_DeleteDatabase(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete the database.
@@ -138,10 +119,8 @@ func TestGlue_DeleteDatabase(t *testing.T) {
 		Name: aws.String(dbName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete database: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted database: %s", dbName)
 
 	// Verify it's deleted.
 	_, err = client.GetDatabase(ctx, &glue.GetDatabaseInput{
@@ -150,8 +129,6 @@ func TestGlue_DeleteDatabase(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when getting deleted database")
 	}
-
-	t.Logf("Verified database is deleted")
 }
 
 func TestGlue_CreateAndGetTable(t *testing.T) {
@@ -168,7 +145,7 @@ func TestGlue_CreateAndGetTable(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table.
@@ -196,10 +173,8 @@ func TestGlue_CreateAndGetTable(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Created table: %s", tableName)
 
 	// Get table.
 	getOutput, err := client.GetTable(ctx, &glue.GetTableInput{
@@ -207,22 +182,10 @@ func TestGlue_CreateAndGetTable(t *testing.T) {
 		Name:         aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get table: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Table == nil {
-		t.Fatal("table is nil")
-	}
-
-	if *getOutput.Table.Name != tableName {
-		t.Errorf("name mismatch: got %s, want %s", *getOutput.Table.Name, tableName)
-	}
-
-	if *getOutput.Table.TableType != "EXTERNAL_TABLE" {
-		t.Errorf("table type mismatch: got %s, want EXTERNAL_TABLE", *getOutput.Table.TableType)
-	}
-
-	t.Logf("Retrieved table: %s", tableName)
+	golden.New(t, golden.WithIgnoreFields("CreateTime", "UpdateTime", "IsRegisteredWithLakeFormation", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestGlue_GetTables(t *testing.T) {
@@ -239,7 +202,7 @@ func TestGlue_GetTables(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table.
@@ -250,7 +213,7 @@ func TestGlue_GetTables(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get tables.
@@ -259,11 +222,7 @@ func TestGlue_GetTables(t *testing.T) {
 		MaxResults:   aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to get tables: %v", err)
-	}
-
-	if len(listOutput.TableList) == 0 {
-		t.Fatal("no tables returned")
+		t.Fatal(err)
 	}
 
 	// Find our table.
@@ -280,8 +239,6 @@ func TestGlue_GetTables(t *testing.T) {
 	if !found {
 		t.Errorf("table %s not found in list", tableName)
 	}
-
-	t.Logf("Listed %d tables", len(listOutput.TableList))
 }
 
 func TestGlue_DeleteTable(t *testing.T) {
@@ -298,7 +255,7 @@ func TestGlue_DeleteTable(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table.
@@ -309,7 +266,7 @@ func TestGlue_DeleteTable(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete table.
@@ -318,10 +275,8 @@ func TestGlue_DeleteTable(t *testing.T) {
 		Name:         aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete table: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted table: %s", tableName)
 
 	// Verify it's deleted.
 	_, err = client.GetTable(ctx, &glue.GetTableInput{
@@ -331,8 +286,6 @@ func TestGlue_DeleteTable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when getting deleted table")
 	}
-
-	t.Logf("Verified table is deleted")
 }
 
 func TestGlue_CreateAndDeleteJob(t *testing.T) {
@@ -356,28 +309,20 @@ func TestGlue_CreateAndDeleteJob(t *testing.T) {
 		WorkerType:      types.WorkerTypeG1x,
 	})
 	if err != nil {
-		t.Fatalf("failed to create job: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.Name == nil || *createOutput.Name != jobName {
-		t.Errorf("job name mismatch: got %v, want %s", createOutput.Name, jobName)
-	}
-
-	t.Logf("Created job: %s", jobName)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete job.
 	deleteOutput, err := client.DeleteJob(ctx, &glue.DeleteJobInput{
 		JobName: aws.String(jobName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete job: %v", err)
+		t.Fatal(err)
 	}
 
-	if deleteOutput.JobName == nil || *deleteOutput.JobName != jobName {
-		t.Errorf("job name mismatch: got %v, want %s", deleteOutput.JobName, jobName)
-	}
-
-	t.Logf("Deleted job: %s", jobName)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestGlue_StartJobRun(t *testing.T) {
@@ -396,7 +341,7 @@ func TestGlue_StartJobRun(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create job: %v", err)
+		t.Fatal(err)
 	}
 
 	// Start job run.
@@ -408,14 +353,10 @@ func TestGlue_StartJobRun(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to start job run: %v", err)
+		t.Fatal(err)
 	}
 
-	if runOutput.JobRunId == nil {
-		t.Fatal("job run ID is nil")
-	}
-
-	t.Logf("Started job run: %s", *runOutput.JobRunId)
+	golden.New(t, golden.WithIgnoreFields("JobRunId", "ResultMetadata")).Assert(t.Name(), runOutput)
 }
 
 func TestGlue_GetNonExistentDatabase(t *testing.T) {
@@ -429,8 +370,6 @@ func TestGlue_GetNonExistentDatabase(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when getting non-existent database")
 	}
-
-	t.Logf("Got expected error: %v", err)
 }
 
 func TestGlue_CreateDuplicateDatabase(t *testing.T) {
@@ -446,7 +385,7 @@ func TestGlue_CreateDuplicateDatabase(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create database: %v", err)
+		t.Fatal(err)
 	}
 
 	// Try to create the same database again.
@@ -458,6 +397,4 @@ func TestGlue_CreateDuplicateDatabase(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when creating duplicate database")
 	}
-
-	t.Logf("Got expected error: %v", err)
 }

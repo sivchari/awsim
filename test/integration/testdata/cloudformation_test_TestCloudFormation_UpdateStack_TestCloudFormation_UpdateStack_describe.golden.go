@@ -2,7 +2,7 @@
   "NextToken": null,
   "Stacks": [
     {
-      "CreationTime": "2026-02-27T00:21:04.427Z",
+      "CreationTime": "2026-03-23T07:45:25.022Z",
       "StackName": "test-stack-update",
       "StackStatus": "UPDATE_COMPLETE",
       "Capabilities": null,
@@ -15,7 +15,7 @@
       "DriftInformation": null,
       "EnableTerminationProtection": null,
       "LastOperations": null,
-      "LastUpdatedTime": "2026-02-27T00:21:04.427Z",
+      "LastUpdatedTime": "2026-03-23T07:45:25.022Z",
       "NotificationARNs": null,
       "Outputs": null,
       "Parameters": [],
@@ -24,7 +24,7 @@
       "RoleARN": null,
       "RollbackConfiguration": null,
       "RootId": null,
-      "StackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/test-stack-update/9171b534-66b5-48c0-8cb8-1e111699976a",
+      "StackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/test-stack-update/abd9b7c2-c95a-4f09-a2d4-6d099dc9cc86",
       "StackStatusReason": null,
       "Tags": null,
       "TimeoutInMinutes": null

@@ -1,8 +1,8 @@
 {
   "Build": {
-    "BuildArn": "arn:aws:gamelift:us-east-1:123456789012:build/build-0efaf49f",
-    "BuildId": "build-0efaf49f",
-    "CreationTime": "2026-02-26T16:00:39Z",
+    "BuildArn": "arn:aws:gamelift:us-east-1:123456789012:build/build-9675c75d",
+    "BuildId": "build-9675c75d",
+    "CreationTime": "2026-03-23T07:45:25Z",
     "Name": "test-build",
     "OperatingSystem": "AMAZON_LINUX_2",
     "ServerSdkVersion": null,

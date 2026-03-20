@@ -1,7 +1,7 @@
 {
   "ActionAfterCompletion": "NONE",
   "Arn": "arn:aws:scheduler:us-east-1:123456789012:schedule/test-schedule-group-with-schedule/test-schedule-in-group",
-  "CreationDate": "2026-02-26T15:21:07Z",
+  "CreationDate": "2026-03-23T07:45:28Z",
   "Description": null,
   "EndDate": null,
   "FlexibleTimeWindow": {
@@ -10,7 +10,7 @@
   },
   "GroupName": "test-schedule-group-with-schedule",
   "KmsKeyArn": null,
-  "LastModificationDate": "2026-02-26T15:21:07Z",
+  "LastModificationDate": "2026-03-23T07:45:28Z",
   "Name": "test-schedule-in-group",
   "ScheduleExpression": "rate(1 hour)",
   "ScheduleExpressionTimezone": "UTC",

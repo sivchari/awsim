@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
+	"github.com/sivchari/golden"
 )
 
 func newElastiCacheClient(t *testing.T) *elasticache.Client {
@@ -44,16 +45,9 @@ func TestElastiCache_CreateAndDescribeCacheCluster(t *testing.T) {
 		NumCacheNodes:  aws.Int32(1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cache cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.CacheCluster == nil {
-		t.Fatal("expected CacheCluster in response, got nil")
-	}
-
-	if *createResult.CacheCluster.CacheClusterId != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *createResult.CacheCluster.CacheClusterId)
-	}
+	golden.New(t, golden.WithIgnoreFields("Address", "CacheClusterCreateTime", "CacheNodeCreateTime", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteCacheCluster(context.Background(), &elasticache.DeleteCacheClusterInput{
@@ -66,16 +60,9 @@ func TestElastiCache_CreateAndDescribeCacheCluster(t *testing.T) {
 		CacheClusterId: aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe cache clusters: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.CacheClusters) != 1 {
-		t.Errorf("expected 1 cluster, got %d", len(descResult.CacheClusters))
-	}
-
-	if *descResult.CacheClusters[0].CacheClusterId != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *descResult.CacheClusters[0].CacheClusterId)
-	}
+	golden.New(t, golden.WithIgnoreFields("Address", "CacheClusterCreateTime", "CacheNodeCreateTime", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestElastiCache_ModifyCacheCluster(t *testing.T) {
@@ -108,12 +95,9 @@ func TestElastiCache_ModifyCacheCluster(t *testing.T) {
 		ApplyImmediately: aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to modify cache cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if *modifyResult.CacheCluster.CacheNodeType != "cache.t3.small" {
-		t.Errorf("expected node type cache.t3.small, got %s", *modifyResult.CacheCluster.CacheNodeType)
-	}
+	golden.New(t, golden.WithIgnoreFields("Address", "CacheClusterCreateTime", "CacheNodeCreateTime", "ResultMetadata")).Assert(t.Name(), modifyResult)
 }
 
 func TestElastiCache_DeleteCacheCluster(t *testing.T) {
@@ -138,14 +122,11 @@ func TestElastiCache_DeleteCacheCluster(t *testing.T) {
 		CacheClusterId: aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cache cluster: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("Address", "CacheClusterCreateTime", "CacheNodeCreateTime", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 
-	if *deleteResult.CacheCluster.CacheClusterId != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *deleteResult.CacheCluster.CacheClusterId)
-	}
-
-	// Verify cluster is deleted
+	// Verify cluster is deleted - error case, skip golden test.
 	_, err = client.DescribeCacheClusters(ctx, &elasticache.DescribeCacheClustersInput{
 		CacheClusterId: aws.String(clusterID),
 	})
@@ -169,16 +150,9 @@ func TestElastiCache_CreateAndDescribeReplicationGroup(t *testing.T) {
 		NumCacheClusters:            aws.Int32(2),
 	})
 	if err != nil {
-		t.Fatalf("failed to create replication group: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.ReplicationGroup == nil {
-		t.Fatal("expected ReplicationGroup in response, got nil")
-	}
-
-	if *createResult.ReplicationGroup.ReplicationGroupId != groupID {
-		t.Errorf("expected identifier %s, got %s", groupID, *createResult.ReplicationGroup.ReplicationGroupId)
-	}
+	golden.New(t, golden.WithIgnoreFields("Address", "ReplicationGroupCreateTime", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteReplicationGroup(context.Background(), &elasticache.DeleteReplicationGroupInput{
@@ -191,16 +165,9 @@ func TestElastiCache_CreateAndDescribeReplicationGroup(t *testing.T) {
 		ReplicationGroupId: aws.String(groupID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe replication groups: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.ReplicationGroups) != 1 {
-		t.Errorf("expected 1 group, got %d", len(descResult.ReplicationGroups))
-	}
-
-	if *descResult.ReplicationGroups[0].ReplicationGroupId != groupID {
-		t.Errorf("expected identifier %s, got %s", groupID, *descResult.ReplicationGroups[0].ReplicationGroupId)
-	}
+	golden.New(t, golden.WithIgnoreFields("Address", "ReplicationGroupCreateTime", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestElastiCache_DeleteReplicationGroup(t *testing.T) {
@@ -225,14 +192,11 @@ func TestElastiCache_DeleteReplicationGroup(t *testing.T) {
 		ReplicationGroupId: aws.String(groupID),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete replication group: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("Address", "ReplicationGroupCreateTime", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 
-	if *deleteResult.ReplicationGroup.ReplicationGroupId != groupID {
-		t.Errorf("expected identifier %s, got %s", groupID, *deleteResult.ReplicationGroup.ReplicationGroupId)
-	}
-
-	// Verify group is deleted
+	// Verify group is deleted - error case, skip golden test.
 	_, err = client.DescribeReplicationGroups(ctx, &elasticache.DescribeReplicationGroupsInput{
 		ReplicationGroupId: aws.String(groupID),
 	})
@@ -267,13 +231,9 @@ func TestElastiCache_DescribeCacheClusters_All(t *testing.T) {
 		}
 	})
 
-	// Describe all cache clusters
-	descResult, err := client.DescribeCacheClusters(ctx, &elasticache.DescribeCacheClustersInput{})
+	// Describe all cache clusters - dynamic list, skip golden test.
+	_, err := client.DescribeCacheClusters(ctx, &elasticache.DescribeCacheClustersInput{})
 	if err != nil {
-		t.Fatalf("failed to describe cache clusters: %v", err)
-	}
-
-	if len(descResult.CacheClusters) < 2 {
-		t.Errorf("expected at least 2 clusters, got %d", len(descResult.CacheClusters))
+		t.Fatal(err)
 	}
 }

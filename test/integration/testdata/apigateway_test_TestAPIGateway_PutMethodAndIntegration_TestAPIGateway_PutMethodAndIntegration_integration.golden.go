@@ -1,0 +1,20 @@
+{
+  "CacheKeyParameters": null,
+  "CacheNamespace": null,
+  "ConnectionId": null,
+  "ConnectionType": "",
+  "ContentHandling": "",
+  "Credentials": null,
+  "HttpMethod": null,
+  "IntegrationResponses": null,
+  "IntegrationTarget": null,
+  "PassthroughBehavior": null,
+  "RequestParameters": null,
+  "RequestTemplates": null,
+  "ResponseTransferMode": "",
+  "TimeoutInMillis": 0,
+  "TlsConfig": null,
+  "Type": "MOCK",
+  "Uri": null,
+  "ResultMetadata": {}
+}

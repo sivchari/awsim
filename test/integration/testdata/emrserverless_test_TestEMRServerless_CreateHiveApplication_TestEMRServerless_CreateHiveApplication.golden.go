@@ -1,12 +1,12 @@
 {
   "Application": {
-    "ApplicationId": "ebbec735e9854a",
-    "Arn": "arn:aws:emr-serverless:us-east-1:123456789012:/applications/ebbec735e9854a",
-    "CreatedAt": "2026-02-26T16:00:38.986Z",
+    "ApplicationId": "269368fb8b0248",
+    "Arn": "arn:aws:emr-serverless:us-east-1:123456789012:/applications/269368fb8b0248",
+    "CreatedAt": "2026-03-23T07:45:25.763Z",
     "ReleaseLabel": "emr-6.9.0",
     "State": "CREATED",
     "Type": "Hive",
-    "UpdatedAt": "2026-02-26T16:00:38.986Z",
+    "UpdatedAt": "2026-03-23T07:45:25.763Z",
     "Architecture": "X86_64",
     "AutoStartConfiguration": {
       "Enabled": true

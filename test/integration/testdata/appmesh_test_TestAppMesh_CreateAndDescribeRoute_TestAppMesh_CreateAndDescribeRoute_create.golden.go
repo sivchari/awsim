@@ -3,11 +3,11 @@
     "MeshName": "route-mesh",
     "Metadata": {
       "Arn": "arn:aws:appmesh:us-east-1:123456789012:mesh/route-mesh/virtualRouter/route-vr/route/test-route",
-      "CreatedAt": "2026-02-26T15:21:04.392Z",
-      "LastUpdatedAt": "2026-02-26T15:21:04.392Z",
+      "CreatedAt": "2026-03-23T07:45:24.909Z",
+      "LastUpdatedAt": "2026-03-23T07:45:24.909Z",
       "MeshOwner": "123456789012",
       "ResourceOwner": "123456789012",
-      "Uid": "20d6ee06-1a00-45da-a70e-5c6b93c41954",
+      "Uid": "50a4bff3-db75-44fd-b1f0-f8dd51198aec",
       "Version": 1
     },
     "RouteName": "test-route",

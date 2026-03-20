@@ -4,7 +4,6 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -12,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/sivchari/golden"
 )
 
 func newIAMClient(t *testing.T) *iam.Client {
@@ -42,23 +42,17 @@ func TestIAM_CreateAndDeleteUser(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.User == nil {
-		t.Fatal("expected user to be created")
-	}
-
-	if *createResult.User.UserName != userName {
-		t.Errorf("expected user name %s, got %s", userName, *createResult.User.UserName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UserId", "Arn", "CreateDate")).Assert(t.Name()+"_create", createResult)
 
 	// Delete user
 	_, err = client.DeleteUser(context.Background(), &iam.DeleteUserInput{
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete user: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -73,7 +67,7 @@ func TestIAM_GetUser(t *testing.T) {
 		Path:     aws.String("/developers/"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -87,20 +81,10 @@ func TestIAM_GetUser(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get user: %v", err)
+		t.Fatal(err)
 	}
 
-	if getResult.User == nil {
-		t.Fatal("expected user in get response")
-	}
-
-	if *getResult.User.UserName != userName {
-		t.Errorf("expected user name %s, got %s", userName, *getResult.User.UserName)
-	}
-
-	if *getResult.User.Path != "/developers/" {
-		t.Errorf("expected path /developers/, got %s", *getResult.User.Path)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UserId", "Arn", "CreateDate")).Assert(t.Name()+"_get", getResult)
 }
 
 func TestIAM_ListUsers(t *testing.T) {
@@ -113,7 +97,7 @@ func TestIAM_ListUsers(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -125,7 +109,7 @@ func TestIAM_ListUsers(t *testing.T) {
 	// List users
 	listResult, err := client.ListUsers(ctx, &iam.ListUsersInput{})
 	if err != nil {
-		t.Fatalf("failed to list users: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -161,23 +145,17 @@ func TestIAM_CreateAndDeleteRole(t *testing.T) {
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicy),
 	})
 	if err != nil {
-		t.Fatalf("failed to create role: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.Role == nil {
-		t.Fatal("expected role to be created")
-	}
-
-	if *createResult.Role.RoleName != roleName {
-		t.Errorf("expected role name %s, got %s", roleName, *createResult.Role.RoleName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "RoleId", "Arn", "CreateDate")).Assert(t.Name()+"_create", createResult)
 
 	// Delete role
 	_, err = client.DeleteRole(context.Background(), &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete role: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -202,7 +180,7 @@ func TestIAM_GetRole(t *testing.T) {
 		Description:              aws.String("Test role"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create role: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -216,16 +194,10 @@ func TestIAM_GetRole(t *testing.T) {
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get role: %v", err)
+		t.Fatal(err)
 	}
 
-	if getResult.Role == nil {
-		t.Fatal("expected role in get response")
-	}
-
-	if *getResult.Role.RoleName != roleName {
-		t.Errorf("expected role name %s, got %s", roleName, *getResult.Role.RoleName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "RoleId", "Arn", "CreateDate")).Assert(t.Name()+"_get", getResult)
 }
 
 func TestIAM_ListRoles(t *testing.T) {
@@ -248,7 +220,7 @@ func TestIAM_ListRoles(t *testing.T) {
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicy),
 	})
 	if err != nil {
-		t.Fatalf("failed to create role: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -260,7 +232,7 @@ func TestIAM_ListRoles(t *testing.T) {
 	// List roles
 	listResult, err := client.ListRoles(ctx, &iam.ListRolesInput{})
 	if err != nil {
-		t.Fatalf("failed to list roles: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -296,16 +268,10 @@ func TestIAM_CreateAndDeletePolicy(t *testing.T) {
 		PolicyDocument: aws.String(policyDocument),
 	})
 	if err != nil {
-		t.Fatalf("failed to create policy: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.Policy == nil {
-		t.Fatal("expected policy to be created")
-	}
-
-	if *createResult.Policy.PolicyName != policyName {
-		t.Errorf("expected policy name %s, got %s", policyName, *createResult.Policy.PolicyName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "PolicyId", "Arn", "CreateDate", "UpdateDate")).Assert(t.Name()+"_create", createResult)
 
 	policyArn := createResult.Policy.Arn
 
@@ -314,7 +280,7 @@ func TestIAM_CreateAndDeletePolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete policy: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -339,7 +305,7 @@ func TestIAM_GetPolicy(t *testing.T) {
 		Description:    aws.String("Test policy"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create policy: %v", err)
+		t.Fatal(err)
 	}
 
 	policyArn := createResult.Policy.Arn
@@ -355,16 +321,10 @@ func TestIAM_GetPolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to get policy: %v", err)
+		t.Fatal(err)
 	}
 
-	if getResult.Policy == nil {
-		t.Fatal("expected policy in get response")
-	}
-
-	if *getResult.Policy.PolicyName != policyName {
-		t.Errorf("expected policy name %s, got %s", policyName, *getResult.Policy.PolicyName)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "PolicyId", "Arn", "CreateDate", "UpdateDate")).Assert(t.Name()+"_get", getResult)
 }
 
 func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
@@ -378,7 +338,7 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create policy
@@ -388,7 +348,7 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 		PolicyDocument: aws.String(policyDocument),
 	})
 	if err != nil {
-		t.Fatalf("failed to create policy: %v", err)
+		t.Fatal(err)
 	}
 
 	policyArn := createPolicyResult.Policy.Arn
@@ -412,7 +372,7 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to attach policy to user: %v", err)
+		t.Fatal(err)
 	}
 
 	// Detach policy from user
@@ -421,7 +381,7 @@ func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to detach policy from user: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -439,7 +399,7 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicy),
 	})
 	if err != nil {
-		t.Fatalf("failed to create role: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create policy
@@ -449,7 +409,7 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 		PolicyDocument: aws.String(policyDocument),
 	})
 	if err != nil {
-		t.Fatalf("failed to create policy: %v", err)
+		t.Fatal(err)
 	}
 
 	policyArn := createPolicyResult.Policy.Arn
@@ -473,7 +433,7 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to attach policy to role: %v", err)
+		t.Fatal(err)
 	}
 
 	// Detach policy from role
@@ -482,7 +442,7 @@ func TestIAM_AttachAndDetachRolePolicy(t *testing.T) {
 		PolicyArn: policyArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to detach policy from role: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -496,7 +456,7 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -522,24 +482,10 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create access key: %v", err)
+		t.Fatal(err)
 	}
 
-	if createResult.AccessKey == nil {
-		t.Fatal("expected access key to be created")
-	}
-
-	if createResult.AccessKey.AccessKeyId == nil || *createResult.AccessKey.AccessKeyId == "" {
-		t.Error("expected access key ID to be set")
-	}
-
-	if createResult.AccessKey.SecretAccessKey == nil || *createResult.AccessKey.SecretAccessKey == "" {
-		t.Error("expected secret access key to be set")
-	}
-
-	if createResult.AccessKey.Status != types.StatusTypeActive {
-		t.Errorf("expected access key status Active, got %s", createResult.AccessKey.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "AccessKeyId", "SecretAccessKey", "CreateDate")).Assert(t.Name()+"_create", createResult)
 
 	// Delete access key
 	_, err = client.DeleteAccessKey(context.Background(), &iam.DeleteAccessKeyInput{
@@ -547,7 +493,7 @@ func TestIAM_CreateAndDeleteAccessKey(t *testing.T) {
 		AccessKeyId: createResult.AccessKey.AccessKeyId,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete access key: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -561,7 +507,7 @@ func TestIAM_ListAccessKeys(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create access key
@@ -569,7 +515,7 @@ func TestIAM_ListAccessKeys(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create access key: %v", err)
+		t.Fatal(err)
 	}
 
 	accessKeyID := createResult.AccessKey.AccessKeyId
@@ -589,7 +535,7 @@ func TestIAM_ListAccessKeys(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list access keys: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -645,7 +591,7 @@ func TestIAM_CreateUserWithTags(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -659,16 +605,8 @@ func TestIAM_CreateUserWithTags(t *testing.T) {
 		UserName: aws.String(userName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get user: %v", err)
+		t.Fatal(err)
 	}
 
-	if getResult.User == nil {
-		t.Fatal("expected user in response")
-	}
-}
-
-// Helper function to pretty print JSON for debugging.
-func prettyJSON(v any) string {
-	b, _ := json.MarshalIndent(v, "", "  ")
-	return string(b)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "UserId", "Arn", "CreateDate")).Assert(t.Name()+"_get", getResult)
 }

@@ -1,5 +1,5 @@
 {
-  "CreationTime": "2026-02-26T15:21:07Z",
+  "CreationTime": "2026-03-23T07:45:28Z",
   "ModelArtifacts": null,
   "SecondaryStatus": "Completed",
   "StoppingCondition": {
@@ -69,8 +69,8 @@
   "SecondaryStatusTransitions": null,
   "ServerlessJobConfig": null,
   "TensorBoardOutputConfig": null,
-  "TrainingEndTime": "2026-02-26T15:21:07Z",
-  "TrainingStartTime": "2026-02-26T15:21:07Z",
+  "TrainingEndTime": "2026-03-23T07:45:28Z",
+  "TrainingStartTime": "2026-03-23T07:45:28Z",
   "TrainingTimeInSeconds": null,
   "TuningJobArn": null,
   "VpcConfig": null,

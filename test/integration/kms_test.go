@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
+	"github.com/sivchari/golden"
 )
 
 func newKMSClient(t *testing.T) *kms.Client {
@@ -41,33 +42,22 @@ func TestKMS_CreateAndDescribeKey(t *testing.T) {
 		KeyUsage:    types.KeyUsageTypeEncryptDecrypt,
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.KeyMetadata == nil || createOutput.KeyMetadata.KeyId == nil {
-		t.Fatal("key metadata is nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "Arn", "CreationDate")).Assert(t.Name()+"_create", createOutput)
 
 	keyID := *createOutput.KeyMetadata.KeyId
-	t.Logf("Created key: %s", keyID)
 
 	// Describe key.
 	describeOutput, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe key: %v", err)
+		t.Fatal(err)
 	}
 
-	if *describeOutput.KeyMetadata.KeyId != keyID {
-		t.Errorf("key ID mismatch: got %s, want %s", *describeOutput.KeyMetadata.KeyId, keyID)
-	}
-
-	if *describeOutput.KeyMetadata.Description != "Test key" {
-		t.Errorf("description mismatch: got %s, want Test key", *describeOutput.KeyMetadata.Description)
-	}
-
-	t.Logf("Described key: %s", keyID)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "Arn", "CreationDate")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestKMS_ListKeys(t *testing.T) {
@@ -79,7 +69,7 @@ func TestKMS_ListKeys(t *testing.T) {
 		Description: aws.String("Test list key"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -89,11 +79,7 @@ func TestKMS_ListKeys(t *testing.T) {
 		Limit: aws.Int32(10),
 	})
 	if err != nil {
-		t.Fatalf("failed to list keys: %v", err)
-	}
-
-	if len(listOutput.Keys) == 0 {
-		t.Fatal("no keys returned")
+		t.Fatal(err)
 	}
 
 	// Find our key.
@@ -109,8 +95,6 @@ func TestKMS_ListKeys(t *testing.T) {
 	if !found {
 		t.Errorf("created key %s not found in list", keyID)
 	}
-
-	t.Logf("Listed %d keys", len(listOutput.Keys))
 }
 
 func TestKMS_EnableDisableKey(t *testing.T) {
@@ -122,7 +106,7 @@ func TestKMS_EnableDisableKey(t *testing.T) {
 		Description: aws.String("Test enable/disable key"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -132,42 +116,36 @@ func TestKMS_EnableDisableKey(t *testing.T) {
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to disable key: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify disabled.
-	describeOutput, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{
+	describeAfterDisable, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe key: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.KeyMetadata.KeyState != types.KeyStateDisabled {
-		t.Errorf("key state should be Disabled, got %s", describeOutput.KeyMetadata.KeyState)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "Arn", "CreationDate")).Assert(t.Name()+"_disabled", describeAfterDisable)
 
 	// Enable key.
 	_, err = client.EnableKey(ctx, &kms.EnableKeyInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to enable key: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify enabled.
-	describeOutput, err = client.DescribeKey(ctx, &kms.DescribeKeyInput{
+	describeAfterEnable, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe key: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.KeyMetadata.KeyState != types.KeyStateEnabled {
-		t.Errorf("key state should be Enabled, got %s", describeOutput.KeyMetadata.KeyState)
-	}
-
-	t.Logf("Enable/disable key test passed: %s", keyID)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "Arn", "CreationDate")).Assert(t.Name()+"_enabled", describeAfterEnable)
 }
 
 func TestKMS_ScheduleKeyDeletion(t *testing.T) {
@@ -179,7 +157,7 @@ func TestKMS_ScheduleKeyDeletion(t *testing.T) {
 		Description: aws.String("Test deletion key"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -190,26 +168,20 @@ func TestKMS_ScheduleKeyDeletion(t *testing.T) {
 		PendingWindowInDays: aws.Int32(7),
 	})
 	if err != nil {
-		t.Fatalf("failed to schedule key deletion: %v", err)
+		t.Fatal(err)
 	}
 
-	if *deleteOutput.KeyId != keyID {
-		t.Errorf("key ID mismatch: got %s, want %s", *deleteOutput.KeyId, keyID)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "DeletionDate")).Assert(t.Name()+"_schedule", deleteOutput)
 
 	// Verify pending deletion.
 	describeOutput, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe key: %v", err)
+		t.Fatal(err)
 	}
 
-	if describeOutput.KeyMetadata.KeyState != types.KeyStatePendingDeletion {
-		t.Errorf("key state should be PendingDeletion, got %s", describeOutput.KeyMetadata.KeyState)
-	}
-
-	t.Logf("Scheduled key deletion: %s", keyID)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "KeyId", "Arn", "CreationDate", "DeletionDate")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestKMS_EncryptDecrypt(t *testing.T) {
@@ -222,7 +194,7 @@ func TestKMS_EncryptDecrypt(t *testing.T) {
 		KeyUsage:    types.KeyUsageTypeEncryptDecrypt,
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -234,7 +206,7 @@ func TestKMS_EncryptDecrypt(t *testing.T) {
 		Plaintext: plaintext,
 	})
 	if err != nil {
-		t.Fatalf("failed to encrypt: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(encryptOutput.CiphertextBlob) == 0 {
@@ -246,14 +218,12 @@ func TestKMS_EncryptDecrypt(t *testing.T) {
 		CiphertextBlob: encryptOutput.CiphertextBlob,
 	})
 	if err != nil {
-		t.Fatalf("failed to decrypt: %v", err)
+		t.Fatal(err)
 	}
 
 	if string(decryptOutput.Plaintext) != string(plaintext) {
 		t.Errorf("plaintext mismatch: got %s, want %s", decryptOutput.Plaintext, plaintext)
 	}
-
-	t.Logf("Encrypt/decrypt test passed")
 }
 
 func TestKMS_GenerateDataKey(t *testing.T) {
@@ -266,7 +236,7 @@ func TestKMS_GenerateDataKey(t *testing.T) {
 		KeyUsage:    types.KeyUsageTypeEncryptDecrypt,
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -277,7 +247,7 @@ func TestKMS_GenerateDataKey(t *testing.T) {
 		KeySpec: types.DataKeySpecAes256,
 	})
 	if err != nil {
-		t.Fatalf("failed to generate data key: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(dataKeyOutput.Plaintext) == 0 {
@@ -297,14 +267,12 @@ func TestKMS_GenerateDataKey(t *testing.T) {
 		CiphertextBlob: dataKeyOutput.CiphertextBlob,
 	})
 	if err != nil {
-		t.Fatalf("failed to decrypt data key: %v", err)
+		t.Fatal(err)
 	}
 
 	if string(decryptOutput.Plaintext) != string(dataKeyOutput.Plaintext) {
 		t.Error("decrypted data key does not match original plaintext")
 	}
-
-	t.Logf("Generated data key of length %d bytes", len(dataKeyOutput.Plaintext))
 }
 
 func TestKMS_CreateAndDeleteAlias(t *testing.T) {
@@ -316,7 +284,7 @@ func TestKMS_CreateAndDeleteAlias(t *testing.T) {
 		Description: aws.String("Test alias key"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -328,17 +296,15 @@ func TestKMS_CreateAndDeleteAlias(t *testing.T) {
 		TargetKeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create alias: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Created alias: %s", aliasName)
 
 	// List aliases.
 	listOutput, err := client.ListAliases(ctx, &kms.ListAliasesInput{
 		KeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to list aliases: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -359,10 +325,8 @@ func TestKMS_CreateAndDeleteAlias(t *testing.T) {
 		AliasName: aws.String(aliasName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete alias: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted alias: %s", aliasName)
 }
 
 func TestKMS_KeyNotFound(t *testing.T) {
@@ -388,7 +352,7 @@ func TestKMS_EncryptWithAlias(t *testing.T) {
 		KeyUsage:    types.KeyUsageTypeEncryptDecrypt,
 	})
 	if err != nil {
-		t.Fatalf("failed to create key: %v", err)
+		t.Fatal(err)
 	}
 
 	keyID := *createOutput.KeyMetadata.KeyId
@@ -400,7 +364,7 @@ func TestKMS_EncryptWithAlias(t *testing.T) {
 		TargetKeyId: aws.String(keyID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create alias: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -417,7 +381,7 @@ func TestKMS_EncryptWithAlias(t *testing.T) {
 		Plaintext: plaintext,
 	})
 	if err != nil {
-		t.Fatalf("failed to encrypt with alias: %v", err)
+		t.Fatal(err)
 	}
 
 	// Decrypt.
@@ -425,12 +389,10 @@ func TestKMS_EncryptWithAlias(t *testing.T) {
 		CiphertextBlob: encryptOutput.CiphertextBlob,
 	})
 	if err != nil {
-		t.Fatalf("failed to decrypt: %v", err)
+		t.Fatal(err)
 	}
 
 	if string(decryptOutput.Plaintext) != string(plaintext) {
 		t.Errorf("plaintext mismatch: got %s, want %s", decryptOutput.Plaintext, plaintext)
 	}
-
-	t.Logf("Encrypt with alias test passed")
 }

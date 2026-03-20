@@ -10,15 +10,15 @@
           }
         }
       ],
-      "SubscriberArn": "arn:aws:securitylake:us-east-1:123456789012:subscriber/fa363911-374b-45ab-b840-ee81778ddef5",
-      "SubscriberId": "fa363911-374b-45ab-b840-ee81778ddef5",
+      "SubscriberArn": "arn:aws:securitylake:us-east-1:123456789012:subscriber/257b6e94-84af-40ed-8edd-bbc01b4b6912",
+      "SubscriberId": "257b6e94-84af-40ed-8edd-bbc01b4b6912",
       "SubscriberIdentity": {
         "ExternalId": "test-external-id",
         "Principal": "123456789012"
       },
       "SubscriberName": "test-subscriber",
       "AccessTypes": null,
-      "CreatedAt": "2026-02-27T15:18:19Z",
+      "CreatedAt": "2026-03-23T07:45:28Z",
       "ResourceShareArn": null,
       "ResourceShareName": null,
       "RoleArn": null,
@@ -26,7 +26,7 @@
       "SubscriberDescription": null,
       "SubscriberEndpoint": null,
       "SubscriberStatus": "ACTIVE",
-      "UpdatedAt": "2026-02-27T15:18:19Z"
+      "UpdatedAt": "2026-03-23T07:45:28Z"
     }
   ],
   "ResultMetadata": {}

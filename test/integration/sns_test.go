@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/sivchari/golden"
 )
 
 func newSNSClient(t *testing.T) *sns.Client {
@@ -40,21 +41,16 @@ func TestSNS_CreateAndDeleteTopic(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.TopicArn == nil {
-		t.Fatal("topic ARN is nil")
-	}
-
-	t.Logf("Created topic: %s", *createOutput.TopicArn)
+	golden.New(t, golden.WithIgnoreFields("TopicArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete topic.
 	_, err = client.DeleteTopic(ctx, &sns.DeleteTopicInput{
 		TopicArn: createOutput.TopicArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete topic: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -68,7 +64,7 @@ func TestSNS_ListTopics(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -80,7 +76,7 @@ func TestSNS_ListTopics(t *testing.T) {
 	// List topics.
 	listOutput, err := client.ListTopics(ctx, &sns.ListTopicsInput{})
 	if err != nil {
-		t.Fatalf("failed to list topics: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -108,7 +104,7 @@ func TestSNS_SubscribeAndUnsubscribe(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -124,21 +120,16 @@ func TestSNS_SubscribeAndUnsubscribe(t *testing.T) {
 		Endpoint: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
 	})
 	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
+		t.Fatal(err)
 	}
-
-	if subscribeOutput.SubscriptionArn == nil {
-		t.Fatal("subscription ARN is nil")
-	}
-
-	t.Logf("Subscribed: %s", *subscribeOutput.SubscriptionArn)
+	golden.New(t, golden.WithIgnoreFields("SubscriptionArn", "ResultMetadata")).Assert(t.Name()+"_subscribe", subscribeOutput)
 
 	// Unsubscribe.
 	_, err = client.Unsubscribe(ctx, &sns.UnsubscribeInput{
 		SubscriptionArn: subscribeOutput.SubscriptionArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to unsubscribe: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -152,7 +143,7 @@ func TestSNS_ListSubscriptions(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -168,7 +159,7 @@ func TestSNS_ListSubscriptions(t *testing.T) {
 		Endpoint: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
 	})
 	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -180,7 +171,7 @@ func TestSNS_ListSubscriptions(t *testing.T) {
 	// List subscriptions.
 	listOutput, err := client.ListSubscriptions(ctx, &sns.ListSubscriptionsInput{})
 	if err != nil {
-		t.Fatalf("failed to list subscriptions: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -208,7 +199,7 @@ func TestSNS_ListSubscriptionsByTopic(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -224,7 +215,7 @@ func TestSNS_ListSubscriptionsByTopic(t *testing.T) {
 		Endpoint: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
 	})
 	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -238,17 +229,9 @@ func TestSNS_ListSubscriptionsByTopic(t *testing.T) {
 		TopicArn: createOutput.TopicArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to list subscriptions by topic: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(listOutput.Subscriptions) != 1 {
-		t.Fatalf("expected 1 subscription, got %d", len(listOutput.Subscriptions))
-	}
-
-	if *listOutput.Subscriptions[0].SubscriptionArn != *subscribeOutput.SubscriptionArn {
-		t.Errorf("subscription ARN mismatch: got %s, want %s",
-			*listOutput.Subscriptions[0].SubscriptionArn, *subscribeOutput.SubscriptionArn)
-	}
+	golden.New(t, golden.WithIgnoreFields("SubscriptionArn", "TopicArn", "ResultMetadata")).Assert(t.Name(), listOutput)
 }
 
 func TestSNS_Publish(t *testing.T) {
@@ -262,7 +245,7 @@ func TestSNS_Publish(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -278,14 +261,9 @@ func TestSNS_Publish(t *testing.T) {
 		Subject:  aws.String("Test Subject"),
 	})
 	if err != nil {
-		t.Fatalf("failed to publish: %v", err)
+		t.Fatal(err)
 	}
-
-	if publishOutput.MessageId == nil {
-		t.Fatal("message ID is nil")
-	}
-
-	t.Logf("Published message: %s", *publishOutput.MessageId)
+	golden.New(t, golden.WithIgnoreFields("MessageId", "SequenceNumber", "ResultMetadata")).Assert(t.Name(), publishOutput)
 }
 
 func TestSNS_CreateTopicIdempotent(t *testing.T) {
@@ -298,7 +276,7 @@ func TestSNS_CreateTopicIdempotent(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -312,7 +290,7 @@ func TestSNS_CreateTopicIdempotent(t *testing.T) {
 		Name: aws.String(topicName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create topic second time: %v", err)
+		t.Fatal(err)
 	}
 
 	if *createOutput1.TopicArn != *createOutput2.TopicArn {

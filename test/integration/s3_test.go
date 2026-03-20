@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/sivchari/golden"
 )
 
 func newS3Client(t *testing.T) *s3.Client {
@@ -202,12 +203,9 @@ func TestS3_HeadObject(t *testing.T) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("failed to head object: %v", err)
+		t.Fatal(err)
 	}
-
-	if *result.ContentLength != int64(len(content)) {
-		t.Errorf("expected content length %d, got %d", len(content), *result.ContentLength)
-	}
+	golden.New(t, golden.WithIgnoreFields("ContentLength", "ETag", "LastModified", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestS3_DeleteObject(t *testing.T) {
@@ -304,12 +302,9 @@ func TestS3_ListObjects(t *testing.T) {
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list objects: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(result.Contents) != 3 {
-		t.Errorf("expected 3 objects, got %d", len(result.Contents))
-	}
+	golden.New(t, golden.WithIgnoreFields("ETag", "LastModified", "ResultMetadata")).Assert(t.Name()+"_all", result)
 
 	// List with prefix
 	result, err = client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
@@ -317,12 +312,9 @@ func TestS3_ListObjects(t *testing.T) {
 		Prefix: aws.String("dir/"),
 	})
 	if err != nil {
-		t.Fatalf("failed to list objects with prefix: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(result.Contents) != 1 {
-		t.Errorf("expected 1 object with prefix 'dir/', got %d", len(result.Contents))
-	}
+	golden.New(t, golden.WithIgnoreFields("ETag", "LastModified", "ResultMetadata")).Assert(t.Name()+"_prefix", result)
 }
 
 func newS3PresignClient(t *testing.T) *s3.PresignClient {
@@ -567,13 +559,11 @@ func TestS3_MultipartUpload_BasicFlow(t *testing.T) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("failed to create multipart upload: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("UploadId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	uploadID := createResult.UploadId
-	if uploadID == nil || *uploadID == "" {
-		t.Fatal("expected non-empty uploadId")
-	}
 
 	// Upload parts
 	part1Content := strings.Repeat("A", 5*1024*1024) // 5MB minimum part size
@@ -664,8 +654,9 @@ func TestS3_MultipartUpload_AbortUpload(t *testing.T) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("failed to create multipart upload: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("UploadId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	uploadID := createResult.UploadId
 
@@ -728,12 +719,9 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get bucket versioning: %v", err)
+		t.Fatal(err)
 	}
-
-	if result.Status != "" {
-		t.Errorf("expected empty versioning status, got %v", result.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_initial", result)
 
 	// Enable versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
@@ -743,7 +731,7 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put bucket versioning: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify versioning is enabled
@@ -751,12 +739,9 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get bucket versioning: %v", err)
+		t.Fatal(err)
 	}
-
-	if result.Status != types.BucketVersioningStatusEnabled {
-		t.Errorf("expected versioning status Enabled, got %v", result.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_enabled", result)
 
 	// Suspend versioning
 	_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
@@ -766,7 +751,7 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to suspend bucket versioning: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify versioning is suspended
@@ -774,12 +759,9 @@ func TestS3_Versioning_PutAndGetBucketVersioning(t *testing.T) {
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get bucket versioning: %v", err)
+		t.Fatal(err)
 	}
-
-	if result.Status != types.BucketVersioningStatusSuspended {
-		t.Errorf("expected versioning status Suspended, got %v", result.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_suspended", result)
 }
 
 func TestS3_Versioning_PutObjectWithVersioning(t *testing.T) {
@@ -1041,7 +1023,7 @@ func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
 		Key:    aws.String(key1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create multipart upload 1: %v", err)
+		t.Fatal(err)
 	}
 
 	upload2, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
@@ -1049,7 +1031,7 @@ func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
 		Key:    aws.String(key2),
 	})
 	if err != nil {
-		t.Fatalf("failed to create multipart upload 2: %v", err)
+		t.Fatal(err)
 	}
 
 	// List multipart uploads
@@ -1057,12 +1039,9 @@ func TestS3_MultipartUpload_ListMultipartUploads(t *testing.T) {
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list multipart uploads: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(listResult.Uploads) != 2 {
-		t.Errorf("expected 2 uploads, got %d", len(listResult.Uploads))
-	}
+	golden.New(t, golden.WithIgnoreFields("UploadId", "Initiated", "ResultMetadata")).Assert(t.Name(), listResult)
 
 	// Cleanup
 	_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
@@ -1103,8 +1082,9 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("failed to create multipart upload: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("UploadId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	uploadID := createResult.UploadId
 
@@ -1117,7 +1097,7 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 		Body:       strings.NewReader("part 1 content"),
 	})
 	if err != nil {
-		t.Fatalf("failed to upload part 1: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.UploadPart(ctx, &s3.UploadPartInput{
@@ -1128,7 +1108,7 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 		Body:       strings.NewReader("part 2 content"),
 	})
 	if err != nil {
-		t.Fatalf("failed to upload part 2: %v", err)
+		t.Fatal(err)
 	}
 
 	// List parts
@@ -1138,12 +1118,9 @@ func TestS3_MultipartUpload_ListParts(t *testing.T) {
 		UploadId: uploadID,
 	})
 	if err != nil {
-		t.Fatalf("failed to list parts: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(listResult.Parts) != 2 {
-		t.Errorf("expected 2 parts, got %d", len(listResult.Parts))
-	}
+	golden.New(t, golden.WithIgnoreFields("UploadId", "ETag", "LastModified", "ResultMetadata")).Assert(t.Name()+"_list", listResult)
 
 	// Cleanup
 	_, _ = client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{

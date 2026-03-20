@@ -1,6 +1,6 @@
 {
   "Distribution": {
-    "ARN": "arn:aws:cloudfront::000000000000:distribution/E2497cb93-4e76",
+    "ARN": "arn:aws:cloudfront::000000000000:distribution/Ef3a25942-4f0c",
     "DistributionConfig": {
       "CallerReference": "test-get-distribution",
       "Comment": "Test distribution",
@@ -76,10 +76,10 @@
       "ViewerMtlsConfig": null,
       "WebACLId": null
     },
-    "DomainName": "E2497cb93-4e76.cloudfront.net",
-    "Id": "E2497cb93-4e76",
+    "DomainName": "Ef3a25942-4f0c.cloudfront.net",
+    "Id": "Ef3a25942-4f0c",
     "InProgressInvalidationBatches": null,
-    "LastModifiedTime": "2026-02-27T00:21:07+09:00",
+    "LastModifiedTime": "2026-03-23T07:45:28Z",
     "Status": "InProgress",
     "ActiveTrustedKeyGroups": {
       "Enabled": false,
@@ -93,6 +93,6 @@
     },
     "AliasICPRecordals": null
   },
-  "ETag": "E8b19cbbf-4a15-48c5-aa97-f7ffaa77",
+  "ETag": "Ec7e6bb08-afd0-41d3-a931-5856ed14",
   "ResultMetadata": {}
 }

@@ -1,12 +1,12 @@
 {
-  "CreationTime": "2026-02-26T16:00:39.03Z",
+  "CreationTime": "2026-03-23T07:45:25.873Z",
   "DataFrequency": null,
   "DatasetArn": "arn:aws:forecast:us-east-1:123456789012:dataset/test-dataset-create-delete",
   "DatasetName": "test-dataset-create-delete",
   "DatasetType": "TARGET_TIME_SERIES",
   "Domain": "RETAIL",
   "EncryptionConfig": null,
-  "LastModificationTime": "2026-02-26T16:00:39.03Z",
+  "LastModificationTime": "2026-03-23T07:45:25.873Z",
   "Schema": {
     "Attributes": [
       {

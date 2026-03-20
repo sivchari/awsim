@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
+	"github.com/sivchari/golden"
 )
 
 func newECRClient(t *testing.T) *ecr.Client {
@@ -41,36 +42,18 @@ func TestECR_CreateAndDescribeRepository(t *testing.T) {
 		RepositoryName: aws.String(repoName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create repository: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.Repository == nil {
-		t.Fatal("repository is nil")
-	}
-
-	if *createOutput.Repository.RepositoryName != repoName {
-		t.Errorf("repository name mismatch: got %s, want %s", *createOutput.Repository.RepositoryName, repoName)
-	}
-
-	t.Logf("Created repository: %s", *createOutput.Repository.RepositoryArn)
+	golden.New(t, golden.WithIgnoreFields("RepositoryArn", "RepositoryUri", "RegistryId", "CreatedAt", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Describe repositories.
 	describeOutput, err := client.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
 		RepositoryNames: []string{repoName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe repositories: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(describeOutput.Repositories) != 1 {
-		t.Errorf("expected 1 repository, got %d", len(describeOutput.Repositories))
-	}
-
-	if *describeOutput.Repositories[0].RepositoryName != repoName {
-		t.Errorf("repository name mismatch: got %s, want %s", *describeOutput.Repositories[0].RepositoryName, repoName)
-	}
-
-	t.Logf("Described repository: %s", *describeOutput.Repositories[0].RepositoryName)
+	golden.New(t, golden.WithIgnoreFields("RepositoryArn", "RepositoryUri", "RegistryId", "CreatedAt", "ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
 }
 
 func TestECR_PutAndListImages(t *testing.T) {
@@ -97,32 +80,18 @@ func TestECR_PutAndListImages(t *testing.T) {
 		ImageTag:       aws.String(imageTag),
 	})
 	if err != nil {
-		t.Fatalf("failed to put image: %v", err)
+		t.Fatal(err)
 	}
-
-	if putOutput.Image == nil {
-		t.Fatal("image is nil")
-	}
-
-	if putOutput.Image.ImageId.ImageTag == nil || *putOutput.Image.ImageId.ImageTag != imageTag {
-		t.Errorf("image tag mismatch")
-	}
-
-	t.Logf("Put image with digest: %s", *putOutput.Image.ImageId.ImageDigest)
+	golden.New(t, golden.WithIgnoreFields("ImageDigest", "RegistryId", "ResultMetadata")).Assert(t.Name()+"_put", putOutput)
 
 	// List images.
 	listOutput, err := client.ListImages(ctx, &ecr.ListImagesInput{
 		RepositoryName: aws.String(repoName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list images: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(listOutput.ImageIds) != 1 {
-		t.Errorf("expected 1 image, got %d", len(listOutput.ImageIds))
-	}
-
-	t.Logf("Listed %d images", len(listOutput.ImageIds))
+	golden.New(t, golden.WithIgnoreFields("ImageDigest", "ResultMetadata")).Assert(t.Name()+"_list", listOutput)
 }
 
 func TestECR_BatchGetImage(t *testing.T) {
@@ -142,13 +111,13 @@ func TestECR_BatchGetImage(t *testing.T) {
 	// Put image.
 	manifest := `{"schemaVersion": 2, "config": {"digest": "sha256:batch"}}`
 
-	putOutput, err := client.PutImage(ctx, &ecr.PutImageInput{
+	_, err = client.PutImage(ctx, &ecr.PutImageInput{
 		RepositoryName: aws.String(repoName),
 		ImageManifest:  aws.String(manifest),
 		ImageTag:       aws.String("v1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to put image: %v", err)
+		t.Fatal(err)
 	}
 
 	// Batch get image.
@@ -159,18 +128,9 @@ func TestECR_BatchGetImage(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to batch get images: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(batchOutput.Images) != 1 {
-		t.Errorf("expected 1 image, got %d", len(batchOutput.Images))
-	}
-
-	if *batchOutput.Images[0].ImageId.ImageDigest != *putOutput.Image.ImageId.ImageDigest {
-		t.Errorf("image digest mismatch")
-	}
-
-	t.Logf("Batch got %d images", len(batchOutput.Images))
+	golden.New(t, golden.WithIgnoreFields("ImageDigest", "RegistryId", "ResultMetadata")).Assert(t.Name(), batchOutput)
 }
 
 func TestECR_BatchDeleteImage(t *testing.T) {
@@ -207,26 +167,18 @@ func TestECR_BatchDeleteImage(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to batch delete images: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(deleteOutput.ImageIds) != 1 {
-		t.Errorf("expected 1 deleted image, got %d", len(deleteOutput.ImageIds))
-	}
-
-	t.Logf("Batch deleted %d images", len(deleteOutput.ImageIds))
+	golden.New(t, golden.WithIgnoreFields("ImageDigest", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 
 	// Verify deletion.
 	listOutput, err := client.ListImages(ctx, &ecr.ListImagesInput{
 		RepositoryName: aws.String(repoName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list images: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(listOutput.ImageIds) != 0 {
-		t.Errorf("expected 0 images after deletion, got %d", len(listOutput.ImageIds))
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_list_after_delete", listOutput)
 }
 
 func TestECR_DeleteRepository(t *testing.T) {
@@ -248,22 +200,9 @@ func TestECR_DeleteRepository(t *testing.T) {
 		RepositoryName: aws.String(repoName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete repository: %v", err)
+		t.Fatal(err)
 	}
-
-	if *deleteOutput.Repository.RepositoryName != repoName {
-		t.Errorf("deleted repository name mismatch: got %s, want %s", *deleteOutput.Repository.RepositoryName, repoName)
-	}
-
-	t.Log("Deleted repository successfully")
-
-	// Verify deletion.
-	_, err = client.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
-		RepositoryNames: []string{repoName},
-	})
-	// Note: ECR returns empty list for non-existent repositories, not an error.
-	// So we just log it.
-	t.Log("Repository no longer exists after deletion")
+	golden.New(t, golden.WithIgnoreFields("RepositoryArn", "RepositoryUri", "RegistryId", "CreatedAt", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestECR_GetAuthorizationToken(t *testing.T) {
@@ -273,22 +212,9 @@ func TestECR_GetAuthorizationToken(t *testing.T) {
 	// Get authorization token.
 	output, err := client.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
-		t.Fatalf("failed to get authorization token: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(output.AuthorizationData) == 0 {
-		t.Error("expected at least one authorization data")
-	}
-
-	if output.AuthorizationData[0].AuthorizationToken == nil {
-		t.Error("authorization token is nil")
-	}
-
-	if output.AuthorizationData[0].ProxyEndpoint == nil {
-		t.Error("proxy endpoint is nil")
-	}
-
-	t.Logf("Got authorization token for endpoint: %s", *output.AuthorizationData[0].ProxyEndpoint)
+	golden.New(t, golden.WithIgnoreFields("AuthorizationToken", "ExpiresAt", "ResultMetadata")).Assert(t.Name(), output)
 }
 
 func TestECR_RepositoryNotFound(t *testing.T) {
@@ -302,6 +228,4 @@ func TestECR_RepositoryNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent repository")
 	}
-
-	t.Log("Got expected error for non-existent repository")
 }

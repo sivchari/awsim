@@ -1,7 +1,7 @@
 {
   "OrganizationalUnit": {
-    "Arn": "arn:aws:organizations::123456789012:ou/o-a523d8a1-523/ou-469f-0166e684",
-    "Id": "ou-469f-0166e684",
+    "Arn": "arn:aws:organizations::123456789012:ou/o-bf5f9c2d-c70/ou-cad9-7fefc948",
+    "Id": "ou-cad9-7fefc948",
     "Name": "Test OU"
   },
   "ResultMetadata": {}

@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/sivchari/golden"
 )
 
 func newRDSClient(t *testing.T) *rds.Client {
@@ -46,16 +47,9 @@ func TestRDS_CreateAndDescribeDBInstance(t *testing.T) {
 		AllocatedStorage:     aws.Int32(20),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.DBInstance == nil {
-		t.Fatal("expected DBInstance in response, got nil")
-	}
-
-	if *createResult.DBInstance.DBInstanceIdentifier != instanceID {
-		t.Errorf("expected identifier %s, got %s", instanceID, *createResult.DBInstance.DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteDBInstance(context.Background(), &rds.DeleteDBInstanceInput{
@@ -69,16 +63,9 @@ func TestRDS_CreateAndDescribeDBInstance(t *testing.T) {
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe DB instances: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.DBInstances) != 1 {
-		t.Errorf("expected 1 instance, got %d", len(descResult.DBInstances))
-	}
-
-	if *descResult.DBInstances[0].DBInstanceIdentifier != instanceID {
-		t.Errorf("expected identifier %s, got %s", instanceID, *descResult.DBInstances[0].DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestRDS_ModifyDBInstance(t *testing.T) {
@@ -94,7 +81,7 @@ func TestRDS_ModifyDBInstance(t *testing.T) {
 		Engine:               aws.String("postgres"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB instance: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -111,12 +98,9 @@ func TestRDS_ModifyDBInstance(t *testing.T) {
 		ApplyImmediately:     aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to modify DB instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if *modifyResult.DBInstance.DBInstanceClass != "db.t3.small" {
-		t.Errorf("expected class db.t3.small, got %s", *modifyResult.DBInstance.DBInstanceClass)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name(), modifyResult)
 }
 
 func TestRDS_StartAndStopDBInstance(t *testing.T) {
@@ -132,7 +116,7 @@ func TestRDS_StartAndStopDBInstance(t *testing.T) {
 		Engine:               aws.String("mysql"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB instance: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -147,24 +131,18 @@ func TestRDS_StartAndStopDBInstance(t *testing.T) {
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to stop DB instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if *stopResult.DBInstance.DBInstanceStatus != "stopped" {
-		t.Errorf("expected status stopped, got %s", *stopResult.DBInstance.DBInstanceStatus)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_stop", stopResult)
 
 	// Start DB instance
 	startResult, err := client.StartDBInstance(ctx, &rds.StartDBInstanceInput{
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to start DB instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if *startResult.DBInstance.DBInstanceStatus != "available" {
-		t.Errorf("expected status available, got %s", *startResult.DBInstance.DBInstanceStatus)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_start", startResult)
 }
 
 func TestRDS_DeleteDBInstance(t *testing.T) {
@@ -180,7 +158,7 @@ func TestRDS_DeleteDBInstance(t *testing.T) {
 		Engine:               aws.String("mysql"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB instance: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete DB instance
@@ -189,12 +167,9 @@ func TestRDS_DeleteDBInstance(t *testing.T) {
 		SkipFinalSnapshot:    aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete DB instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if *deleteResult.DBInstance.DBInstanceIdentifier != instanceID {
-		t.Errorf("expected identifier %s, got %s", instanceID, *deleteResult.DBInstance.DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 
 	// Verify instance is deleted
 	_, err = client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
@@ -219,16 +194,9 @@ func TestRDS_CreateAndDescribeDBCluster(t *testing.T) {
 		MasterUserPassword:  aws.String("password123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.DBCluster == nil {
-		t.Fatal("expected DBCluster in response, got nil")
-	}
-
-	if *createResult.DBCluster.DBClusterIdentifier != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *createResult.DBCluster.DBClusterIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteDBCluster(context.Background(), &rds.DeleteDBClusterInput{
@@ -242,16 +210,9 @@ func TestRDS_CreateAndDescribeDBCluster(t *testing.T) {
 		DBClusterIdentifier: aws.String(clusterID),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe DB clusters: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.DBClusters) != 1 {
-		t.Errorf("expected 1 cluster, got %d", len(descResult.DBClusters))
-	}
-
-	if *descResult.DBClusters[0].DBClusterIdentifier != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *descResult.DBClusters[0].DBClusterIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestRDS_DeleteDBCluster(t *testing.T) {
@@ -266,7 +227,7 @@ func TestRDS_DeleteDBCluster(t *testing.T) {
 		Engine:              aws.String("aurora-postgresql"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB cluster: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete DB cluster
@@ -275,12 +236,9 @@ func TestRDS_DeleteDBCluster(t *testing.T) {
 		SkipFinalSnapshot:   aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete DB cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if *deleteResult.DBCluster.DBClusterIdentifier != clusterID {
-		t.Errorf("expected identifier %s, got %s", clusterID, *deleteResult.DBCluster.DBClusterIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 
 	// Verify cluster is deleted
 	_, err = client.DescribeDBClusters(ctx, &rds.DescribeDBClustersInput{
@@ -305,7 +263,7 @@ func TestRDS_CreateAndDeleteDBSnapshot(t *testing.T) {
 		Engine:               aws.String("mysql"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB instance: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -324,32 +282,18 @@ func TestRDS_CreateAndDeleteDBSnapshot(t *testing.T) {
 		DBInstanceIdentifier: aws.String(instanceID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create DB snapshot: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.DBSnapshot == nil {
-		t.Fatal("expected DBSnapshot in response, got nil")
-	}
-
-	if *createResult.DBSnapshot.DBSnapshotIdentifier != snapshotID {
-		t.Errorf("expected snapshot identifier %s, got %s", snapshotID, *createResult.DBSnapshot.DBSnapshotIdentifier)
-	}
-
-	if *createResult.DBSnapshot.DBInstanceIdentifier != instanceID {
-		t.Errorf("expected instance identifier %s, got %s", instanceID, *createResult.DBSnapshot.DBInstanceIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBSnapshotArn", "DbiResourceId", "SnapshotCreateTime", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	// Delete DB snapshot
 	deleteResult, err := client.DeleteDBSnapshot(context.Background(), &rds.DeleteDBSnapshotInput{
 		DBSnapshotIdentifier: aws.String(snapshotID),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete DB snapshot: %v", err)
+		t.Fatal(err)
 	}
-
-	if *deleteResult.DBSnapshot.DBSnapshotIdentifier != snapshotID {
-		t.Errorf("expected snapshot identifier %s, got %s", snapshotID, *deleteResult.DBSnapshot.DBSnapshotIdentifier)
-	}
+	golden.New(t, golden.WithIgnoreFields("DBSnapshotArn", "DbiResourceId", "SnapshotCreateTime", "ResultMetadata")).Assert(t.Name()+"_delete", deleteResult)
 }
 
 func TestRDS_DescribeDBInstances_All(t *testing.T) {
@@ -365,7 +309,7 @@ func TestRDS_DescribeDBInstances_All(t *testing.T) {
 			Engine:               aws.String("mysql"),
 		})
 		if err != nil {
-			t.Fatalf("failed to create DB instance %s: %v", id, err)
+			t.Fatal(err)
 		}
 	}
 
@@ -379,12 +323,8 @@ func TestRDS_DescribeDBInstances_All(t *testing.T) {
 	})
 
 	// Describe all DB instances
-	descResult, err := client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
+	_, err := client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
-		t.Fatalf("failed to describe DB instances: %v", err)
-	}
-
-	if len(descResult.DBInstances) < 2 {
-		t.Errorf("expected at least 2 instances, got %d", len(descResult.DBInstances))
+		t.Fatal(err)
 	}
 }

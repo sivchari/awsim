@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/codegurureviewer"
 	"github.com/aws/aws-sdk-go-v2/service/codegurureviewer/types"
+	"github.com/sivchari/golden"
 )
 
 func newCodeGuruReviewerClient(t *testing.T) *codegurureviewer.Client {
@@ -42,24 +43,10 @@ func TestCodeGuruReviewer_AssociateRepository(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.RepositoryAssociation == nil {
-		t.Fatal("expected RepositoryAssociation to be set")
-	}
-
-	if result.RepositoryAssociation.AssociationArn == nil || *result.RepositoryAssociation.AssociationArn == "" {
-		t.Error("expected AssociationArn to be set")
-	}
-
-	if *result.RepositoryAssociation.Name != "my-repo" {
-		t.Errorf("expected name 'my-repo', got %s", *result.RepositoryAssociation.Name)
-	}
-
-	if result.RepositoryAssociation.State != types.RepositoryAssociationStateAssociated {
-		t.Errorf("expected state Associated, got %s", result.RepositoryAssociation.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("AssociationArn", "AssociationId", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_DescribeRepositoryAssociation(t *testing.T) {
@@ -74,19 +61,17 @@ func TestCodeGuruReviewer_DescribeRepositoryAssociation(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.DescribeRepositoryAssociation(ctx, &codegurureviewer.DescribeRepositoryAssociationInput{
 		AssociationArn: assocResult.RepositoryAssociation.AssociationArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe repository association: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.RepositoryAssociation.Name != "describe-repo" {
-		t.Errorf("expected name 'describe-repo', got %s", *result.RepositoryAssociation.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("AssociationArn", "AssociationId", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_DisassociateRepository(t *testing.T) {
@@ -101,19 +86,17 @@ func TestCodeGuruReviewer_DisassociateRepository(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.DisassociateRepository(ctx, &codegurureviewer.DisassociateRepositoryInput{
 		AssociationArn: assocResult.RepositoryAssociation.AssociationArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to disassociate repository: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.RepositoryAssociation.State != types.RepositoryAssociationStateDisassociated {
-		t.Errorf("expected state Disassociated, got %s", result.RepositoryAssociation.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("AssociationArn", "AssociationId", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_ListRepositoryAssociations(t *testing.T) {
@@ -128,17 +111,15 @@ func TestCodeGuruReviewer_ListRepositoryAssociations(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListRepositoryAssociations(ctx, &codegurureviewer.ListRepositoryAssociationsInput{})
 	if err != nil {
-		t.Fatalf("failed to list repository associations: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.RepositoryAssociationSummaries) == 0 {
-		t.Error("expected at least one repository association")
-	}
+	golden.New(t, golden.WithIgnoreFields("AssociationArn", "AssociationId", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_CreateCodeReview(t *testing.T) {
@@ -153,7 +134,7 @@ func TestCodeGuruReviewer_CreateCodeReview(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -168,20 +149,10 @@ func TestCodeGuruReviewer_CreateCodeReview(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.CodeReview == nil {
-		t.Fatal("expected CodeReview to be set")
-	}
-
-	if result.CodeReview.CodeReviewArn == nil || *result.CodeReview.CodeReviewArn == "" {
-		t.Error("expected CodeReviewArn to be set")
-	}
-
-	if *result.CodeReview.Name != "test-review" {
-		t.Errorf("expected name 'test-review', got %s", *result.CodeReview.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("CodeReviewArn", "AssociationArn", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_DescribeCodeReview(t *testing.T) {
@@ -196,7 +167,7 @@ func TestCodeGuruReviewer_DescribeCodeReview(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	createResult, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -211,19 +182,17 @@ func TestCodeGuruReviewer_DescribeCodeReview(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.DescribeCodeReview(ctx, &codegurureviewer.DescribeCodeReviewInput{
 		CodeReviewArn: createResult.CodeReview.CodeReviewArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe code review: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.CodeReview.Name != "describe-review" {
-		t.Errorf("expected name 'describe-review', got %s", *result.CodeReview.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("CodeReviewArn", "AssociationArn", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_ListCodeReviews(t *testing.T) {
@@ -238,7 +207,7 @@ func TestCodeGuruReviewer_ListCodeReviews(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -253,19 +222,17 @@ func TestCodeGuruReviewer_ListCodeReviews(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListCodeReviews(ctx, &codegurureviewer.ListCodeReviewsInput{
 		Type: types.TypeRepositoryAnalysis,
 	})
 	if err != nil {
-		t.Fatalf("failed to list code reviews: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.CodeReviewSummaries) == 0 {
-		t.Error("expected at least one code review")
-	}
+	golden.New(t, golden.WithIgnoreFields("CodeReviewArn", "AssociationArn", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_ListRecommendations(t *testing.T) {
@@ -280,7 +247,7 @@ func TestCodeGuruReviewer_ListRecommendations(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	createResult, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -295,19 +262,17 @@ func TestCodeGuruReviewer_ListRecommendations(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListRecommendations(ctx, &codegurureviewer.ListRecommendationsInput{
 		CodeReviewArn: createResult.CodeReview.CodeReviewArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to list recommendations: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.RecommendationSummaries == nil {
-		t.Error("expected RecommendationSummaries to be non-nil")
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_PutRecommendationFeedback(t *testing.T) {
@@ -322,7 +287,7 @@ func TestCodeGuruReviewer_PutRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	createResult, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -337,7 +302,7 @@ func TestCodeGuruReviewer_PutRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.PutRecommendationFeedback(ctx, &codegurureviewer.PutRecommendationFeedbackInput{
@@ -346,7 +311,7 @@ func TestCodeGuruReviewer_PutRecommendationFeedback(t *testing.T) {
 		Reactions:        []types.Reaction{types.ReactionThumbsUp},
 	})
 	if err != nil {
-		t.Fatalf("failed to put recommendation feedback: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -362,7 +327,7 @@ func TestCodeGuruReviewer_DescribeRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	createResult, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -377,7 +342,7 @@ func TestCodeGuruReviewer_DescribeRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.PutRecommendationFeedback(ctx, &codegurureviewer.PutRecommendationFeedbackInput{
@@ -386,7 +351,7 @@ func TestCodeGuruReviewer_DescribeRecommendationFeedback(t *testing.T) {
 		Reactions:        []types.Reaction{types.ReactionThumbsDown},
 	})
 	if err != nil {
-		t.Fatalf("failed to put recommendation feedback: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.DescribeRecommendationFeedback(ctx, &codegurureviewer.DescribeRecommendationFeedbackInput{
@@ -394,16 +359,10 @@ func TestCodeGuruReviewer_DescribeRecommendationFeedback(t *testing.T) {
 		RecommendationId: aws.String("rec-2"),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe recommendation feedback: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.RecommendationFeedback == nil {
-		t.Fatal("expected RecommendationFeedback to be set")
-	}
-
-	if *result.RecommendationFeedback.RecommendationId != "rec-2" {
-		t.Errorf("expected RecommendationId 'rec-2', got %s", *result.RecommendationFeedback.RecommendationId)
-	}
+	golden.New(t, golden.WithIgnoreFields("CodeReviewArn", "CreatedTimeStamp", "LastUpdatedTimeStamp", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_ListRecommendationFeedback(t *testing.T) {
@@ -418,7 +377,7 @@ func TestCodeGuruReviewer_ListRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to associate repository: %v", err)
+		t.Fatal(err)
 	}
 
 	createResult, err := client.CreateCodeReview(ctx, &codegurureviewer.CreateCodeReviewInput{
@@ -433,7 +392,7 @@ func TestCodeGuruReviewer_ListRecommendationFeedback(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create code review: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.PutRecommendationFeedback(ctx, &codegurureviewer.PutRecommendationFeedbackInput{
@@ -442,19 +401,17 @@ func TestCodeGuruReviewer_ListRecommendationFeedback(t *testing.T) {
 		Reactions:        []types.Reaction{types.ReactionThumbsUp},
 	})
 	if err != nil {
-		t.Fatalf("failed to put recommendation feedback: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListRecommendationFeedback(ctx, &codegurureviewer.ListRecommendationFeedbackInput{
 		CodeReviewArn: createResult.CodeReview.CodeReviewArn,
 	})
 	if err != nil {
-		t.Fatalf("failed to list recommendation feedback: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.RecommendationFeedbackSummaries) == 0 {
-		t.Error("expected at least one recommendation feedback")
-	}
+	golden.New(t, golden.WithIgnoreFields("CodeReviewArn", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestCodeGuruReviewer_AssociationNotFound(t *testing.T) {

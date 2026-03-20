@@ -3,6 +3,23 @@
   "Quotas": [
     {
       "Adjustable": true,
+      "Description": "Max Elastic IP addresses for EC2-VPC",
+      "ErrorReason": null,
+      "GlobalQuota": false,
+      "Period": null,
+      "QuotaAppliedAtLevel": "ACCOUNT",
+      "QuotaArn": "arn:aws:servicequotas:us-east-1::ec2/L-0E3CBAB9",
+      "QuotaCode": "L-0E3CBAB9",
+      "QuotaContext": null,
+      "QuotaName": "EC2-VPC Elastic IPs",
+      "ServiceCode": "ec2",
+      "ServiceName": "Amazon Elastic Compute Cloud (Amazon EC2)",
+      "Unit": "None",
+      "UsageMetric": null,
+      "Value": 5
+    },
+    {
+      "Adjustable": true,
       "Description": "Maximum number of VPCs per Region",
       "ErrorReason": null,
       "GlobalQuota": false,
@@ -51,23 +68,6 @@
       "Unit": "None",
       "UsageMetric": null,
       "Value": 1920
-    },
-    {
-      "Adjustable": true,
-      "Description": "Max Elastic IP addresses for EC2-VPC",
-      "ErrorReason": null,
-      "GlobalQuota": false,
-      "Period": null,
-      "QuotaAppliedAtLevel": "ACCOUNT",
-      "QuotaArn": "arn:aws:servicequotas:us-east-1::ec2/L-0E3CBAB9",
-      "QuotaCode": "L-0E3CBAB9",
-      "QuotaContext": null,
-      "QuotaName": "EC2-VPC Elastic IPs",
-      "ServiceCode": "ec2",
-      "ServiceName": "Amazon Elastic Compute Cloud (Amazon EC2)",
-      "Unit": "None",
-      "UsageMetric": null,
-      "Value": 5
     }
   ],
   "ResultMetadata": {}

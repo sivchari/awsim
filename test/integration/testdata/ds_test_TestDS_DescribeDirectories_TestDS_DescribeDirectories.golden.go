@@ -6,14 +6,14 @@
       "ConnectSettings": null,
       "Description": "Test directory for describe",
       "DesiredNumberOfDomainControllers": 2,
-      "DirectoryId": "d-1801c22d-7",
+      "DirectoryId": "d-f759628f-3",
       "DnsIpAddrs": [
         "10.0.0.1",
         "10.0.0.2"
       ],
       "Edition": "",
       "HybridSettings": null,
-      "LaunchTime": "2026-02-27T06:18:15Z",
+      "LaunchTime": "2026-03-23T07:45:25Z",
       "Name": "describe-test.example.com",
       "OsVersion": "",
       "OwnerDirectoryDescription": null,
@@ -27,7 +27,7 @@
       "Size": "Small",
       "SsoEnabled": false,
       "Stage": "Active",
-      "StageLastUpdatedDateTime": "2026-02-27T06:18:15Z",
+      "StageLastUpdatedDateTime": "2026-03-23T07:45:25Z",
       "StageReason": null,
       "Type": "SimpleAD",
       "VpcSettings": {
@@ -35,7 +35,7 @@
           "us-east-1a",
           "us-east-1b"
         ],
-        "SecurityGroupId": "sg-d97100ad",
+        "SecurityGroupId": "sg-f7d8a726",
         "SubnetIds": [
           "subnet-11111111",
           "subnet-22222222"

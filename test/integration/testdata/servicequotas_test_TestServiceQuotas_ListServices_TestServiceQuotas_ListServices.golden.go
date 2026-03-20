@@ -2,8 +2,12 @@
   "NextToken": null,
   "Services": [
     {
-      "ServiceCode": "rds",
-      "ServiceName": "Amazon Relational Database Service (Amazon RDS)"
+      "ServiceCode": "s3",
+      "ServiceName": "Amazon Simple Storage Service (Amazon S3)"
+    },
+    {
+      "ServiceCode": "dynamodb",
+      "ServiceName": "Amazon DynamoDB"
     },
     {
       "ServiceCode": "sns",
@@ -14,20 +18,16 @@
       "ServiceName": "Amazon ElastiCache"
     },
     {
-      "ServiceCode": "ecs",
-      "ServiceName": "Amazon Elastic Container Service (Amazon ECS)"
-    },
-    {
       "ServiceCode": "ec2",
       "ServiceName": "Amazon Elastic Compute Cloud (Amazon EC2)"
     },
     {
-      "ServiceCode": "dynamodb",
-      "ServiceName": "Amazon DynamoDB"
-    },
-    {
       "ServiceCode": "lambda",
       "ServiceName": "AWS Lambda"
+    },
+    {
+      "ServiceCode": "rds",
+      "ServiceName": "Amazon Relational Database Service (Amazon RDS)"
     },
     {
       "ServiceCode": "sqs",
@@ -38,8 +38,8 @@
       "ServiceName": "Amazon Kinesis"
     },
     {
-      "ServiceCode": "s3",
-      "ServiceName": "Amazon Simple Storage Service (Amazon S3)"
+      "ServiceCode": "ecs",
+      "ServiceName": "Amazon Elastic Container Service (Amazon ECS)"
     }
   ],
   "ResultMetadata": {}

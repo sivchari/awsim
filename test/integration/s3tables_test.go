@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3tables"
+	"github.com/sivchari/golden"
 )
 
 func newS3TablesClient(t *testing.T) *s3tables.Client {
@@ -40,12 +41,9 @@ func TestS3Tables_CreateAndDeleteTableBucket(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.Arn == nil || *createResult.Arn == "" {
-		t.Fatal("expected table bucket ARN to be returned")
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	arn := *createResult.Arn
 
@@ -54,7 +52,7 @@ func TestS3Tables_CreateAndDeleteTableBucket(t *testing.T) {
 		TableBucketARN: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete table bucket: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -68,7 +66,7 @@ func TestS3Tables_GetTableBucket(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createResult.Arn
@@ -84,16 +82,9 @@ func TestS3Tables_GetTableBucket(t *testing.T) {
 		TableBucketARN: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to get table bucket: %v", err)
+		t.Fatal(err)
 	}
-
-	if getResult.Name == nil || *getResult.Name != bucketName {
-		t.Errorf("expected bucket name %s, got %v", bucketName, getResult.Name)
-	}
-
-	if getResult.Arn == nil || *getResult.Arn != arn {
-		t.Errorf("expected ARN %s, got %v", arn, getResult.Arn)
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreatedAt", "ResultMetadata")).Assert(t.Name(), getResult)
 }
 
 func TestS3Tables_ListTableBuckets(t *testing.T) {
@@ -106,7 +97,7 @@ func TestS3Tables_ListTableBuckets(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createResult.Arn
@@ -120,7 +111,7 @@ func TestS3Tables_ListTableBuckets(t *testing.T) {
 	// List table buckets
 	listResult, err := client.ListTableBuckets(ctx, &s3tables.ListTableBucketsInput{})
 	if err != nil {
-		t.Fatalf("failed to list table buckets: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -147,7 +138,7 @@ func TestS3Tables_CreateAndDeleteNamespace(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -168,12 +159,9 @@ func TestS3Tables_CreateAndDeleteNamespace(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(createNsResult.Namespace) == 0 || createNsResult.Namespace[0] != namespaceName {
-		t.Errorf("expected namespace %s, got %v", namespaceName, createNsResult.Namespace)
-	}
+	golden.New(t, golden.WithIgnoreFields("TableBucketARN", "ResultMetadata")).Assert(t.Name()+"_create", createNsResult)
 
 	// Delete namespace
 	_, err = client.DeleteNamespace(context.Background(), &s3tables.DeleteNamespaceInput{
@@ -181,7 +169,7 @@ func TestS3Tables_CreateAndDeleteNamespace(t *testing.T) {
 		Namespace:      aws.String(namespaceName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete namespace: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -196,7 +184,7 @@ func TestS3Tables_GetNamespace(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -217,7 +205,7 @@ func TestS3Tables_GetNamespace(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get namespace
@@ -226,12 +214,9 @@ func TestS3Tables_GetNamespace(t *testing.T) {
 		Namespace:      aws.String(namespaceName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get namespace: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(getResult.Namespace) == 0 || getResult.Namespace[0] != namespaceName {
-		t.Errorf("expected namespace %s, got %v", namespaceName, getResult.Namespace)
-	}
+	golden.New(t, golden.WithIgnoreFields("TableBucketARN", "CreatedAt", "ResultMetadata")).Assert(t.Name(), getResult)
 }
 
 func TestS3Tables_ListNamespaces(t *testing.T) {
@@ -245,7 +230,7 @@ func TestS3Tables_ListNamespaces(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -266,7 +251,7 @@ func TestS3Tables_ListNamespaces(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// List namespaces
@@ -274,7 +259,7 @@ func TestS3Tables_ListNamespaces(t *testing.T) {
 		TableBucketARN: aws.String(arn),
 	})
 	if err != nil {
-		t.Fatalf("failed to list namespaces: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -302,7 +287,7 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -328,7 +313,7 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table
@@ -339,16 +324,9 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 		Format:         "ICEBERG",
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
-
-	if createTableResult.TableARN == nil || *createTableResult.TableARN == "" {
-		t.Fatal("expected table ARN to be returned")
-	}
-
-	if createTableResult.VersionToken == nil || *createTableResult.VersionToken == "" {
-		t.Fatal("expected version token to be returned")
-	}
+	golden.New(t, golden.WithIgnoreFields("TableARN", "VersionToken", "ResultMetadata")).Assert(t.Name()+"_create", createTableResult)
 
 	// Delete table
 	_, err = client.DeleteTable(context.Background(), &s3tables.DeleteTableInput{
@@ -357,7 +335,7 @@ func TestS3Tables_CreateAndDeleteTable(t *testing.T) {
 		Name:           aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete table: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -373,7 +351,7 @@ func TestS3Tables_GetTable(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -399,7 +377,7 @@ func TestS3Tables_GetTable(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table
@@ -410,7 +388,7 @@ func TestS3Tables_GetTable(t *testing.T) {
 		Format:         "ICEBERG",
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get table
@@ -420,16 +398,9 @@ func TestS3Tables_GetTable(t *testing.T) {
 		Name:           aws.String(tableName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get table: %v", err)
+		t.Fatal(err)
 	}
-
-	if getResult.Name == nil || *getResult.Name != tableName {
-		t.Errorf("expected table name %s, got %v", tableName, getResult.Name)
-	}
-
-	if getResult.Format != "ICEBERG" {
-		t.Errorf("expected format ICEBERG, got %v", getResult.Format)
-	}
+	golden.New(t, golden.WithIgnoreFields("TableBucketARN", "TableARN", "VersionToken", "CreatedAt", "ModifiedAt", "ResultMetadata")).Assert(t.Name(), getResult)
 }
 
 func TestS3Tables_ListTables(t *testing.T) {
@@ -444,7 +415,7 @@ func TestS3Tables_ListTables(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -470,7 +441,7 @@ func TestS3Tables_ListTables(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create table
@@ -481,7 +452,7 @@ func TestS3Tables_ListTables(t *testing.T) {
 		Format:         "ICEBERG",
 	})
 	if err != nil {
-		t.Fatalf("failed to create table: %v", err)
+		t.Fatal(err)
 	}
 
 	// List tables
@@ -490,7 +461,7 @@ func TestS3Tables_ListTables(t *testing.T) {
 		Namespace:      aws.String(namespaceName),
 	})
 	if err != nil {
-		t.Fatalf("failed to list tables: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -529,7 +500,7 @@ func TestS3Tables_NamespaceNotFound(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -561,7 +532,7 @@ func TestS3Tables_TableNotFound(t *testing.T) {
 		Name: aws.String(bucketName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create table bucket: %v", err)
+		t.Fatal(err)
 	}
 
 	arn := *createBucketResult.Arn
@@ -582,7 +553,7 @@ func TestS3Tables_TableNotFound(t *testing.T) {
 		Namespace:      []string{namespaceName},
 	})
 	if err != nil {
-		t.Fatalf("failed to create namespace: %v", err)
+		t.Fatal(err)
 	}
 
 	// Try to get non-existent table

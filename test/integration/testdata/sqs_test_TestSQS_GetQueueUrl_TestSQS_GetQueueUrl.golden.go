@@ -1,0 +1,4 @@
+{
+  "QueueUrl": "http://localhost:4566/000000000000/test-queue-get-url",
+  "ResultMetadata": {}
+}

@@ -1,0 +1,21 @@
+{
+  "ApiKeySource": "",
+  "ApiStatus": "",
+  "ApiStatusMessage": null,
+  "BinaryMediaTypes": null,
+  "CreatedDate": "2026-03-23T07:45:24Z",
+  "Description": "Test REST API",
+  "DisableExecuteApiEndpoint": false,
+  "EndpointAccessMode": "",
+  "EndpointConfiguration": null,
+  "Id": "b1945628-8",
+  "MinimumCompressionSize": null,
+  "Name": "test-rest-api",
+  "Policy": null,
+  "RootResourceId": "f2c0bee6-0",
+  "SecurityPolicy": "",
+  "Tags": null,
+  "Version": null,
+  "Warnings": null,
+  "ResultMetadata": {}
+}

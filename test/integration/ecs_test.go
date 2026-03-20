@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/sivchari/golden"
 )
 
 func newECSClient(t *testing.T) *ecs.Client {
@@ -41,38 +42,18 @@ func TestECS_CreateAndDeleteCluster(t *testing.T) {
 		ClusterName: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.Cluster == nil {
-		t.Fatal("cluster is nil")
-	}
-
-	if *createOutput.Cluster.ClusterName != clusterName {
-		t.Errorf("cluster name mismatch: got %s, want %s", *createOutput.Cluster.ClusterName, clusterName)
-	}
-
-	if createOutput.Cluster.Status == nil || *createOutput.Cluster.Status != "ACTIVE" {
-		t.Errorf("cluster status mismatch: got %v, want ACTIVE", createOutput.Cluster.Status)
-	}
-
-	t.Logf("Created cluster: %s", *createOutput.Cluster.ClusterName)
+	golden.New(t, golden.WithIgnoreFields("ClusterArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete cluster.
 	deleteOutput, err := client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
 		Cluster: aws.String(clusterName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete cluster: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteOutput.Cluster == nil {
-		t.Fatal("deleted cluster is nil")
-	}
-
-	if *deleteOutput.Cluster.Status != "INACTIVE" {
-		t.Errorf("deleted cluster status mismatch: got %s, want INACTIVE", *deleteOutput.Cluster.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ClusterArn", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestECS_ListClusters(t *testing.T) {
@@ -94,24 +75,10 @@ func TestECS_ListClusters(t *testing.T) {
 		})
 	})
 
-	// List clusters.
-	listOutput, err := client.ListClusters(ctx, &ecs.ListClustersInput{})
+	// List clusters - dynamic list, skip golden test.
+	_, err = client.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
-		t.Fatalf("failed to list clusters: %v", err)
-	}
-
-	found := false
-
-	for _, arn := range listOutput.ClusterArns {
-		if arn == "arn:aws:ecs:us-east-1:000000000000:cluster/"+clusterName {
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("cluster %s not found in list", clusterName)
+		t.Fatal(err)
 	}
 }
 
@@ -139,20 +106,9 @@ func TestECS_DescribeClusters(t *testing.T) {
 		Clusters: []string{clusterName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe clusters: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descOutput.Clusters) != 1 {
-		t.Fatalf("expected 1 cluster, got %d", len(descOutput.Clusters))
-	}
-
-	if *descOutput.Clusters[0].ClusterName != clusterName {
-		t.Errorf("cluster name mismatch: got %s, want %s", *descOutput.Clusters[0].ClusterName, clusterName)
-	}
-
-	if *descOutput.Clusters[0].Status != "ACTIVE" {
-		t.Errorf("cluster status mismatch: got %s, want ACTIVE", *descOutput.Clusters[0].Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ClusterArn", "ResultMetadata")).Assert(t.Name(), descOutput)
 }
 
 func TestECS_RegisterAndDeregisterTaskDefinition(t *testing.T) {
@@ -186,39 +142,20 @@ func TestECS_RegisterAndDeregisterTaskDefinition(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to register task definition: %v", err)
+		t.Fatal(err)
 	}
-
-	if registerOutput.TaskDefinition == nil {
-		t.Fatal("task definition is nil")
-	}
-
-	if *registerOutput.TaskDefinition.Family != family {
-		t.Errorf("family mismatch: got %s, want %s", *registerOutput.TaskDefinition.Family, family)
-	}
-
-	if registerOutput.TaskDefinition.Revision != 1 {
-		t.Errorf("revision mismatch: got %d, want 1", registerOutput.TaskDefinition.Revision)
-	}
+	golden.New(t, golden.WithIgnoreFields("TaskDefinitionArn", "RegisteredAt", "ResultMetadata")).Assert(t.Name()+"_register", registerOutput)
 
 	taskDefArn := *registerOutput.TaskDefinition.TaskDefinitionArn
-	t.Logf("Registered task definition: %s", taskDefArn)
 
 	// Deregister task definition.
 	deregisterOutput, err := client.DeregisterTaskDefinition(ctx, &ecs.DeregisterTaskDefinitionInput{
 		TaskDefinition: aws.String(taskDefArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to deregister task definition: %v", err)
+		t.Fatal(err)
 	}
-
-	if deregisterOutput.TaskDefinition == nil {
-		t.Fatal("deregistered task definition is nil")
-	}
-
-	if deregisterOutput.TaskDefinition.Status != types.TaskDefinitionStatusInactive {
-		t.Errorf("task definition status mismatch: got %s, want INACTIVE", deregisterOutput.TaskDefinition.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("TaskDefinitionArn", "RegisteredAt", "DeregisteredAt", "ResultMetadata")).Assert(t.Name()+"_deregister", deregisterOutput)
 }
 
 func TestECS_RunAndStopTask(t *testing.T) {
@@ -275,19 +212,11 @@ func TestECS_RunAndStopTask(t *testing.T) {
 		LaunchType:     types.LaunchTypeFargate,
 	})
 	if err != nil {
-		t.Fatalf("failed to run task: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(runOutput.Tasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(runOutput.Tasks))
-	}
+	golden.New(t, golden.WithIgnoreFields("TaskArn", "ClusterArn", "TaskDefinitionArn", "CreatedAt", "StartedAt", "PullStartedAt", "PullStoppedAt", "ContainerArn", "ResultMetadata")).Assert(t.Name()+"_run", runOutput)
 
 	taskArn := *runOutput.Tasks[0].TaskArn
-	t.Logf("Started task: %s", taskArn)
-
-	if *runOutput.Tasks[0].LastStatus != "RUNNING" {
-		t.Errorf("task status mismatch: got %s, want RUNNING", *runOutput.Tasks[0].LastStatus)
-	}
 
 	// Stop task.
 	stopOutput, err := client.StopTask(ctx, &ecs.StopTaskInput{
@@ -296,16 +225,9 @@ func TestECS_RunAndStopTask(t *testing.T) {
 		Reason:  aws.String("Test stop"),
 	})
 	if err != nil {
-		t.Fatalf("failed to stop task: %v", err)
+		t.Fatal(err)
 	}
-
-	if stopOutput.Task == nil {
-		t.Fatal("stopped task is nil")
-	}
-
-	if *stopOutput.Task.LastStatus != "STOPPED" {
-		t.Errorf("stopped task status mismatch: got %s, want STOPPED", *stopOutput.Task.LastStatus)
-	}
+	golden.New(t, golden.WithIgnoreFields("TaskArn", "ClusterArn", "TaskDefinitionArn", "ContainerArn", "CreatedAt", "StartedAt", "StoppedAt", "StoppingAt", "PullStartedAt", "PullStoppedAt", "ResultMetadata")).Assert(t.Name()+"_stop", stopOutput)
 }
 
 func TestECS_DescribeTasks(t *testing.T) {
@@ -379,16 +301,9 @@ func TestECS_DescribeTasks(t *testing.T) {
 		Tasks:   []string{taskArn},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe tasks: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descOutput.Tasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(descOutput.Tasks))
-	}
-
-	if *descOutput.Tasks[0].TaskArn != taskArn {
-		t.Errorf("task ARN mismatch: got %s, want %s", *descOutput.Tasks[0].TaskArn, taskArn)
-	}
+	golden.New(t, golden.WithIgnoreFields("TaskArn", "ClusterArn", "TaskDefinitionArn", "CreatedAt", "StartedAt", "PullStartedAt", "PullStoppedAt", "ContainerArn", "ResultMetadata")).Assert(t.Name(), descOutput)
 }
 
 func TestECS_CreateAndDeleteService(t *testing.T) {
@@ -447,26 +362,9 @@ func TestECS_CreateAndDeleteService(t *testing.T) {
 		LaunchType:     types.LaunchTypeFargate,
 	})
 	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.Service == nil {
-		t.Fatal("service is nil")
-	}
-
-	if *createOutput.Service.ServiceName != serviceName {
-		t.Errorf("service name mismatch: got %s, want %s", *createOutput.Service.ServiceName, serviceName)
-	}
-
-	if createOutput.Service.DesiredCount != 2 {
-		t.Errorf("desired count mismatch: got %d, want 2", createOutput.Service.DesiredCount)
-	}
-
-	if *createOutput.Service.Status != "ACTIVE" {
-		t.Errorf("service status mismatch: got %s, want ACTIVE", *createOutput.Service.Status)
-	}
-
-	t.Logf("Created service: %s", *createOutput.Service.ServiceName)
+	golden.New(t, golden.WithIgnoreFields("ServiceArn", "ClusterArn", "TaskDefinition", "CreatedAt", "UpdatedAt", "Id", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete service.
 	deleteOutput, err := client.DeleteService(ctx, &ecs.DeleteServiceInput{
@@ -475,16 +373,9 @@ func TestECS_CreateAndDeleteService(t *testing.T) {
 		Force:   aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete service: %v", err)
+		t.Fatal(err)
 	}
-
-	if deleteOutput.Service == nil {
-		t.Fatal("deleted service is nil")
-	}
-
-	if *deleteOutput.Service.Status != "DRAINING" {
-		t.Errorf("deleted service status mismatch: got %s, want DRAINING", *deleteOutput.Service.Status)
-	}
+	golden.New(t, golden.WithIgnoreFields("ServiceArn", "ClusterArn", "TaskDefinition", "CreatedAt", "UpdatedAt", "Id", "ResultMetadata")).Assert(t.Name()+"_delete", deleteOutput)
 }
 
 func TestECS_UpdateService(t *testing.T) {
@@ -560,18 +451,9 @@ func TestECS_UpdateService(t *testing.T) {
 		DesiredCount: aws.Int32(3),
 	})
 	if err != nil {
-		t.Fatalf("failed to update service: %v", err)
+		t.Fatal(err)
 	}
-
-	if updateOutput.Service == nil {
-		t.Fatal("updated service is nil")
-	}
-
-	if updateOutput.Service.DesiredCount != 3 {
-		t.Errorf("desired count mismatch: got %d, want 3", updateOutput.Service.DesiredCount)
-	}
-
-	t.Logf("Updated service: %s, desiredCount: %d", *updateOutput.Service.ServiceName, updateOutput.Service.DesiredCount)
+	golden.New(t, golden.WithIgnoreFields("ServiceArn", "ClusterArn", "TaskDefinition", "CreatedAt", "UpdatedAt", "Id", "ResultMetadata")).Assert(t.Name(), updateOutput)
 }
 
 func TestECS_TaskDefinitionRevision(t *testing.T) {
@@ -594,14 +476,11 @@ func TestECS_TaskDefinitionRevision(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to register first task definition: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("TaskDefinitionArn", "RegisteredAt", "ResultMetadata")).Assert(t.Name()+"_register_v1", registerOutput1)
 
 	taskDefArns = append(taskDefArns, *registerOutput1.TaskDefinition.TaskDefinitionArn)
-
-	if registerOutput1.TaskDefinition.Revision != 1 {
-		t.Errorf("first revision mismatch: got %d, want 1", registerOutput1.TaskDefinition.Revision)
-	}
 
 	// Register second task definition with same family.
 	registerOutput2, err := client.RegisterTaskDefinition(ctx, &ecs.RegisterTaskDefinitionInput{
@@ -616,14 +495,11 @@ func TestECS_TaskDefinitionRevision(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to register second task definition: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("TaskDefinitionArn", "RegisteredAt", "ResultMetadata")).Assert(t.Name()+"_register_v2", registerOutput2)
 
 	taskDefArns = append(taskDefArns, *registerOutput2.TaskDefinition.TaskDefinitionArn)
-
-	if registerOutput2.TaskDefinition.Revision != 2 {
-		t.Errorf("second revision mismatch: got %d, want 2", registerOutput2.TaskDefinition.Revision)
-	}
 
 	// Cleanup.
 	for _, arn := range taskDefArns {

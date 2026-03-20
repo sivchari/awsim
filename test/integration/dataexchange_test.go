@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dataexchange"
 	"github.com/aws/aws-sdk-go-v2/service/dataexchange/types"
+	"github.com/sivchari/golden"
 )
 
 func newDataExchangeClient(t *testing.T) *dataexchange.Client {
@@ -40,24 +41,10 @@ func TestDataExchange_CreateDataSet(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.Id == nil || *result.Id == "" {
-		t.Error("expected Id to be set")
-	}
-
-	if *result.Name != "test-dataset" {
-		t.Errorf("expected name 'test-dataset', got %s", *result.Name)
-	}
-
-	if *result.Description != "test description" {
-		t.Errorf("expected description 'test description', got %s", *result.Description)
-	}
-
-	if result.Arn == nil || *result.Arn == "" {
-		t.Error("expected Arn to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_GetDataSet(t *testing.T) {
@@ -70,19 +57,17 @@ func TestDataExchange_GetDataSet(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.GetDataSet(ctx, &dataexchange.GetDataSetInput{
 		DataSetId: createResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get data set: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.Name != "get-dataset" {
-		t.Errorf("expected name 'get-dataset', got %s", *result.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_ListDataSets(t *testing.T) {
@@ -95,17 +80,15 @@ func TestDataExchange_ListDataSets(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListDataSets(ctx, &dataexchange.ListDataSetsInput{})
 	if err != nil {
-		t.Fatalf("failed to list data sets: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.DataSets) == 0 {
-		t.Error("expected at least one data set")
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_UpdateDataSet(t *testing.T) {
@@ -118,7 +101,7 @@ func TestDataExchange_UpdateDataSet(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.UpdateDataSet(ctx, &dataexchange.UpdateDataSetInput{
@@ -126,12 +109,10 @@ func TestDataExchange_UpdateDataSet(t *testing.T) {
 		Description: aws.String("updated"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update data set: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.Description != "updated" {
-		t.Errorf("expected description 'updated', got %s", *result.Description)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_DeleteDataSet(t *testing.T) {
@@ -144,14 +125,14 @@ func TestDataExchange_DeleteDataSet(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteDataSet(ctx, &dataexchange.DeleteDataSetInput{
 		DataSetId: createResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete data set: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetDataSet(ctx, &dataexchange.GetDataSetInput{
@@ -172,7 +153,7 @@ func TestDataExchange_CreateRevision(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.CreateRevision(ctx, &dataexchange.CreateRevisionInput{
@@ -180,16 +161,10 @@ func TestDataExchange_CreateRevision(t *testing.T) {
 		Comment:   aws.String("initial revision"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create revision: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.Id == nil || *result.Id == "" {
-		t.Error("expected Id to be set")
-	}
-
-	if *result.Comment != "initial revision" {
-		t.Errorf("expected comment 'initial revision', got %s", *result.Comment)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "DataSetId", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_GetRevision(t *testing.T) {
@@ -202,7 +177,7 @@ func TestDataExchange_GetRevision(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	revResult, err := client.CreateRevision(ctx, &dataexchange.CreateRevisionInput{
@@ -210,7 +185,7 @@ func TestDataExchange_GetRevision(t *testing.T) {
 		Comment:   aws.String("get revision"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create revision: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.GetRevision(ctx, &dataexchange.GetRevisionInput{
@@ -218,12 +193,10 @@ func TestDataExchange_GetRevision(t *testing.T) {
 		RevisionId: revResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get revision: %v", err)
+		t.Fatal(err)
 	}
 
-	if *result.Comment != "get revision" {
-		t.Errorf("expected comment 'get revision', got %s", *result.Comment)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "DataSetId", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_ListRevisions(t *testing.T) {
@@ -236,26 +209,24 @@ func TestDataExchange_ListRevisions(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateRevision(ctx, &dataexchange.CreateRevisionInput{
 		DataSetId: dsResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to create revision: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListDataSetRevisions(ctx, &dataexchange.ListDataSetRevisionsInput{
 		DataSetId: dsResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to list revisions: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.Revisions) != 1 {
-		t.Errorf("expected 1 revision, got %d", len(result.Revisions))
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "DataSetId", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_DeleteRevision(t *testing.T) {
@@ -268,14 +239,14 @@ func TestDataExchange_DeleteRevision(t *testing.T) {
 		AssetType:   types.AssetTypeS3Snapshot,
 	})
 	if err != nil {
-		t.Fatalf("failed to create data set: %v", err)
+		t.Fatal(err)
 	}
 
 	revResult, err := client.CreateRevision(ctx, &dataexchange.CreateRevisionInput{
 		DataSetId: dsResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to create revision: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.DeleteRevision(ctx, &dataexchange.DeleteRevisionInput{
@@ -283,7 +254,7 @@ func TestDataExchange_DeleteRevision(t *testing.T) {
 		RevisionId: revResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete revision: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.GetRevision(ctx, &dataexchange.GetRevisionInput{
@@ -315,16 +286,10 @@ func TestDataExchange_CreateJob(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create job: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.Id == nil || *result.Id == "" {
-		t.Error("expected Id to be set")
-	}
-
-	if result.State != types.StateWaiting {
-		t.Errorf("expected state WAITING, got %s", result.State)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_GetJob(t *testing.T) {
@@ -347,19 +312,17 @@ func TestDataExchange_GetJob(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create job: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.GetJob(ctx, &dataexchange.GetJobInput{
 		JobId: createResult.Id,
 	})
 	if err != nil {
-		t.Fatalf("failed to get job: %v", err)
+		t.Fatal(err)
 	}
 
-	if result.Type != types.TypeImportAssetsFromS3 {
-		t.Errorf("expected type IMPORT_ASSETS_FROM_S3, got %s", result.Type)
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_ListJobs(t *testing.T) {
@@ -382,17 +345,15 @@ func TestDataExchange_ListJobs(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create job: %v", err)
+		t.Fatal(err)
 	}
 
 	result, err := client.ListJobs(ctx, &dataexchange.ListJobsInput{})
 	if err != nil {
-		t.Fatalf("failed to list jobs: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(result.Jobs) == 0 {
-		t.Error("expected at least one job")
-	}
+	golden.New(t, golden.WithIgnoreFields("Id", "Arn", "CreatedAt", "UpdatedAt", "ResultMetadata")).Assert(t.Name(), result)
 }
 
 func TestDataExchange_DataSetNotFound(t *testing.T) {

@@ -1,0 +1,50 @@
+{
+  "UserPool": {
+    "AccountRecoverySetting": null,
+    "AdminCreateUserConfig": null,
+    "AliasAttributes": null,
+    "Arn": null,
+    "AutoVerifiedAttributes": null,
+    "CreationDate": "2026-03-23T07:45:25Z",
+    "CustomDomain": null,
+    "DeletionProtection": "",
+    "DeviceConfiguration": null,
+    "Domain": null,
+    "EmailConfiguration": null,
+    "EmailConfigurationFailure": null,
+    "EmailVerificationMessage": null,
+    "EmailVerificationSubject": null,
+    "EstimatedNumberOfUsers": 0,
+    "Id": "us-east-1_91e35edc-",
+    "LambdaConfig": null,
+    "LastModifiedDate": "2026-03-23T07:45:25Z",
+    "MfaConfiguration": "",
+    "Name": "test-user-pool",
+    "Policies": {
+      "PasswordPolicy": {
+        "MinimumLength": 8,
+        "PasswordHistorySize": null,
+        "RequireLowercase": true,
+        "RequireNumbers": true,
+        "RequireSymbols": false,
+        "RequireUppercase": true,
+        "TemporaryPasswordValidityDays": 0
+      },
+      "SignInPolicy": null
+    },
+    "SchemaAttributes": null,
+    "SmsAuthenticationMessage": null,
+    "SmsConfiguration": null,
+    "SmsConfigurationFailure": null,
+    "SmsVerificationMessage": null,
+    "Status": "Enabled",
+    "UserAttributeUpdateSettings": null,
+    "UserPoolAddOns": null,
+    "UserPoolTags": null,
+    "UserPoolTier": "",
+    "UsernameAttributes": null,
+    "UsernameConfiguration": null,
+    "VerificationMessageTemplate": null
+  },
+  "ResultMetadata": {}
+}

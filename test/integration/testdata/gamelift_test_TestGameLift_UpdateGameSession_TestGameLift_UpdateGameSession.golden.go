@@ -1,14 +1,14 @@
 {
   "GameSession": {
-    "CreationTime": "2026-02-26T16:00:39Z",
+    "CreationTime": "2026-03-23T07:45:25Z",
     "CreatorId": null,
     "CurrentPlayerSessionCount": null,
     "DnsName": null,
-    "FleetArn": "arn:aws:gamelift:us-east-1:123456789012:fleet/fleet-f99ce73a",
-    "FleetId": "fleet-f99ce73a",
+    "FleetArn": "arn:aws:gamelift:us-east-1:123456789012:fleet/fleet-bb30c1b5",
+    "FleetId": "fleet-bb30c1b5",
     "GameProperties": null,
     "GameSessionData": null,
-    "GameSessionId": "gsess-d5ded29a",
+    "GameSessionId": "gsess-6042af4a",
     "IpAddress": "10.0.0.1",
     "Location": null,
     "MatchmakerData": null,

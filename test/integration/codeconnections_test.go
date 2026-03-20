@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/codeconnections"
 	"github.com/aws/aws-sdk-go-v2/service/codeconnections/types"
+	"github.com/sivchari/golden"
 )
 
 func newCodeConnectionsClient(t *testing.T) *codeconnections.Client {
@@ -41,25 +42,20 @@ func TestCodeConnections_CreateAndDeleteConnection(t *testing.T) {
 		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
-		t.Fatalf("failed to create connection: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.ConnectionArn == nil || *createOutput.ConnectionArn == "" {
-		t.Fatal("connection ARN is empty")
-	}
+	golden.New(t, golden.WithIgnoreFields("ConnectionArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	connectionArn := *createOutput.ConnectionArn
-	t.Logf("Created connection: %s", connectionArn)
 
 	// Delete connection.
 	_, err = client.DeleteConnection(ctx, &codeconnections.DeleteConnectionInput{
 		ConnectionArn: aws.String(connectionArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete connection: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted connection: %s", connectionArn)
 }
 
 func TestCodeConnections_GetConnection(t *testing.T) {
@@ -72,7 +68,7 @@ func TestCodeConnections_GetConnection(t *testing.T) {
 		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
-		t.Fatalf("failed to create connection: %v", err)
+		t.Fatal(err)
 	}
 
 	connectionArn := *createOutput.ConnectionArn
@@ -88,24 +84,10 @@ func TestCodeConnections_GetConnection(t *testing.T) {
 		ConnectionArn: aws.String(connectionArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to get connection: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Connection == nil {
-		t.Fatal("connection is nil")
-	}
-
-	if *getOutput.Connection.ConnectionArn != connectionArn {
-		t.Errorf("connection ARN mismatch: got %s, want %s",
-			*getOutput.Connection.ConnectionArn, connectionArn)
-	}
-
-	if *getOutput.Connection.ConnectionName != "test-get-connection" {
-		t.Errorf("connection name mismatch: got %s, want test-get-connection",
-			*getOutput.Connection.ConnectionName)
-	}
-
-	t.Logf("Got connection: %s", *getOutput.Connection.ConnectionName)
+	golden.New(t, golden.WithIgnoreFields("ConnectionArn", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestCodeConnections_ListConnections(t *testing.T) {
@@ -140,14 +122,10 @@ func TestCodeConnections_ListConnections(t *testing.T) {
 		MaxResults: 10,
 	})
 	if err != nil {
-		t.Fatalf("failed to list connections: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.Connections) == 0 {
-		t.Fatal("no connections returned")
-	}
-
-	t.Logf("Listed %d connections", len(listOutput.Connections))
+	golden.New(t, golden.WithIgnoreFields("ConnectionArn", "ResultMetadata")).Assert(t.Name()+"_list", listOutput)
 }
 
 func TestCodeConnections_CreateAndDeleteHost(t *testing.T) {
@@ -161,25 +139,20 @@ func TestCodeConnections_CreateAndDeleteHost(t *testing.T) {
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create host: %v", err)
+		t.Fatal(err)
 	}
 
-	if createOutput.HostArn == nil || *createOutput.HostArn == "" {
-		t.Fatal("host ARN is empty")
-	}
+	golden.New(t, golden.WithIgnoreFields("HostArn", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	hostArn := *createOutput.HostArn
-	t.Logf("Created host: %s", hostArn)
 
 	// Delete host.
 	_, err = client.DeleteHost(ctx, &codeconnections.DeleteHostInput{
 		HostArn: aws.String(hostArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete host: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Deleted host: %s", hostArn)
 }
 
 func TestCodeConnections_GetHost(t *testing.T) {
@@ -193,7 +166,7 @@ func TestCodeConnections_GetHost(t *testing.T) {
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create host: %v", err)
+		t.Fatal(err)
 	}
 
 	hostArn := *createOutput.HostArn
@@ -209,18 +182,10 @@ func TestCodeConnections_GetHost(t *testing.T) {
 		HostArn: aws.String(hostArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to get host: %v", err)
+		t.Fatal(err)
 	}
 
-	if getOutput.Name == nil || *getOutput.Name != "test-get-host" {
-		t.Errorf("host name mismatch: got %v, want test-get-host", getOutput.Name)
-	}
-
-	if getOutput.ProviderEndpoint == nil || *getOutput.ProviderEndpoint != "https://github.example.com" {
-		t.Errorf("provider endpoint mismatch: got %v, want https://github.example.com", getOutput.ProviderEndpoint)
-	}
-
-	t.Logf("Got host: %s", *getOutput.Name)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestCodeConnections_ListHosts(t *testing.T) {
@@ -234,7 +199,7 @@ func TestCodeConnections_ListHosts(t *testing.T) {
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create host: %v", err)
+		t.Fatal(err)
 	}
 
 	hostArn := *createOutput.HostArn
@@ -250,14 +215,10 @@ func TestCodeConnections_ListHosts(t *testing.T) {
 		MaxResults: 10,
 	})
 	if err != nil {
-		t.Fatalf("failed to list hosts: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listOutput.Hosts) == 0 {
-		t.Fatal("no hosts returned")
-	}
-
-	t.Logf("Listed %d hosts", len(listOutput.Hosts))
+	golden.New(t, golden.WithIgnoreFields("HostArn", "ResultMetadata")).Assert(t.Name()+"_list", listOutput)
 }
 
 func TestCodeConnections_UpdateHost(t *testing.T) {
@@ -271,7 +232,7 @@ func TestCodeConnections_UpdateHost(t *testing.T) {
 		ProviderEndpoint: aws.String("https://github.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create host: %v", err)
+		t.Fatal(err)
 	}
 
 	hostArn := *createOutput.HostArn
@@ -288,7 +249,7 @@ func TestCodeConnections_UpdateHost(t *testing.T) {
 		ProviderEndpoint: aws.String("https://github-new.example.com"),
 	})
 	if err != nil {
-		t.Fatalf("failed to update host: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify update.
@@ -296,15 +257,10 @@ func TestCodeConnections_UpdateHost(t *testing.T) {
 		HostArn: aws.String(hostArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to get host: %v", err)
+		t.Fatal(err)
 	}
 
-	if *getOutput.ProviderEndpoint != "https://github-new.example.com" {
-		t.Errorf("provider endpoint not updated: got %s, want https://github-new.example.com",
-			*getOutput.ProviderEndpoint)
-	}
-
-	t.Logf("Updated host: %s", hostArn)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestCodeConnections_ConnectionNotFound(t *testing.T) {
@@ -343,7 +299,7 @@ func TestCodeConnections_TagResource(t *testing.T) {
 		ProviderType:   types.ProviderTypeGithub,
 	})
 	if err != nil {
-		t.Fatalf("failed to create connection: %v", err)
+		t.Fatal(err)
 	}
 
 	connectionArn := *createOutput.ConnectionArn
@@ -363,7 +319,7 @@ func TestCodeConnections_TagResource(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to tag resource: %v", err)
+		t.Fatal(err)
 	}
 
 	// List tags.
@@ -371,14 +327,10 @@ func TestCodeConnections_TagResource(t *testing.T) {
 		ResourceArn: aws.String(connectionArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to list tags: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listTagsOutput.Tags) != 2 {
-		t.Errorf("expected 2 tags, got %d", len(listTagsOutput.Tags))
-	}
-
-	t.Logf("Tagged resource with %d tags", len(listTagsOutput.Tags))
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_list_tags", listTagsOutput)
 }
 
 func TestCodeConnections_UntagResource(t *testing.T) {
@@ -395,7 +347,7 @@ func TestCodeConnections_UntagResource(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create connection: %v", err)
+		t.Fatal(err)
 	}
 
 	connectionArn := *createOutput.ConnectionArn
@@ -412,7 +364,7 @@ func TestCodeConnections_UntagResource(t *testing.T) {
 		TagKeys:     []string{"Environment"},
 	})
 	if err != nil {
-		t.Fatalf("failed to untag resource: %v", err)
+		t.Fatal(err)
 	}
 
 	// List tags.
@@ -420,12 +372,8 @@ func TestCodeConnections_UntagResource(t *testing.T) {
 		ResourceArn: aws.String(connectionArn),
 	})
 	if err != nil {
-		t.Fatalf("failed to list tags: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(listTagsOutput.Tags) != 1 {
-		t.Errorf("expected 1 tag, got %d", len(listTagsOutput.Tags))
-	}
-
-	t.Logf("Untagged resource, remaining tags: %d", len(listTagsOutput.Tags))
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_list_tags", listTagsOutput)
 }

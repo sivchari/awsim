@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/sivchari/golden"
 )
 
 func newCloudWatchLogsClient(t *testing.T) *cloudwatchlogs.Client {
@@ -42,7 +43,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogGroup(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify log group exists
@@ -50,7 +51,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogGroup(t *testing.T) {
 		LogGroupNamePrefix: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe log groups: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -71,7 +72,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogGroup(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete log group: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -86,7 +87,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogStream(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -105,7 +106,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogStream(t *testing.T) {
 		LogStreamName: aws.String(logStreamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify log stream exists
@@ -114,7 +115,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogStream(t *testing.T) {
 		LogStreamNamePrefix: aws.String(logStreamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe log streams: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -136,7 +137,7 @@ func TestCloudWatchLogs_CreateAndDeleteLogStream(t *testing.T) {
 		LogStreamName: aws.String(logStreamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete log stream: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -151,7 +152,7 @@ func TestCloudWatchLogs_PutAndGetLogEvents(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -170,7 +171,7 @@ func TestCloudWatchLogs_PutAndGetLogEvents(t *testing.T) {
 		LogStreamName: aws.String(logStreamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Put log events
@@ -190,7 +191,7 @@ func TestCloudWatchLogs_PutAndGetLogEvents(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put log events: %v", err)
+		t.Fatal(err)
 	}
 
 	// Get log events
@@ -200,16 +201,10 @@ func TestCloudWatchLogs_PutAndGetLogEvents(t *testing.T) {
 		StartFromHead: aws.Bool(true),
 	})
 	if err != nil {
-		t.Fatalf("failed to get log events: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(getResult.Events) != 2 {
-		t.Errorf("expected 2 events, got %d", len(getResult.Events))
-	}
-
-	if len(getResult.Events) > 0 && *getResult.Events[0].Message != "Test message 1" {
-		t.Errorf("expected first message to be 'Test message 1', got '%s'", *getResult.Events[0].Message)
-	}
+	golden.New(t, golden.WithIgnoreFields("Timestamp", "IngestionTime", "NextBackwardToken", "NextForwardToken", "ResultMetadata")).Assert(t.Name(), getResult)
 }
 
 func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
@@ -223,7 +218,7 @@ func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -242,7 +237,7 @@ func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
 		LogStreamName: aws.String(logStreamName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log stream: %v", err)
+		t.Fatal(err)
 	}
 
 	// Put log events
@@ -266,7 +261,7 @@ func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to put log events: %v", err)
+		t.Fatal(err)
 	}
 
 	// Filter log events for ERROR
@@ -275,12 +270,10 @@ func TestCloudWatchLogs_FilterLogEvents(t *testing.T) {
 		FilterPattern: aws.String("ERROR"),
 	})
 	if err != nil {
-		t.Fatalf("failed to filter log events: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(filterResult.Events) != 2 {
-		t.Errorf("expected 2 filtered events, got %d", len(filterResult.Events))
-	}
+	golden.New(t, golden.WithIgnoreFields("Timestamp", "IngestionTime", "EventId", "ResultMetadata")).Assert(t.Name(), filterResult)
 }
 
 func TestCloudWatchLogs_DescribeLogGroups(t *testing.T) {
@@ -295,14 +288,14 @@ func TestCloudWatchLogs_DescribeLogGroups(t *testing.T) {
 		LogGroupName: aws.String(logGroupName1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group 1: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
 		LogGroupName: aws.String(logGroupName2),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group 2: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -319,12 +312,10 @@ func TestCloudWatchLogs_DescribeLogGroups(t *testing.T) {
 		LogGroupNamePrefix: aws.String(logGroupPrefix),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe log groups: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descResult.LogGroups) < 2 {
-		t.Errorf("expected at least 2 log groups, got %d", len(descResult.LogGroups))
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "LogGroupArn", "CreationTime", "ResultMetadata")).Assert(t.Name(), descResult)
 }
 
 func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
@@ -340,7 +331,7 @@ func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
 		LogGroupName: aws.String(logGroupName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log group: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -363,7 +354,7 @@ func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
 		LogStreamName: aws.String(logStreamName1),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log stream 1: %v", err)
+		t.Fatal(err)
 	}
 
 	_, err = client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
@@ -371,7 +362,7 @@ func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
 		LogStreamName: aws.String(logStreamName2),
 	})
 	if err != nil {
-		t.Fatalf("failed to create log stream 2: %v", err)
+		t.Fatal(err)
 	}
 
 	// Describe log streams with prefix
@@ -380,10 +371,8 @@ func TestCloudWatchLogs_DescribeLogStreams(t *testing.T) {
 		LogStreamNamePrefix: aws.String(logStreamPrefix),
 	})
 	if err != nil {
-		t.Fatalf("failed to describe log streams: %v", err)
+		t.Fatal(err)
 	}
 
-	if len(descResult.LogStreams) != 2 {
-		t.Errorf("expected 2 log streams, got %d", len(descResult.LogStreams))
-	}
+	golden.New(t, golden.WithIgnoreFields("Arn", "CreationTime", "FirstEventTimestamp", "LastEventTimestamp", "LastIngestionTime", "UploadSequenceToken", "ResultMetadata")).Assert(t.Name(), descResult)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/sivchari/golden"
 )
 
 func newSQSClient(t *testing.T) *sqs.Client {
@@ -41,21 +42,16 @@ func TestSQS_CreateAndDeleteQueue(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.QueueUrl == nil {
-		t.Fatal("queue URL is nil")
-	}
-
-	t.Logf("Created queue: %s", *createOutput.QueueUrl)
+	golden.New(t, golden.WithIgnoreFields("QueueUrl", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Delete queue.
 	_, err = client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 		QueueUrl: createOutput.QueueUrl,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete queue: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -69,7 +65,7 @@ func TestSQS_ListQueues(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -81,7 +77,7 @@ func TestSQS_ListQueues(t *testing.T) {
 	// List queues.
 	listOutput, err := client.ListQueues(ctx, &sqs.ListQueuesInput{})
 	if err != nil {
-		t.Fatalf("failed to list queues: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -109,7 +105,7 @@ func TestSQS_GetQueueUrl(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -123,12 +119,9 @@ func TestSQS_GetQueueUrl(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get queue URL: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.QueueUrl != *createOutput.QueueUrl {
-		t.Errorf("queue URL mismatch: got %s, want %s", *getOutput.QueueUrl, *createOutput.QueueUrl)
-	}
+	golden.New(t, golden.WithIgnoreFields("QueueUrl", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestSQS_SendAndReceiveMessage(t *testing.T) {
@@ -142,7 +135,7 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -157,14 +150,9 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 		MessageBody: aws.String(messageBody),
 	})
 	if err != nil {
-		t.Fatalf("failed to send message: %v", err)
+		t.Fatal(err)
 	}
-
-	if sendOutput.MessageId == nil {
-		t.Fatal("message ID is nil")
-	}
-
-	t.Logf("Sent message: %s", *sendOutput.MessageId)
+	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "SequenceNumber", "ResultMetadata")).Assert(t.Name()+"_send", sendOutput)
 
 	// Receive message.
 	receiveOutput, err := client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
@@ -172,16 +160,9 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 		MaxNumberOfMessages: 1,
 	})
 	if err != nil {
-		t.Fatalf("failed to receive message: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(receiveOutput.Messages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(receiveOutput.Messages))
-	}
-
-	if *receiveOutput.Messages[0].Body != messageBody {
-		t.Errorf("message body mismatch: got %s, want %s", *receiveOutput.Messages[0].Body, messageBody)
-	}
+	golden.New(t, golden.WithIgnoreFields("MessageId", "ReceiptHandle", "MD5OfBody", "ApproximateFirstReceiveTimestamp", "SentTimestamp", "ResultMetadata")).Assert(t.Name()+"_receive", receiveOutput)
 
 	// Delete message.
 	_, err = client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
@@ -189,7 +170,7 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 		ReceiptHandle: receiveOutput.Messages[0].ReceiptHandle,
 	})
 	if err != nil {
-		t.Fatalf("failed to delete message: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -203,7 +184,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -219,7 +200,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 			MessageBody: aws.String("test message"),
 		})
 		if err != nil {
-			t.Fatalf("failed to send message: %v", err)
+			t.Fatal(err)
 		}
 	}
 
@@ -228,7 +209,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 		QueueUrl: createOutput.QueueUrl,
 	})
 	if err != nil {
-		t.Fatalf("failed to purge queue: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify queue is empty.
@@ -237,7 +218,7 @@ func TestSQS_PurgeQueue(t *testing.T) {
 		MaxNumberOfMessages: 10,
 	})
 	if err != nil {
-		t.Fatalf("failed to receive message: %v", err)
+		t.Fatal(err)
 	}
 
 	if len(receiveOutput.Messages) != 0 {
@@ -258,7 +239,7 @@ func TestSQS_GetQueueAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -275,16 +256,9 @@ func TestSQS_GetQueueAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get queue attributes: %v", err)
+		t.Fatal(err)
 	}
-
-	if _, ok := getOutput.Attributes["QueueArn"]; !ok {
-		t.Error("QueueArn attribute not found")
-	}
-
-	if vt, ok := getOutput.Attributes["VisibilityTimeout"]; !ok || vt != "60" {
-		t.Errorf("VisibilityTimeout mismatch: got %s, want 60", vt)
-	}
+	golden.New(t, golden.WithIgnoreFields("QueueArn", "CreatedTimestamp", "LastModifiedTimestamp", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestSQS_SetQueueAttributes(t *testing.T) {
@@ -297,7 +271,7 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -314,7 +288,7 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to set queue attributes: %v", err)
+		t.Fatal(err)
 	}
 
 	// Verify attributes.
@@ -325,12 +299,9 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get queue attributes: %v", err)
+		t.Fatal(err)
 	}
-
-	if vt, ok := getOutput.Attributes["VisibilityTimeout"]; !ok || vt != "120" {
-		t.Errorf("VisibilityTimeout mismatch: got %s, want 120", vt)
-	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
@@ -347,7 +318,7 @@ func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create FIFO queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -363,18 +334,9 @@ func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
 		MessageGroupId: aws.String("group1"),
 	})
 	if err != nil {
-		t.Fatalf("failed to send message to FIFO queue: %v", err)
+		t.Fatal(err)
 	}
-
-	if sendOutput.MessageId == nil {
-		t.Fatal("message ID is nil")
-	}
-
-	if sendOutput.SequenceNumber == nil {
-		t.Fatal("sequence number is nil for FIFO queue")
-	}
-
-	t.Logf("Sent message: %s, SequenceNumber: %s", *sendOutput.MessageId, *sendOutput.SequenceNumber)
+	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "SequenceNumber", "ResultMetadata")).Assert(t.Name(), sendOutput)
 }
 
 func TestSQS_FIFOQueue_GetAttributes(t *testing.T) {
@@ -391,7 +353,7 @@ func TestSQS_FIFOQueue_GetAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create FIFO queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -408,16 +370,9 @@ func TestSQS_FIFOQueue_GetAttributes(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to get queue attributes: %v", err)
+		t.Fatal(err)
 	}
-
-	if fifo, ok := getOutput.Attributes["FifoQueue"]; !ok || fifo != "true" {
-		t.Errorf("FifoQueue attribute mismatch: got %s, want true", fifo)
-	}
-
-	if cbd, ok := getOutput.Attributes["ContentBasedDeduplication"]; !ok || cbd != "true" {
-		t.Errorf("ContentBasedDeduplication attribute mismatch: got %s, want true", cbd)
-	}
+	golden.New(t, golden.WithIgnoreFields("QueueArn", "CreatedTimestamp", "LastModifiedTimestamp", "ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
 func TestSQS_FIFOQueue_MissingMessageGroupId(t *testing.T) {
@@ -434,7 +389,7 @@ func TestSQS_FIFOQueue_MissingMessageGroupId(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create FIFO queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -466,7 +421,7 @@ func TestSQS_FIFOQueue_ExplicitDeduplicationId(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create FIFO queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -483,14 +438,9 @@ func TestSQS_FIFOQueue_ExplicitDeduplicationId(t *testing.T) {
 		MessageDeduplicationId: aws.String("dedup-123"),
 	})
 	if err != nil {
-		t.Fatalf("failed to send message with deduplication ID: %v", err)
+		t.Fatal(err)
 	}
-
-	if sendOutput.SequenceNumber == nil {
-		t.Fatal("sequence number is nil for FIFO queue")
-	}
-
-	t.Logf("Sent message: %s, SequenceNumber: %s", *sendOutput.MessageId, *sendOutput.SequenceNumber)
+	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "SequenceNumber", "ResultMetadata")).Assert(t.Name(), sendOutput)
 }
 
 func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
@@ -506,7 +456,7 @@ func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to create FIFO queue: %v", err)
+		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {

@@ -1,8 +1,8 @@
 {
   "Jobs": [
     {
-      "JobDefinition": "arn:aws:batch:us-east-1:000000000000:job-definition/terminate-job-test-jd:2",
-      "JobId": "8a3d99ec-311b-402d-8ef0-9b53cb2605ad",
+      "JobDefinition": "arn:aws:batch:us-east-1:000000000000:job-definition/terminate-job-test-jd:1",
+      "JobId": "f009ebc5-a92d-43be-85bc-129e76b6e486",
       "JobName": "terminate-test-job",
       "JobQueue": "arn:aws:batch:us-east-1:000000000000:job-queue/terminate-job-test-jq",
       "StartedAt": null,
@@ -11,14 +11,14 @@
       "Attempts": null,
       "ConsumableResourceProperties": null,
       "Container": null,
-      "CreatedAt": 1772121639450,
+      "CreatedAt": 1774251928788,
       "DependsOn": null,
       "EcsProperties": null,
       "EksAttempts": null,
       "EksProperties": null,
       "IsCancelled": null,
       "IsTerminated": true,
-      "JobArn": "arn:aws:batch:us-east-1:000000000000:job/8a3d99ec-311b-402d-8ef0-9b53cb2605ad",
+      "JobArn": "arn:aws:batch:us-east-1:000000000000:job/f009ebc5-a92d-43be-85bc-129e76b6e486",
       "NodeDetails": null,
       "NodeProperties": null,
       "Parameters": null,
@@ -28,7 +28,7 @@
       "SchedulingPriority": null,
       "ShareIdentifier": null,
       "StatusReason": "Test termination",
-      "StoppedAt": 1772121639451,
+      "StoppedAt": 1774251928789,
       "Tags": null,
       "Timeout": null
     }

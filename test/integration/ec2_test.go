@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/sivchari/golden"
 )
 
 func newEC2Client(t *testing.T) *ec2.Client {
@@ -43,12 +44,9 @@ func TestEC2_RunAndDescribeInstances(t *testing.T) {
 		MaxCount:     aws.Int32(2),
 	})
 	if err != nil {
-		t.Fatalf("failed to run instances: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(runResult.Instances) != 2 {
-		t.Errorf("expected 2 instances, got %d", len(runResult.Instances))
-	}
+	golden.New(t, golden.WithIgnoreFields("InstanceId", "ReservationId", "RequesterId", "OwnerId", "LaunchTime", "PrivateIpAddress", "ResultMetadata")).Assert(t.Name()+"_run", runResult)
 
 	instanceIDs := make([]string, 0, len(runResult.Instances))
 	for _, inst := range runResult.Instances {
@@ -66,17 +64,9 @@ func TestEC2_RunAndDescribeInstances(t *testing.T) {
 		InstanceIds: instanceIDs,
 	})
 	if err != nil {
-		t.Fatalf("failed to describe instances: %v", err)
+		t.Fatal(err)
 	}
-
-	totalInstances := 0
-	for _, reservation := range descResult.Reservations {
-		totalInstances += len(reservation.Instances)
-	}
-
-	if totalInstances != 2 {
-		t.Errorf("expected 2 instances in describe result, got %d", totalInstances)
-	}
+	golden.New(t, golden.WithIgnoreFields("InstanceId", "ReservationId", "RequesterId", "OwnerId", "LaunchTime", "PrivateIpAddress", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestEC2_StartAndStopInstances(t *testing.T) {
@@ -107,32 +97,18 @@ func TestEC2_StartAndStopInstances(t *testing.T) {
 		InstanceIds: []string{instanceID},
 	})
 	if err != nil {
-		t.Fatalf("failed to stop instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(stopResult.StoppingInstances) != 1 {
-		t.Errorf("expected 1 stopping instance, got %d", len(stopResult.StoppingInstances))
-	}
-
-	if stopResult.StoppingInstances[0].CurrentState.Name != types.InstanceStateNameStopped {
-		t.Errorf("expected stopped state, got %s", stopResult.StoppingInstances[0].CurrentState.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("InstanceId", "ResultMetadata")).Assert(t.Name()+"_stop", stopResult)
 
 	// Start instance
 	startResult, err := client.StartInstances(ctx, &ec2.StartInstancesInput{
 		InstanceIds: []string{instanceID},
 	})
 	if err != nil {
-		t.Fatalf("failed to start instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(startResult.StartingInstances) != 1 {
-		t.Errorf("expected 1 starting instance, got %d", len(startResult.StartingInstances))
-	}
-
-	if startResult.StartingInstances[0].CurrentState.Name != types.InstanceStateNameRunning {
-		t.Errorf("expected running state, got %s", startResult.StartingInstances[0].CurrentState.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("InstanceId", "ResultMetadata")).Assert(t.Name()+"_start", startResult)
 }
 
 func TestEC2_TerminateInstances(t *testing.T) {
@@ -157,16 +133,9 @@ func TestEC2_TerminateInstances(t *testing.T) {
 		InstanceIds: []string{instanceID},
 	})
 	if err != nil {
-		t.Fatalf("failed to terminate instance: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(termResult.TerminatingInstances) != 1 {
-		t.Errorf("expected 1 terminating instance, got %d", len(termResult.TerminatingInstances))
-	}
-
-	if termResult.TerminatingInstances[0].CurrentState.Name != types.InstanceStateNameTerminated {
-		t.Errorf("expected terminated state, got %s", termResult.TerminatingInstances[0].CurrentState.Name)
-	}
+	golden.New(t, golden.WithIgnoreFields("InstanceId", "ResultMetadata")).Assert(t.Name(), termResult)
 }
 
 func TestEC2_CreateAndDeleteSecurityGroup(t *testing.T) {
@@ -180,12 +149,9 @@ func TestEC2_CreateAndDeleteSecurityGroup(t *testing.T) {
 		Description: aws.String("Test security group"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create security group: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.GroupId == nil {
-		t.Error("expected group ID to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("GroupId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	groupID := *createResult.GroupId
 
@@ -221,7 +187,7 @@ func TestEC2_AuthorizeSecurityGroupIngress(t *testing.T) {
 	})
 
 	// Authorize ingress
-	_, err = client.AuthorizeSecurityGroupIngress(ctx, &ec2.AuthorizeSecurityGroupIngressInput{
+	ingressResult, err := client.AuthorizeSecurityGroupIngress(ctx, &ec2.AuthorizeSecurityGroupIngressInput{
 		GroupId: aws.String(groupID),
 		IpPermissions: []types.IpPermission{
 			{
@@ -238,8 +204,9 @@ func TestEC2_AuthorizeSecurityGroupIngress(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to authorize security group ingress: %v", err)
+		t.Fatal(err)
 	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), ingressResult)
 }
 
 func TestEC2_CreateAndDeleteKeyPair(t *testing.T) {
@@ -252,16 +219,9 @@ func TestEC2_CreateAndDeleteKeyPair(t *testing.T) {
 		KeyName: aws.String(keyName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create key pair: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.KeyPairId == nil {
-		t.Error("expected key pair ID to be set")
-	}
-
-	if createResult.KeyMaterial == nil || *createResult.KeyMaterial == "" {
-		t.Error("expected key material to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("KeyPairId", "KeyFingerprint", "KeyMaterial", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	t.Cleanup(func() {
 		_, _ = client.DeleteKeyPair(context.Background(), &ec2.DeleteKeyPairInput{
@@ -302,16 +262,9 @@ func TestEC2_DescribeKeyPairs(t *testing.T) {
 		KeyNames: []string{keyName},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe key pairs: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.KeyPairs) != 1 {
-		t.Errorf("expected 1 key pair, got %d", len(descResult.KeyPairs))
-	}
-
-	if *descResult.KeyPairs[0].KeyName != keyName {
-		t.Errorf("expected key name %s, got %s", keyName, *descResult.KeyPairs[0].KeyName)
-	}
+	golden.New(t, golden.WithIgnoreFields("KeyPairId", "KeyFingerprint", "ResultMetadata")).Assert(t.Name(), descResult)
 }
 
 func TestEC2_CreateAndDeleteVpc(t *testing.T) {
@@ -323,16 +276,9 @@ func TestEC2_CreateAndDeleteVpc(t *testing.T) {
 		CidrBlock: aws.String("10.0.0.0/16"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create VPC: %v", err)
+		t.Fatal(err)
 	}
-
-	if createResult.Vpc == nil {
-		t.Fatal("expected VPC to be set")
-	}
-
-	if createResult.Vpc.VpcId == nil {
-		t.Error("expected VPC ID to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("VpcId", "OwnerId", "ResultMetadata")).Assert(t.Name()+"_create", createResult)
 
 	vpcID := *createResult.Vpc.VpcId
 
@@ -370,16 +316,9 @@ func TestEC2_DescribeVpcs(t *testing.T) {
 		VpcIds: []string{vpcID},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe VPCs: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.Vpcs) != 1 {
-		t.Errorf("expected 1 VPC, got %d", len(descResult.Vpcs))
-	}
-
-	if *descResult.Vpcs[0].VpcId != vpcID {
-		t.Errorf("expected VPC ID %s, got %s", vpcID, *descResult.Vpcs[0].VpcId)
-	}
+	golden.New(t, golden.WithIgnoreFields("VpcId", "OwnerId", "ResultMetadata")).Assert(t.Name(), descResult)
 }
 
 func TestEC2_CreateAndDeleteSubnet(t *testing.T) {
@@ -408,12 +347,9 @@ func TestEC2_CreateAndDeleteSubnet(t *testing.T) {
 		CidrBlock: aws.String("10.0.1.0/24"),
 	})
 	if err != nil {
-		t.Fatalf("failed to create subnet: %v", err)
+		t.Fatal(err)
 	}
-
-	if subnetResult.Subnet == nil {
-		t.Fatal("expected subnet to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("SubnetId", "SubnetArn", "VpcId", "OwnerId", "AvailabilityZoneId", "ResultMetadata")).Assert(t.Name()+"_create", subnetResult)
 
 	subnetID := *subnetResult.Subnet.SubnetId
 
@@ -443,12 +379,9 @@ func TestEC2_CreateInternetGatewayAndAttach(t *testing.T) {
 	// Create Internet Gateway
 	igwResult, err := client.CreateInternetGateway(ctx, &ec2.CreateInternetGatewayInput{})
 	if err != nil {
-		t.Fatalf("failed to create internet gateway: %v", err)
+		t.Fatal(err)
 	}
-
-	if igwResult.InternetGateway == nil {
-		t.Fatal("expected internet gateway to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("InternetGatewayId", "OwnerId", "ResultMetadata")).Assert(t.Name()+"_create_igw", igwResult)
 
 	igwID := *igwResult.InternetGateway.InternetGatewayId
 
@@ -479,20 +412,9 @@ func TestEC2_CreateInternetGatewayAndAttach(t *testing.T) {
 		InternetGatewayIds: []string{igwID},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe internet gateways: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.InternetGateways) != 1 {
-		t.Errorf("expected 1 internet gateway, got %d", len(descResult.InternetGateways))
-	}
-
-	if len(descResult.InternetGateways[0].Attachments) != 1 {
-		t.Errorf("expected 1 attachment, got %d", len(descResult.InternetGateways[0].Attachments))
-	}
-
-	if *descResult.InternetGateways[0].Attachments[0].VpcId != vpcID {
-		t.Errorf("expected attachment VPC ID %s, got %s", vpcID, *descResult.InternetGateways[0].Attachments[0].VpcId)
-	}
+	golden.New(t, golden.WithIgnoreFields("InternetGatewayId", "OwnerId", "VpcId", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestEC2_CreateRouteTableAndAssociate(t *testing.T) {
@@ -534,12 +456,9 @@ func TestEC2_CreateRouteTableAndAssociate(t *testing.T) {
 		VpcId: aws.String(vpcID),
 	})
 	if err != nil {
-		t.Fatalf("failed to create route table: %v", err)
+		t.Fatal(err)
 	}
-
-	if rtResult.RouteTable == nil {
-		t.Fatal("expected route table to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("RouteTableId", "VpcId", "OwnerId", "ResultMetadata")).Assert(t.Name()+"_create_rt", rtResult)
 
 	rtID := *rtResult.RouteTable.RouteTableId
 
@@ -549,12 +468,9 @@ func TestEC2_CreateRouteTableAndAssociate(t *testing.T) {
 		SubnetId:     aws.String(subnetID),
 	})
 	if err != nil {
-		t.Fatalf("failed to associate route table: %v", err)
+		t.Fatal(err)
 	}
-
-	if assocResult.AssociationId == nil {
-		t.Error("expected association ID to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("AssociationId", "ResultMetadata")).Assert(t.Name()+"_associate", assocResult)
 }
 
 func TestEC2_CreateRoute(t *testing.T) {
@@ -626,17 +542,9 @@ func TestEC2_CreateRoute(t *testing.T) {
 		RouteTableIds: []string{rtID},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe route tables: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.RouteTables) != 1 {
-		t.Errorf("expected 1 route table, got %d", len(descResult.RouteTables))
-	}
-
-	// Check for the new route (should have local + our new route)
-	if len(descResult.RouteTables[0].Routes) < 2 {
-		t.Errorf("expected at least 2 routes, got %d", len(descResult.RouteTables[0].Routes))
-	}
+	golden.New(t, golden.WithIgnoreFields("RouteTableId", "VpcId", "OwnerId", "GatewayId", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }
 
 func TestEC2_CreateNatGateway(t *testing.T) {
@@ -679,12 +587,9 @@ func TestEC2_CreateNatGateway(t *testing.T) {
 		ConnectivityType: types.ConnectivityTypePrivate,
 	})
 	if err != nil {
-		t.Fatalf("failed to create NAT gateway: %v", err)
+		t.Fatal(err)
 	}
-
-	if natgwResult.NatGateway == nil {
-		t.Fatal("expected NAT gateway to be set")
-	}
+	golden.New(t, golden.WithIgnoreFields("NatGatewayId", "SubnetId", "VpcId", "CreateTime", "ResultMetadata")).Assert(t.Name()+"_create", natgwResult)
 
 	natgwID := *natgwResult.NatGateway.NatGatewayId
 
@@ -693,14 +598,7 @@ func TestEC2_CreateNatGateway(t *testing.T) {
 		NatGatewayIds: []string{natgwID},
 	})
 	if err != nil {
-		t.Fatalf("failed to describe NAT gateways: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(descResult.NatGateways) != 1 {
-		t.Errorf("expected 1 NAT gateway, got %d", len(descResult.NatGateways))
-	}
-
-	if *descResult.NatGateways[0].NatGatewayId != natgwID {
-		t.Errorf("expected NAT gateway ID %s, got %s", natgwID, *descResult.NatGateways[0].NatGatewayId)
-	}
+	golden.New(t, golden.WithIgnoreFields("NatGatewayId", "SubnetId", "VpcId", "CreateTime", "ResultMetadata")).Assert(t.Name()+"_describe", descResult)
 }

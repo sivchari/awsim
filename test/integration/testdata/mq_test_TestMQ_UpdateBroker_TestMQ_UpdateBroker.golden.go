@@ -1,7 +1,7 @@
 {
   "AuthenticationStrategy": "",
   "AutoMinorVersionUpgrade": true,
-  "BrokerId": "7807cab9-8ad6-43a4-abf8-89089c4b272d",
+  "BrokerId": "4022cd98-1553-42c4-8c8a-7ecc46a66774",
   "Configuration": null,
   "DataReplicationMetadata": null,
   "DataReplicationMode": "",

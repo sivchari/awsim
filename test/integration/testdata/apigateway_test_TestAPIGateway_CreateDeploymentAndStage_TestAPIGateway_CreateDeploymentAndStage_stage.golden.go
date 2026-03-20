@@ -1,0 +1,20 @@
+{
+  "AccessLogSettings": null,
+  "CacheClusterEnabled": false,
+  "CacheClusterSize": "",
+  "CacheClusterStatus": "",
+  "CanarySettings": null,
+  "ClientCertificateId": null,
+  "CreatedDate": "2026-03-23T07:45:24Z",
+  "DeploymentId": "82f0c1c2-7",
+  "Description": null,
+  "DocumentationVersion": null,
+  "LastUpdatedDate": "2026-03-23T07:45:24Z",
+  "MethodSettings": null,
+  "StageName": "prod",
+  "Tags": null,
+  "TracingEnabled": false,
+  "Variables": null,
+  "WebAclArn": null,
+  "ResultMetadata": {}
+}

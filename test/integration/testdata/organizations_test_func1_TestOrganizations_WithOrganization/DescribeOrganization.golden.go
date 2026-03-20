@@ -1,6 +1,6 @@
 {
   "Organization": {
-    "Arn": "arn:aws:organizations::123456789012:organization/o-a523d8a1-523",
+    "Arn": "arn:aws:organizations::123456789012:organization/o-bf5f9c2d-c70",
     "AvailablePolicyTypes": [
       {
         "Status": "ENABLED",
@@ -8,8 +8,8 @@
       }
     ],
     "FeatureSet": "ALL",
-    "Id": "o-a523d8a1-523",
-    "MasterAccountArn": "arn:aws:organizations::123456789012:account/o-a523d8a1-523/123456789012",
+    "Id": "o-bf5f9c2d-c70",
+    "MasterAccountArn": "arn:aws:organizations::123456789012:account/o-bf5f9c2d-c70/123456789012",
     "MasterAccountEmail": "master@example.com",
     "MasterAccountId": "123456789012"
   },

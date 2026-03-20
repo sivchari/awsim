@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
+	"github.com/sivchari/golden"
 )
 
 func newSESv2Client(t *testing.T) *sesv2.Client {
@@ -41,28 +42,18 @@ func TestSESv2_CreateAndGetEmailIdentity(t *testing.T) {
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to create email identity: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.IdentityType != types.IdentityTypeEmailAddress {
-		t.Errorf("identity type mismatch: got %s, want EMAIL_ADDRESS", createOutput.IdentityType)
-	}
-
-	t.Logf("Created email identity: %s (type: %s)", emailIdentity, createOutput.IdentityType)
+	golden.New(t, golden.WithIgnoreFields("Tokens", "ResultMetadata")).Assert(t.Name()+"_create", createOutput)
 
 	// Get email identity.
 	getOutput, err := client.GetEmailIdentity(ctx, &sesv2.GetEmailIdentityInput{
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to get email identity: %v", err)
+		t.Fatal(err)
 	}
-
-	if getOutput.IdentityType != types.IdentityTypeEmailAddress {
-		t.Errorf("identity type mismatch: got %s, want EMAIL_ADDRESS", getOutput.IdentityType)
-	}
-
-	t.Logf("Got email identity: type=%s, verified=%v", getOutput.IdentityType, getOutput.VerifiedForSendingStatus)
+	golden.New(t, golden.WithIgnoreFields("Tokens", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSESv2_CreateDomainIdentity(t *testing.T) {
@@ -76,14 +67,9 @@ func TestSESv2_CreateDomainIdentity(t *testing.T) {
 		EmailIdentity: aws.String(domainIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to create domain identity: %v", err)
+		t.Fatal(err)
 	}
-
-	if createOutput.IdentityType != types.IdentityTypeDomain {
-		t.Errorf("identity type mismatch: got %s, want DOMAIN", createOutput.IdentityType)
-	}
-
-	t.Logf("Created domain identity: %s (type: %s)", domainIdentity, createOutput.IdentityType)
+	golden.New(t, golden.WithIgnoreFields("Tokens", "ResultMetadata")).Assert(t.Name(), createOutput)
 }
 
 func TestSESv2_ListEmailIdentities(t *testing.T) {
@@ -96,13 +82,13 @@ func TestSESv2_ListEmailIdentities(t *testing.T) {
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to create email identity: %v", err)
+		t.Fatal(err)
 	}
 
 	// List email identities.
 	listOutput, err := client.ListEmailIdentities(ctx, &sesv2.ListEmailIdentitiesInput{})
 	if err != nil {
-		t.Fatalf("failed to list email identities: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -118,8 +104,6 @@ func TestSESv2_ListEmailIdentities(t *testing.T) {
 	if !found {
 		t.Error("created email identity not found in list")
 	}
-
-	t.Logf("Listed %d email identities", len(listOutput.EmailIdentities))
 }
 
 func TestSESv2_DeleteEmailIdentity(t *testing.T) {
@@ -133,7 +117,7 @@ func TestSESv2_DeleteEmailIdentity(t *testing.T) {
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to create email identity: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete email identity.
@@ -141,10 +125,8 @@ func TestSESv2_DeleteEmailIdentity(t *testing.T) {
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete email identity: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Log("Deleted email identity successfully")
 
 	// Verify deletion.
 	_, err = client.GetEmailIdentity(ctx, &sesv2.GetEmailIdentityInput{
@@ -153,8 +135,6 @@ func TestSESv2_DeleteEmailIdentity(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for deleted email identity")
 	}
-
-	t.Log("Verified email identity deletion")
 }
 
 func TestSESv2_CreateAndGetConfigurationSet(t *testing.T) {
@@ -168,25 +148,17 @@ func TestSESv2_CreateAndGetConfigurationSet(t *testing.T) {
 		ConfigurationSetName: aws.String(configSetName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create configuration set: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Logf("Created configuration set: %s", configSetName)
 
 	// Get configuration set.
 	getOutput, err := client.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{
 		ConfigurationSetName: aws.String(configSetName),
 	})
 	if err != nil {
-		t.Fatalf("failed to get configuration set: %v", err)
+		t.Fatal(err)
 	}
-
-	if *getOutput.ConfigurationSetName != configSetName {
-		t.Errorf("configuration set name mismatch: got %s, want %s",
-			*getOutput.ConfigurationSetName, configSetName)
-	}
-
-	t.Logf("Got configuration set: %s", *getOutput.ConfigurationSetName)
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get", getOutput)
 }
 
 func TestSESv2_ListConfigurationSets(t *testing.T) {
@@ -200,13 +172,13 @@ func TestSESv2_ListConfigurationSets(t *testing.T) {
 		ConfigurationSetName: aws.String(configSetName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create configuration set: %v", err)
+		t.Fatal(err)
 	}
 
 	// List configuration sets.
 	listOutput, err := client.ListConfigurationSets(ctx, &sesv2.ListConfigurationSetsInput{})
 	if err != nil {
-		t.Fatalf("failed to list configuration sets: %v", err)
+		t.Fatal(err)
 	}
 
 	found := false
@@ -222,8 +194,6 @@ func TestSESv2_ListConfigurationSets(t *testing.T) {
 	if !found {
 		t.Error("created configuration set not found in list")
 	}
-
-	t.Logf("Listed %d configuration sets", len(listOutput.ConfigurationSets))
 }
 
 func TestSESv2_DeleteConfigurationSet(t *testing.T) {
@@ -237,7 +207,7 @@ func TestSESv2_DeleteConfigurationSet(t *testing.T) {
 		ConfigurationSetName: aws.String(configSetName),
 	})
 	if err != nil {
-		t.Fatalf("failed to create configuration set: %v", err)
+		t.Fatal(err)
 	}
 
 	// Delete configuration set.
@@ -245,10 +215,8 @@ func TestSESv2_DeleteConfigurationSet(t *testing.T) {
 		ConfigurationSetName: aws.String(configSetName),
 	})
 	if err != nil {
-		t.Fatalf("failed to delete configuration set: %v", err)
+		t.Fatal(err)
 	}
-
-	t.Log("Deleted configuration set successfully")
 
 	// Verify deletion.
 	_, err = client.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{
@@ -257,8 +225,6 @@ func TestSESv2_DeleteConfigurationSet(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for deleted configuration set")
 	}
-
-	t.Log("Verified configuration set deletion")
 }
 
 func TestSESv2_SendEmail(t *testing.T) {
@@ -271,7 +237,7 @@ func TestSESv2_SendEmail(t *testing.T) {
 		EmailIdentity: aws.String(emailIdentity),
 	})
 	if err != nil {
-		t.Fatalf("failed to create email identity: %v", err)
+		t.Fatal(err)
 	}
 
 	// Send email.
@@ -294,14 +260,9 @@ func TestSESv2_SendEmail(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("failed to send email: %v", err)
+		t.Fatal(err)
 	}
-
-	if sendOutput.MessageId == nil || *sendOutput.MessageId == "" {
-		t.Error("expected non-empty message ID")
-	}
-
-	t.Logf("Sent email with message ID: %s", *sendOutput.MessageId)
+	golden.New(t, golden.WithIgnoreFields("MessageId", "ResultMetadata")).Assert(t.Name(), sendOutput)
 }
 
 func TestSESv2_EmailIdentityNotFound(t *testing.T) {
@@ -315,6 +276,4 @@ func TestSESv2_EmailIdentityNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent email identity")
 	}
-
-	t.Log("Got expected error for non-existent email identity")
 }

@@ -2,10 +2,10 @@
   "NextToken": null,
   "Snapshots": [
     {
-      "DirectoryId": "d-bf7c121a-3",
+      "DirectoryId": "d-3262a3ac-a",
       "Name": "test-snapshot",
-      "SnapshotId": "s-05032592-e",
-      "StartTime": "2026-02-27T06:18:15Z",
+      "SnapshotId": "s-7d6267f4-4",
+      "StartTime": "2026-03-23T07:45:25Z",
       "Status": "Completed",
       "Type": "Manual"
     }
