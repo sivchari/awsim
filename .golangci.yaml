@@ -282,6 +282,10 @@ linters:
       - path: internal/service/codegurureviewer/types\.go
         linters:
           - tagliatelle
+      # awsim.go uses blank imports to register all AWS services via init().
+      - path: awsim\.go
+        linters:
+          - revive
   settings:
     gocritic:
       enable-all: true

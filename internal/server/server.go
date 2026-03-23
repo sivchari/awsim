@@ -152,6 +152,12 @@ func (s *Server) Addr() string {
 	return fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 }
 
+// Handler returns the HTTP handler for the server.
+// This can be used with httptest.NewServer for in-process testing.
+func (s *Server) Handler() http.Handler {
+	return s.router
+}
+
 // Start starts the HTTP server.
 func (s *Server) Start() error {
 	s.server = &http.Server{
