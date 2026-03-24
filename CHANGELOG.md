@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.5.0](https://github.com/sivchari/kumo/compare/v0.4.0...v0.5.0) - 2026-03-24
+- test(integration): migrate all integration tests to golden test pattern by @sivchari in https://github.com/sivchari/kumo/pull/359
+- feat: expose public Go API for in-process testing by @sivchari in https://github.com/sivchari/kumo/pull/361
+- rename: awsim to kumo by @sivchari in https://github.com/sivchari/kumo/pull/362
+- fix: regenerate golden files after rename to kumo by @sivchari in https://github.com/sivchari/kumo/pull/363
+- feat: add Homebrew tap support via goreleaser by @sivchari in https://github.com/sivchari/kumo/pull/364
+- release v0.5.0 by @sivchari in https://github.com/sivchari/kumo/pull/365
+
 ## [v0.4.0](https://github.com/sivchari/awsim/compare/v0.3.0...v0.4.0) - 2026-03-19
 - feat(ebs): implement EBS Direct API remaining operations by @sivchari in https://github.com/sivchari/awsim/pull/356
 
