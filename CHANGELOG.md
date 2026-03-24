@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.1](https://github.com/sivchari/kumo/compare/v0.5.0...v0.5.1) - 2026-03-24
+- fix(ci): add HOMEBREW_TAP_GITHUB_TOKEN for goreleaser by @sivchari in https://github.com/sivchari/kumo/pull/367
+
 ## [v0.5.0](https://github.com/sivchari/kumo/compare/v0.4.0...v0.5.0) - 2026-03-24
 - test(integration): migrate all integration tests to golden test pattern by @sivchari in https://github.com/sivchari/kumo/pull/359
 - feat: expose public Go API for in-process testing by @sivchari in https://github.com/sivchari/kumo/pull/361
