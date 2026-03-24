@@ -1,4 +1,4 @@
-// Package cloudformation provides CloudFormation service emulation for awsim.
+// Package cloudformation provides CloudFormation service emulation for kumo.
 package cloudformation
 
 import (

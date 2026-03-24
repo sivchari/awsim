@@ -1,6 +1,6 @@
 package appmesh
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Service implements the App Mesh service.
 type Service struct {

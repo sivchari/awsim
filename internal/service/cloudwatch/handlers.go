@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/sivchari/awsim/internal/server"
+	"github.com/sivchari/kumo/internal/server"
 )
 
 // Error codes for CloudWatch.

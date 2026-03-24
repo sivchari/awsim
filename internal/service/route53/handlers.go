@@ -82,10 +82,10 @@ func (s *Service) CreateHostedZone(w http.ResponseWriter, r *http.Request) {
 		},
 		DelegationSet: DelegationSet{
 			NameServers: []string{
-				"ns-1.awsim.local",
-				"ns-2.awsim.local",
-				"ns-3.awsim.local",
-				"ns-4.awsim.local",
+				"ns-1.kumo.local",
+				"ns-2.kumo.local",
+				"ns-3.kumo.local",
+				"ns-4.kumo.local",
 			},
 		},
 	}
@@ -123,10 +123,10 @@ func (s *Service) GetHostedZone(w http.ResponseWriter, r *http.Request) {
 		HostedZone: *zone,
 		DelegationSet: DelegationSet{
 			NameServers: []string{
-				"ns-1.awsim.local",
-				"ns-2.awsim.local",
-				"ns-3.awsim.local",
-				"ns-4.awsim.local",
+				"ns-1.kumo.local",
+				"ns-2.kumo.local",
+				"ns-3.kumo.local",
+				"ns-4.kumo.local",
 			},
 		},
 	}

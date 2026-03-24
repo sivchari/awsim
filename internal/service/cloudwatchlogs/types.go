@@ -1,4 +1,4 @@
-// Package cloudwatchlogs provides CloudWatch Logs service emulation for awsim.
+// Package cloudwatchlogs provides CloudWatch Logs service emulation for kumo.
 package cloudwatchlogs
 
 // LogGroup represents a log group in CloudWatch Logs.

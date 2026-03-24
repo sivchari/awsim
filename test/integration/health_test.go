@@ -1,6 +1,6 @@
 //go:build integration
 
-// Package integration provides integration tests for awsim.
+// Package integration provides integration tests for kumo.
 package integration
 
 import (

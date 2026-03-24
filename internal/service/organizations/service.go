@@ -1,7 +1,7 @@
 // Package organizations provides AWS Organizations service emulation.
 package organizations
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Service implements the Organizations service.
 type Service struct {

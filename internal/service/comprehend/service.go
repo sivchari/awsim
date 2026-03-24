@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 // Compile-time checks to ensure Service implements required interfaces.

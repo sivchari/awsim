@@ -3,8 +3,8 @@ package cloudwatch
 import (
 	"net/http"
 
-	"github.com/sivchari/awsim/internal/server"
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/server"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

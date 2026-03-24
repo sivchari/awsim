@@ -1,4 +1,4 @@
-// Package cloudwatch provides CloudWatch metrics service emulation for awsim.
+// Package cloudwatch provides CloudWatch metrics service emulation for kumo.
 package cloudwatch
 
 import (

@@ -1,7 +1,7 @@
 package secretsmanager
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 const defaultBaseURL = "http://localhost:4566"

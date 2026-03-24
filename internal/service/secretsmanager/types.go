@@ -1,4 +1,4 @@
-// Package secretsmanager provides Secrets Manager service emulation for awsim.
+// Package secretsmanager provides Secrets Manager service emulation for kumo.
 package secretsmanager
 
 import (

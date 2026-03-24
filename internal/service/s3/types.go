@@ -1,4 +1,4 @@
-// Package s3 provides S3 service emulation for awsim.
+// Package s3 provides S3 service emulation for kumo.
 package s3
 
 import (

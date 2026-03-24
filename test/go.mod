@@ -1,4 +1,4 @@
-module github.com/sivchari/awsim/test
+module github.com/sivchari/kumo/test
 
 go 1.25.0
 
@@ -99,4 +99,4 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.13 // indirect
 )
 
-replace github.com/sivchari/awsim => ../
+replace github.com/sivchari/kumo => ../

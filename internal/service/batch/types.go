@@ -1,4 +1,4 @@
-// Package batch provides AWS Batch service emulation for awsim.
+// Package batch provides AWS Batch service emulation for kumo.
 package batch
 
 import "time"

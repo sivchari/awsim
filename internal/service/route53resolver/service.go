@@ -1,6 +1,6 @@
 package route53resolver
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Compile-time check to ensure Service implements JSONProtocolService.
 var _ service.JSONProtocolService = (*Service)(nil)

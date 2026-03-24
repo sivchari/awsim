@@ -1,4 +1,4 @@
-// Package appsync provides AWS AppSync service emulation for awsim.
+// Package appsync provides AWS AppSync service emulation for kumo.
 package appsync
 
 // Authentication types.

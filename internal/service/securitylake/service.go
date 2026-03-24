@@ -1,6 +1,6 @@
 package securitylake
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Compile-time check to ensure Service implements service.Service.
 var _ service.Service = (*Service)(nil)

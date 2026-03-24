@@ -1,4 +1,4 @@
-// Package forecast provides Amazon Forecast service emulation for awsim.
+// Package forecast provides Amazon Forecast service emulation for kumo.
 package forecast
 
 import (

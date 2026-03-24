@@ -2,7 +2,7 @@
 package cloudtrail
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 // Service is the CloudTrail service.

@@ -15,7 +15,7 @@ type Route struct {
 	Handler http.HandlerFunc
 }
 
-// Router is the HTTP router for awsim.
+// Router is the HTTP router for kumo.
 type Router struct {
 	mux           *http.ServeMux
 	routes        []Route

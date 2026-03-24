@@ -1,4 +1,4 @@
-// Package dynamodb provides DynamoDB service emulation for awsim.
+// Package dynamodb provides DynamoDB service emulation for kumo.
 package dynamodb
 
 import (

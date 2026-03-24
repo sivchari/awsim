@@ -2,7 +2,7 @@
 package entityresolution
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

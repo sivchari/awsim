@@ -1,8 +1,8 @@
-// Package athena provides Athena service emulation for awsim.
+// Package athena provides Athena service emulation for kumo.
 package athena
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

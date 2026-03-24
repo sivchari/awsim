@@ -1,4 +1,4 @@
-// Package cloudfront provides CloudFront service emulation for awsim.
+// Package cloudfront provides CloudFront service emulation for kumo.
 package cloudfront
 
 import (

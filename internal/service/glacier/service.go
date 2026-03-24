@@ -1,7 +1,7 @@
 package glacier
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 // Service implements the AWS Glacier service.

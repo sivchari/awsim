@@ -1,4 +1,4 @@
-// Package ssm provides SSM Parameter Store service emulation for awsim.
+// Package ssm provides SSM Parameter Store service emulation for kumo.
 package ssm
 
 import (

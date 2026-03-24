@@ -1,7 +1,7 @@
 // Package servicequotas provides AWS Service Quotas service emulation.
 package servicequotas
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Service implements the Service Quotas service.
 type Service struct {

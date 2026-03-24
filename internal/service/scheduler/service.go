@@ -1,8 +1,8 @@
-// Package scheduler provides EventBridge Scheduler service emulation for awsim.
+// Package scheduler provides EventBridge Scheduler service emulation for kumo.
 package scheduler
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

@@ -1,6 +1,6 @@
 package route53
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 func init() {
 	storage := NewMemoryStorage()

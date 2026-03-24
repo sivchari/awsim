@@ -27,34 +27,34 @@ jobs:
       - name: Build with coverage
         run: |
           mkdir -p bin coverage
-          go build -cover -covermode=atomic -o bin/awsim ./cmd/awsim
+          go build -cover -covermode=atomic -o bin/kumo ./cmd/kumo
 
-      - name: Start awsim with coverage
+      - name: Start kumo with coverage
         run: |
-          GOCOVERDIR=coverage bin/awsim --host 0.0.0.0 --port 4566 &
-          echo $! > awsim.pid
+          GOCOVERDIR=coverage bin/kumo --host 0.0.0.0 --port 4566 &
+          echo $! > kumo.pid
 
-      - name: Wait for awsim to be ready
+      - name: Wait for kumo to be ready
         run: |
           for i in {1..30}; do
             if curl -s http://localhost:4566/health | grep -q "healthy"; then
-              echo "awsim is ready"
+              echo "kumo is ready"
               exit 0
             fi
-            echo "Waiting for awsim..."
+            echo "Waiting for kumo..."
             sleep 1
           done
-          echo "awsim failed to start"
+          echo "kumo failed to start"
           exit 1
 
       - name: Run integration tests
         run: make test-integration
 
-      - name: Stop awsim
+      - name: Stop kumo
         if: always()
         run: |
-          if [ -f awsim.pid ]; then
-            kill $(cat awsim.pid) 2>/dev/null || true
+          if [ -f kumo.pid ]; then
+            kill $(cat kumo.pid) 2>/dev/null || true
             sleep 2
           fi
 

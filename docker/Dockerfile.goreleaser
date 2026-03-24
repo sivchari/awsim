@@ -2,9 +2,9 @@ FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates
 
-COPY awsim /usr/local/bin/awsim
+COPY kumo /usr/local/bin/kumo
 
 EXPOSE 4566
 
-ENTRYPOINT ["awsim"]
+ENTRYPOINT ["kumo"]
 CMD ["--host", "0.0.0.0", "--port", "4566"]

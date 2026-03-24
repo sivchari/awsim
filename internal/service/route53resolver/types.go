@@ -1,4 +1,4 @@
-// Package route53resolver provides Route 53 Resolver service emulation for awsim.
+// Package route53resolver provides Route 53 Resolver service emulation for kumo.
 package route53resolver
 
 // ResolverEndpoint represents a Route 53 Resolver endpoint.

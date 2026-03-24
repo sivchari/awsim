@@ -1,7 +1,7 @@
 // Package forecast provides Amazon Forecast service emulation.
 package forecast
 
-import "github.com/sivchari/awsim/internal/service"
+import "github.com/sivchari/kumo/internal/service"
 
 // Service implements the Forecast service.
 type Service struct {

@@ -1,4 +1,4 @@
-// Package ec2 provides EC2 service emulation for awsim.
+// Package ec2 provides EC2 service emulation for kumo.
 package ec2
 
 import (

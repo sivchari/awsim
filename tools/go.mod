@@ -1,4 +1,4 @@
-module github.com/sivchari/awsim/tools
+module github.com/sivchari/kumo/tools
 
 go 1.25
 

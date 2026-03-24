@@ -1,8 +1,8 @@
-// Package dlm provides Data Lifecycle Manager service emulation for awsim.
+// Package dlm provides Data Lifecycle Manager service emulation for kumo.
 package dlm
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

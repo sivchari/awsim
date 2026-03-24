@@ -1,4 +1,4 @@
-// Package mq provides Amazon MQ service emulation for awsim.
+// Package mq provides Amazon MQ service emulation for kumo.
 package mq
 
 import (

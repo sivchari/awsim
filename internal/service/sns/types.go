@@ -1,4 +1,4 @@
-// Package sns provides SNS service emulation for awsim.
+// Package sns provides SNS service emulation for kumo.
 package sns
 
 import (

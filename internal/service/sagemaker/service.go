@@ -1,8 +1,8 @@
-// Package sagemaker provides SageMaker service emulation for awsim.
+// Package sagemaker provides SageMaker service emulation for kumo.
 package sagemaker
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {

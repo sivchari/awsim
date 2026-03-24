@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/awsim.png" alt="awsim logo" width="480">
+  <img src="assets/kumo.jpg" alt="kumo logo" width="480">
   <br><br>
-  <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/sivchari/awsim" alt="Go Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/sivchari/awsim" alt="License"></a>
-  <a href="https://github.com/sivchari/awsim/releases"><img src="https://img.shields.io/github/v/release/sivchari/awsim" alt="Release"></a>
-  <a href="https://github.com/sivchari/awsim/actions/workflows/lint.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/lint.yaml/badge.svg" alt="Lint"></a>
-  <a href="https://github.com/sivchari/awsim/actions/workflows/integration-test.yaml"><img src="https://github.com/sivchari/awsim/actions/workflows/integration-test.yaml/badge.svg" alt="Integration Tests"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/sivchari/kumo" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/sivchari/kumo" alt="License"></a>
+  <a href="https://github.com/sivchari/kumo/releases"><img src="https://img.shields.io/github/v/release/sivchari/kumo" alt="Release"></a>
+  <a href="https://github.com/sivchari/kumo/actions/workflows/lint.yaml"><img src="https://github.com/sivchari/kumo/actions/workflows/lint.yaml/badge.svg" alt="Lint"></a>
+  <a href="https://github.com/sivchari/kumo/actions/workflows/integration-test.yaml"><img src="https://github.com/sivchari/kumo/actions/workflows/integration-test.yaml/badge.svg" alt="Integration Tests"></a>
 </p>
 
 <p align="center">A lightweight AWS service emulator written in Go.<br>Designed for CI/CD environments where authentication-free local AWS testing is needed.</p>
@@ -148,7 +148,7 @@
 ### Docker (Recommended)
 
 ```bash
-docker run -p 4566:4566 ghcr.io/sivchari/awsim:latest
+docker run -p 4566:4566 ghcr.io/sivchari/kumo:latest
 ```
 
 ### Binary
@@ -158,15 +158,15 @@ docker run -p 4566:4566 ghcr.io/sivchari/awsim:latest
 make build
 
 # Run
-./bin/awsim
+./bin/kumo
 ```
 
 ### Docker Compose
 
 ```yaml
 services:
-  awsim:
-    image: ghcr.io/sivchari/awsim:latest
+  kumo:
+    image: ghcr.io/sivchari/kumo:latest
     ports:
       - "4566:4566"
 ```
@@ -354,9 +354,9 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AWSIM_HOST` | `0.0.0.0` | Server bind address |
-| `AWSIM_PORT` | `4566` | Server port |
-| `AWSIM_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
+| `KUMO_HOST` | `0.0.0.0` | Server bind address |
+| `KUMO_PORT` | `4566` | Server port |
+| `KUMO_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 
 ## Development
 

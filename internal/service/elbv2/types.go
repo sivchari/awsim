@@ -1,4 +1,4 @@
-// Package elbv2 provides ELB v2 service emulation for awsim.
+// Package elbv2 provides ELB v2 service emulation for kumo.
 package elbv2
 
 import (

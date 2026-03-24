@@ -1,16 +1,16 @@
 .PHONY: build run test test-integration clean docker lint lint-fix fmt fmt-diff
 
-BINARY_NAME=awsim
+BINARY_NAME=kumo
 VERSION?=$(shell grep 'const Version' version.go | cut -d'"' -f2)
 BUILD_DIR=bin
 GOLANGCI_LINT=go tool -modfile tools/go.mod golangci-lint
 
 # Build
 build:
-	go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/awsim
+	go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/kumo
 
 run:
-	go run ./cmd/awsim
+	go run ./cmd/kumo
 
 # Test
 test:
@@ -38,10 +38,10 @@ fmt-diff:
 
 # Docker
 docker:
-	docker build -t awsim:$(VERSION) -f docker/Dockerfile .
+	docker build -t kumo:$(VERSION) -f docker/Dockerfile .
 
 docker-run:
-	docker run -p 4566:4566 awsim:$(VERSION)
+	docker run -p 4566:4566 kumo:$(VERSION)
 
 compose-up:
 	docker compose up -d

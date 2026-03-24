@@ -1,5 +1,5 @@
-// Package awsim provides a lightweight AWS service emulator for CI/CD environments.
-package awsim
+// Package kumo provides a lightweight AWS service emulator for CI/CD environments.
+package kumo
 
-// Version is the current version of awsim.
+// Version is the current version of kumo.
 const Version = "0.4.0"

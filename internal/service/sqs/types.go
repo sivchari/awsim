@@ -1,4 +1,4 @@
-// Package sqs provides SQS service emulation for awsim.
+// Package sqs provides SQS service emulation for kumo.
 package sqs
 
 import (

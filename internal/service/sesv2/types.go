@@ -1,4 +1,4 @@
-// Package sesv2 provides SES v2 service emulation for awsim.
+// Package sesv2 provides SES v2 service emulation for kumo.
 package sesv2
 
 import "time"

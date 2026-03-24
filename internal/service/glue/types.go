@@ -1,4 +1,4 @@
-// Package glue provides AWS Glue service emulation for awsim.
+// Package glue provides AWS Glue service emulation for kumo.
 package glue
 
 import (

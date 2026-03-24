@@ -1,4 +1,4 @@
-// Package s3tables provides S3 Tables service emulation for awsim.
+// Package s3tables provides S3 Tables service emulation for kumo.
 package s3tables
 
 import "time"

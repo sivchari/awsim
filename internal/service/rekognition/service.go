@@ -1,7 +1,7 @@
 package rekognition
 
 import (
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 // Compile-time check to ensure Service implements service.Service.

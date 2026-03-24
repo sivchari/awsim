@@ -1,15 +1,15 @@
 version: 2
 
-project_name: awsim
+project_name: kumo
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: awsim
-    main: ./cmd/awsim
-    binary: awsim
+  - id: kumo
+    main: ./cmd/kumo
+    binary: kumo
     env:
       - CGO_ENABLED=0
     goos:
@@ -23,7 +23,7 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
 archives:
-  - id: awsim
+  - id: kumo
     formats: ['tar.gz']
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
@@ -33,7 +33,7 @@ archives:
       - LICENSE
       - README.md
     ids:
-      - awsim
+      - kumo
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
@@ -46,7 +46,7 @@ release:
 
 dockers:
   - image_templates:
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
     use: buildx
     goos: linux
     goarch: amd64
@@ -55,10 +55,10 @@ dockers:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/sivchari/awsim"
+      - "--label=org.opencontainers.image.source=https://github.com/sivchari/kumo"
 
   - image_templates:
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"
     use: buildx
     goos: linux
     goarch: arm64
@@ -67,14 +67,14 @@ dockers:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/sivchari/awsim"
+      - "--label=org.opencontainers.image.source=https://github.com/sivchari/kumo"
 
 docker_manifests:
-  - name_template: "ghcr.io/sivchari/awsim:{{ .Version }}"
+  - name_template: "ghcr.io/sivchari/kumo:{{ .Version }}"
     image_templates:
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/sivchari/awsim:latest"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/sivchari/kumo:latest"
     image_templates:
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-amd64"
-      - "ghcr.io/sivchari/awsim:{{ .Version }}-arm64"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
+      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"

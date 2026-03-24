@@ -1,4 +1,4 @@
-// Package xray provides AWS X-Ray service emulation for awsim.
+// Package xray provides AWS X-Ray service emulation for kumo.
 package xray
 
 import (

@@ -13,16 +13,16 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /awsim ./cmd/awsim
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /kumo ./cmd/kumo
 
 # Final image
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /awsim /usr/local/bin/awsim
+COPY --from=builder /kumo /usr/local/bin/kumo
 
 EXPOSE 4566
 
-ENTRYPOINT ["awsim"]
+ENTRYPOINT ["kumo"]
 CMD ["--host", "0.0.0.0", "--port", "4566"]

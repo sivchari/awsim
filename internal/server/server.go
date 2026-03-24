@@ -1,4 +1,4 @@
-// Package server provides the HTTP server for awsim.
+// Package server provides the HTTP server for kumo.
 package server
 
 import (
@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 // Config holds the server configuration.
@@ -31,7 +31,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Server is the main HTTP server for awsim.
+// Server is the main HTTP server for kumo.
 type Server struct {
 	config          Config
 	router          *Router
@@ -166,7 +166,7 @@ func (s *Server) Start() error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	s.logger.Info("starting awsim server", "addr", s.Addr())
+	s.logger.Info("starting kumo server", "addr", s.Addr())
 
 	// List registered services
 	for _, name := range s.registry.Names() {

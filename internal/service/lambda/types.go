@@ -1,4 +1,4 @@
-// Package lambda provides Lambda service emulation for awsim.
+// Package lambda provides Lambda service emulation for kumo.
 package lambda
 
 import (
@@ -26,7 +26,7 @@ type Function struct {
 	Architectures   []string
 	Environment     *Environment
 	Code            *FunctionCode
-	InvokeEndpoint  string // awsim extension: HTTP endpoint to proxy invocations
+	InvokeEndpoint  string // kumo extension: HTTP endpoint to proxy invocations
 }
 
 // Environment represents the function's environment variables.
@@ -58,7 +58,7 @@ type CreateFunctionRequest struct {
 	Architectures  []string          `json:"Architectures,omitempty"`
 	Environment    *Environment      `json:"Environment,omitempty"`
 	Tags           map[string]string `json:"Tags,omitempty"`
-	InvokeEndpoint string            `json:"InvokeEndpoint,omitempty"` // awsim extension
+	InvokeEndpoint string            `json:"InvokeEndpoint,omitempty"` // kumo extension
 }
 
 // CreateFunctionResponse is the response for CreateFunction.
@@ -162,7 +162,7 @@ type UpdateFunctionConfigurationRequest struct {
 	Runtime        string       `json:"Runtime,omitempty"`
 	Timeout        int          `json:"Timeout,omitempty"`
 	Environment    *Environment `json:"Environment,omitempty"`
-	InvokeEndpoint string       `json:"InvokeEndpoint,omitempty"` // awsim extension
+	InvokeEndpoint string       `json:"InvokeEndpoint,omitempty"` // kumo extension
 }
 
 // FunctionError represents a Lambda error.

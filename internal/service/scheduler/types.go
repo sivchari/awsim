@@ -1,4 +1,4 @@
-// Package scheduler provides EventBridge Scheduler service emulation for awsim.
+// Package scheduler provides EventBridge Scheduler service emulation for kumo.
 package scheduler
 
 import "time"

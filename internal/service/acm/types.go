@@ -1,4 +1,4 @@
-// Package acm provides ACM service emulation for awsim.
+// Package acm provides ACM service emulation for kumo.
 package acm
 
 import (

@@ -282,8 +282,8 @@ linters:
       - path: internal/service/codegurureviewer/types\.go
         linters:
           - tagliatelle
-      # awsim.go uses blank imports to register all AWS services via init().
-      - path: awsim\.go
+      # kumo.go uses blank imports to register all AWS services via init().
+      - path: kumo\.go
         linters:
           - revive
   settings:

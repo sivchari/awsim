@@ -1,4 +1,4 @@
-// Package dlm provides Data Lifecycle Manager service emulation for awsim.
+// Package dlm provides Data Lifecycle Manager service emulation for kumo.
 package dlm
 
 import "time"

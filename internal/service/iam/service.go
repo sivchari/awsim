@@ -1,10 +1,10 @@
-// Package iam provides IAM service emulation for awsim.
+// Package iam provides IAM service emulation for kumo.
 package iam
 
 import (
 	"net/http"
 
-	"github.com/sivchari/awsim/internal/service"
+	"github.com/sivchari/kumo/internal/service"
 )
 
 func init() {
