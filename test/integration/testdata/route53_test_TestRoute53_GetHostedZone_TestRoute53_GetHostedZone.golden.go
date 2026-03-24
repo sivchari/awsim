@@ -1,7 +1,7 @@
 {
   "HostedZone": {
     "CallerReference": "test-get-hosted-zone",
-    "Id": "/hostedzone/cf477c69-f0e6-4b6f-a631-f0cbf8d7b638",
+    "Id": "/hostedzone/ed1080e1-ecdd-4a1b-b575-58ed7071d2bb",
     "Name": "get-test.example.com.",
     "Config": null,
     "Features": null,
@@ -10,10 +10,10 @@
   },
   "DelegationSet": {
     "NameServers": [
-      "ns-1.awsim.local",
-      "ns-2.awsim.local",
-      "ns-3.awsim.local",
-      "ns-4.awsim.local"
+      "ns-1.kumo.local",
+      "ns-2.kumo.local",
+      "ns-3.kumo.local",
+      "ns-4.kumo.local"
     ],
     "CallerReference": null,
     "Id": null
