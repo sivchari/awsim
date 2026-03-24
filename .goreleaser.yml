@@ -80,6 +80,7 @@ homebrew_casks:
     repository:
       owner: sivchari
       name: homebrew-kumo
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
 docker_manifests:
   - name_template: "ghcr.io/sivchari/kumo:{{ .Version }}"
