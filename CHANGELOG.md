@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.3](https://github.com/sivchari/kumo/compare/v0.5.2...v0.5.3) - 2026-03-24
+- Fix/goreleaser cask token by @sivchari in https://github.com/sivchari/kumo/pull/371
+
 ## [v0.5.2](https://github.com/sivchari/kumo/compare/v0.5.1...v0.5.2) - 2026-03-24
 - fix(ci): set repository token for homebrew cask in goreleaser by @sivchari in https://github.com/sivchari/kumo/pull/369
 
