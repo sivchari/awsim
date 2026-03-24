@@ -69,6 +69,18 @@ dockers:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.source=https://github.com/sivchari/kumo"
 
+homebrew_casks:
+  - name: kumo
+    ids:
+      - kumo
+    binaries:
+      - kumo
+    homepage: "https://github.com/sivchari/kumo"
+    description: "A lightweight AWS service emulator for CI/CD environments"
+    repository:
+      owner: sivchari
+      name: homebrew-kumo
+
 docker_manifests:
   - name_template: "ghcr.io/sivchari/kumo:{{ .Version }}"
     image_templates:
