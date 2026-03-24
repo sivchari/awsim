@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.4](https://github.com/sivchari/kumo/compare/v0.5.3...v0.5.4) - 2026-03-24
+- Fix/goreleaser cask token by @sivchari in https://github.com/sivchari/kumo/pull/373
+
 ## [v0.5.3](https://github.com/sivchari/kumo/compare/v0.5.2...v0.5.3) - 2026-03-24
 - Fix/goreleaser cask token by @sivchari in https://github.com/sivchari/kumo/pull/371
 
