@@ -1,9 +1,23 @@
 package route53
 
-import "github.com/sivchari/kumo/internal/service"
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/sivchari/kumo/internal/service"
+)
+
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
 
 func init() {
-	storage := NewMemoryStorage()
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	storage := NewMemoryStorage(opts...)
 	service.Register(New(storage))
 }
 
@@ -33,4 +47,15 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	// Resource Record Sets
 	r.Handle("POST", "/2013-04-01/hostedzone/{id}/rrset", s.ChangeResourceRecordSets)
 	r.Handle("GET", "/2013-04-01/hostedzone/{id}/rrset", s.ListResourceRecordSets)
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

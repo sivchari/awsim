@@ -2,11 +2,14 @@ package gamelift
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -75,27 +78,113 @@ type Storage interface {
 	DescribePlayerSessions(ctx context.Context, gameSessionID, playerSessionID, playerID string) ([]*PlayerSession, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	builds         map[string]*Build
-	fleets         map[string]*Fleet
-	gameSessions   map[string]*GameSession
-	playerSessions map[string]*PlayerSession
+	mu             sync.RWMutex              `json:"-"`
+	Builds         map[string]*Build         `json:"builds"`
+	Fleets         map[string]*Fleet         `json:"fleets"`
+	GameSessions   map[string]*GameSession   `json:"gameSessions"`
+	PlayerSessions map[string]*PlayerSession `json:"playerSessions"`
 	region         string
 	accountID      string
+	dataDir        string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		builds:         make(map[string]*Build),
-		fleets:         make(map[string]*Fleet),
-		gameSessions:   make(map[string]*GameSession),
-		playerSessions: make(map[string]*PlayerSession),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Builds:         make(map[string]*Build),
+		Fleets:         make(map[string]*Fleet),
+		GameSessions:   make(map[string]*GameSession),
+		PlayerSessions: make(map[string]*PlayerSession),
 		region:         defaultRegion,
 		accountID:      defaultAccountID,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "gamelift", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Builds == nil {
+		m.Builds = make(map[string]*Build)
+	}
+
+	if m.Fleets == nil {
+		m.Fleets = make(map[string]*Fleet)
+	}
+
+	if m.GameSessions == nil {
+		m.GameSessions = make(map[string]*GameSession)
+	}
+
+	if m.PlayerSessions == nil {
+		m.PlayerSessions = make(map[string]*PlayerSession)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "gamelift", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateBuild creates a new build.
@@ -117,7 +206,7 @@ func (m *MemoryStorage) CreateBuild(_ context.Context, req *CreateBuildRequest) 
 		CreationTime:    time.Now(),
 	}
 
-	m.builds[buildID] = build
+	m.Builds[buildID] = build
 
 	return build, nil
 }
@@ -127,7 +216,7 @@ func (m *MemoryStorage) DescribeBuild(_ context.Context, buildID string) (*Build
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	build, exists := m.builds[buildID]
+	build, exists := m.Builds[buildID]
 	if !exists {
 		return nil, &Error{Code: errNotFoundException, Message: "Build not found: " + buildID}
 	}
@@ -140,9 +229,9 @@ func (m *MemoryStorage) ListBuilds(_ context.Context, status string, limit int32
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*Build, 0, len(m.builds))
+	result := make([]*Build, 0, len(m.Builds))
 
-	for _, build := range m.builds {
+	for _, build := range m.Builds {
 		if status != "" && build.Status != status {
 			continue
 		}
@@ -163,11 +252,11 @@ func (m *MemoryStorage) DeleteBuild(_ context.Context, buildID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.builds[buildID]; !exists {
+	if _, exists := m.Builds[buildID]; !exists {
 		return &Error{Code: errNotFoundException, Message: "Build not found: " + buildID}
 	}
 
-	delete(m.builds, buildID)
+	delete(m.Builds, buildID)
 
 	return nil
 }
@@ -198,7 +287,7 @@ func (m *MemoryStorage) CreateFleet(_ context.Context, req *CreateFleetRequest) 
 		CreationTime:                   time.Now(),
 	}
 
-	m.fleets[fleetID] = fleet
+	m.Fleets[fleetID] = fleet
 
 	return fleet, nil
 }
@@ -210,8 +299,8 @@ func (m *MemoryStorage) DescribeFleetAttributes(_ context.Context, fleetIDs []st
 
 	if len(fleetIDs) == 0 {
 		// Return all fleets
-		result := make([]*Fleet, 0, len(m.fleets))
-		for _, fleet := range m.fleets {
+		result := make([]*Fleet, 0, len(m.Fleets))
+		for _, fleet := range m.Fleets {
 			result = append(result, fleet)
 		}
 
@@ -222,7 +311,7 @@ func (m *MemoryStorage) DescribeFleetAttributes(_ context.Context, fleetIDs []st
 	result := make([]*Fleet, 0, len(fleetIDs))
 
 	for _, fleetID := range fleetIDs {
-		if fleet, exists := m.fleets[fleetID]; exists {
+		if fleet, exists := m.Fleets[fleetID]; exists {
 			result = append(result, fleet)
 		}
 	}
@@ -235,9 +324,9 @@ func (m *MemoryStorage) ListFleets(_ context.Context, buildID string, limit int3
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]string, 0, len(m.fleets))
+	result := make([]string, 0, len(m.Fleets))
 
-	for _, fleet := range m.fleets {
+	for _, fleet := range m.Fleets {
 		if buildID != "" && fleet.BuildID != buildID {
 			continue
 		}
@@ -258,11 +347,11 @@ func (m *MemoryStorage) DeleteFleet(_ context.Context, fleetID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.fleets[fleetID]; !exists {
+	if _, exists := m.Fleets[fleetID]; !exists {
 		return &Error{Code: errNotFoundException, Message: "Fleet not found: " + fleetID}
 	}
 
-	delete(m.fleets, fleetID)
+	delete(m.Fleets, fleetID)
 
 	return nil
 }
@@ -276,7 +365,7 @@ func (m *MemoryStorage) CreateGameSession(_ context.Context, req *CreateGameSess
 		return nil, &Error{Code: errInvalidRequestException, Message: "FleetId is required"}
 	}
 
-	fleet, exists := m.fleets[req.FleetID]
+	fleet, exists := m.Fleets[req.FleetID]
 	if !exists {
 		return nil, &Error{Code: errNotFoundException, Message: "Fleet not found: " + req.FleetID}
 	}
@@ -298,7 +387,7 @@ func (m *MemoryStorage) CreateGameSession(_ context.Context, req *CreateGameSess
 		CreationTime:              time.Now(),
 	}
 
-	m.gameSessions[gameSessionID] = gameSession
+	m.GameSessions[gameSessionID] = gameSession
 
 	return gameSession, nil
 }
@@ -309,7 +398,7 @@ func (m *MemoryStorage) DescribeGameSessions(_ context.Context, fleetID, gameSes
 	defer m.mu.RUnlock()
 
 	if gameSessionID != "" {
-		session, exists := m.gameSessions[gameSessionID]
+		session, exists := m.GameSessions[gameSessionID]
 		if !exists {
 			return []*GameSession{}, nil
 		}
@@ -317,9 +406,9 @@ func (m *MemoryStorage) DescribeGameSessions(_ context.Context, fleetID, gameSes
 		return []*GameSession{session}, nil
 	}
 
-	result := make([]*GameSession, 0, len(m.gameSessions))
+	result := make([]*GameSession, 0, len(m.GameSessions))
 
-	for _, session := range m.gameSessions {
+	for _, session := range m.GameSessions {
 		if fleetID != "" && session.FleetID != fleetID {
 			continue
 		}
@@ -335,7 +424,7 @@ func (m *MemoryStorage) UpdateGameSession(_ context.Context, req *UpdateGameSess
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	session, exists := m.gameSessions[req.GameSessionID]
+	session, exists := m.GameSessions[req.GameSessionID]
 	if !exists {
 		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + req.GameSessionID}
 	}
@@ -356,7 +445,7 @@ func (m *MemoryStorage) CreatePlayerSession(_ context.Context, gameSessionID, pl
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	gameSession, exists := m.gameSessions[gameSessionID]
+	gameSession, exists := m.GameSessions[gameSessionID]
 	if !exists {
 		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + gameSessionID}
 	}
@@ -379,7 +468,7 @@ func (m *MemoryStorage) CreatePlayerSession(_ context.Context, gameSessionID, pl
 		CreationTime:    time.Now(),
 	}
 
-	m.playerSessions[playerSessionID] = playerSession
+	m.PlayerSessions[playerSessionID] = playerSession
 	gameSession.CurrentPlayerSessionCount++
 
 	return playerSession, nil
@@ -390,7 +479,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	gameSession, exists := m.gameSessions[gameSessionID]
+	gameSession, exists := m.GameSessions[gameSessionID]
 	if !exists {
 		return nil, &Error{Code: errNotFoundException, Message: "Game session not found: " + gameSessionID}
 	}
@@ -417,7 +506,7 @@ func (m *MemoryStorage) CreatePlayerSessions(_ context.Context, gameSessionID st
 			CreationTime:    time.Now(),
 		}
 
-		m.playerSessions[playerSessionID] = playerSession
+		m.PlayerSessions[playerSessionID] = playerSession
 		result = append(result, playerSession)
 	}
 
@@ -433,7 +522,7 @@ func (m *MemoryStorage) DescribePlayerSessions(_ context.Context, gameSessionID,
 	defer m.mu.RUnlock()
 
 	if playerSessionID != "" {
-		session, exists := m.playerSessions[playerSessionID]
+		session, exists := m.PlayerSessions[playerSessionID]
 		if !exists {
 			return []*PlayerSession{}, nil
 		}
@@ -441,9 +530,9 @@ func (m *MemoryStorage) DescribePlayerSessions(_ context.Context, gameSessionID,
 		return []*PlayerSession{session}, nil
 	}
 
-	result := make([]*PlayerSession, 0, len(m.playerSessions))
+	result := make([]*PlayerSession, 0, len(m.PlayerSessions))
 
-	for _, session := range m.playerSessions {
+	for _, session := range m.PlayerSessions {
 		if gameSessionID != "" && session.GameSessionID != gameSessionID {
 			continue
 		}

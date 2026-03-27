@@ -2,8 +2,12 @@ package cloudtrail
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -31,21 +35,95 @@ type Storage interface {
 	GetTrailStatus(ctx context.Context, name string) (*Trail, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	trails    map[string]*Trail
+	mu        sync.RWMutex      `json:"-"`
+	Trails    map[string]*Trail `json:"trails"`
 	region    string
 	accountID string
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		trails:    make(map[string]*Trail),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Trails:    make(map[string]*Trail),
 		region:    defaultRegion,
 		accountID: defaultAccountID,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "cloudtrail", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Trails == nil {
+		m.Trails = make(map[string]*Trail)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "cloudtrail", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateTrail creates a new trail.
@@ -61,7 +139,7 @@ func (m *MemoryStorage) CreateTrail(_ context.Context, req *CreateTrailRequest) 
 		return nil, &Error{Code: errValidationError, Message: "S3 bucket name is required"}
 	}
 
-	if _, exists := m.trails[req.Name]; exists {
+	if _, exists := m.Trails[req.Name]; exists {
 		return nil, &Error{Code: errTrailAlreadyExists, Message: "Trail already exists"}
 	}
 
@@ -100,7 +178,7 @@ func (m *MemoryStorage) CreateTrail(_ context.Context, req *CreateTrailRequest) 
 		trail.IsOrganizationTrail = *req.IsOrganizationTrail
 	}
 
-	m.trails[req.Name] = trail
+	m.Trails[req.Name] = trail
 
 	return trail, nil
 }
@@ -110,11 +188,11 @@ func (m *MemoryStorage) DeleteTrail(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.trails[name]; !exists {
+	if _, exists := m.Trails[name]; !exists {
 		return &Error{Code: errTrailNotFound, Message: "Trail not found"}
 	}
 
-	delete(m.trails, name)
+	delete(m.Trails, name)
 
 	return nil
 }
@@ -124,7 +202,7 @@ func (m *MemoryStorage) GetTrail(_ context.Context, name string) (*Trail, error)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	trail, exists := m.trails[name]
+	trail, exists := m.Trails[name]
 	if !exists {
 		return nil, &Error{Code: errTrailNotFound, Message: "Trail not found"}
 	}
@@ -139,8 +217,8 @@ func (m *MemoryStorage) DescribeTrails(_ context.Context, names []string) ([]*Tr
 
 	if len(names) == 0 {
 		// Return all trails.
-		result := make([]*Trail, 0, len(m.trails))
-		for _, trail := range m.trails {
+		result := make([]*Trail, 0, len(m.Trails))
+		for _, trail := range m.Trails {
 			result = append(result, trail)
 		}
 
@@ -151,7 +229,7 @@ func (m *MemoryStorage) DescribeTrails(_ context.Context, names []string) ([]*Tr
 	result := make([]*Trail, 0, len(names))
 
 	for _, name := range names {
-		if trail, exists := m.trails[name]; exists {
+		if trail, exists := m.Trails[name]; exists {
 			result = append(result, trail)
 		}
 	}
@@ -164,7 +242,7 @@ func (m *MemoryStorage) StartLogging(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	trail, exists := m.trails[name]
+	trail, exists := m.Trails[name]
 	if !exists {
 		return &Error{Code: errTrailNotFound, Message: "Trail not found"}
 	}
@@ -179,7 +257,7 @@ func (m *MemoryStorage) StopLogging(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	trail, exists := m.trails[name]
+	trail, exists := m.Trails[name]
 	if !exists {
 		return &Error{Code: errTrailNotFound, Message: "Trail not found"}
 	}
@@ -201,7 +279,7 @@ func (m *MemoryStorage) GetTrailStatus(_ context.Context, name string) (*Trail, 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	trail, exists := m.trails[name]
+	trail, exists := m.Trails[name]
 	if !exists {
 		return nil, &Error{Code: errTrailNotFound, Message: "Trail not found"}
 	}

@@ -2,12 +2,15 @@ package emrserverless
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for EMR Serverless storage operations.
@@ -28,19 +31,97 @@ type Storage interface {
 	CancelJobRun(ctx context.Context, applicationID, jobRunID string) (*JobRun, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements the Storage interface using in-memory storage.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	applications map[string]*Application
-	jobRuns      map[string]map[string]*JobRun // applicationID -> jobRunID -> JobRun
+	mu           sync.RWMutex                  `json:"-"`
+	Applications map[string]*Application       `json:"applications"`
+	JobRuns      map[string]map[string]*JobRun `json:"jobRuns"`
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		applications: make(map[string]*Application),
-		jobRuns:      make(map[string]map[string]*JobRun),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Applications: make(map[string]*Application),
+		JobRuns:      make(map[string]map[string]*JobRun),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "emrserverless", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Applications == nil {
+		m.Applications = make(map[string]*Application)
+	}
+
+	if m.JobRuns == nil {
+		m.JobRuns = make(map[string]map[string]*JobRun)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "emrserverless", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 const (
@@ -135,8 +216,8 @@ func (m *MemoryStorage) CreateApplication(_ context.Context, req *CreateApplicat
 		UpdatedAt:               AWSTimestamp{Time: now},
 	}
 
-	m.applications[applicationID] = app
-	m.jobRuns[applicationID] = make(map[string]*JobRun)
+	m.Applications[applicationID] = app
+	m.JobRuns[applicationID] = make(map[string]*JobRun)
 
 	return app, nil
 }
@@ -146,7 +227,7 @@ func (m *MemoryStorage) GetApplication(_ context.Context, applicationID string) 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	app, exists := m.applications[applicationID]
+	app, exists := m.Applications[applicationID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -174,7 +255,7 @@ func (m *MemoryStorage) ListApplications(_ context.Context, req *ListApplication
 
 	var summaries []*ApplicationSummary
 
-	for _, app := range m.applications {
+	for _, app := range m.Applications {
 		// Apply state filter.
 		if len(stateFilter) > 0 && !stateFilter[app.State] {
 			continue
@@ -210,7 +291,7 @@ func (m *MemoryStorage) UpdateApplication(_ context.Context, req *UpdateApplicat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[req.ApplicationID]
+	app, exists := m.Applications[req.ApplicationID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -269,7 +350,7 @@ func (m *MemoryStorage) DeleteApplication(_ context.Context, applicationID strin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[applicationID]
+	app, exists := m.Applications[applicationID]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -286,7 +367,7 @@ func (m *MemoryStorage) DeleteApplication(_ context.Context, applicationID strin
 	}
 
 	// Check for running job runs.
-	for _, jr := range m.jobRuns[applicationID] {
+	for _, jr := range m.JobRuns[applicationID] {
 		if jr.State == JobRunStateRunning || jr.State == JobRunStatePending || jr.State == JobRunStateScheduled {
 			return &Error{
 				Code:    errConflictException,
@@ -299,8 +380,8 @@ func (m *MemoryStorage) DeleteApplication(_ context.Context, applicationID strin
 	app.State = ApplicationStateTerminated
 	app.UpdatedAt = AWSTimestamp{Time: time.Now()}
 
-	delete(m.applications, applicationID)
-	delete(m.jobRuns, applicationID)
+	delete(m.Applications, applicationID)
+	delete(m.JobRuns, applicationID)
 
 	return nil
 }
@@ -310,7 +391,7 @@ func (m *MemoryStorage) StartApplication(_ context.Context, applicationID string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[applicationID]
+	app, exists := m.Applications[applicationID]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -338,7 +419,7 @@ func (m *MemoryStorage) StopApplication(_ context.Context, applicationID string)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[applicationID]
+	app, exists := m.Applications[applicationID]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -368,7 +449,7 @@ func (m *MemoryStorage) StartJobRun(_ context.Context, req *StartJobRunInput) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[req.ApplicationID]
+	app, exists := m.Applications[req.ApplicationID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -434,7 +515,7 @@ func (m *MemoryStorage) StartJobRun(_ context.Context, req *StartJobRunInput) (*
 		CreatedBy:               fmt.Sprintf("arn:aws:iam::%s:user/test-user", accountID),
 	}
 
-	m.jobRuns[req.ApplicationID][jobRunID] = jobRun
+	m.JobRuns[req.ApplicationID][jobRunID] = jobRun
 
 	return jobRun, nil
 }
@@ -444,14 +525,14 @@ func (m *MemoryStorage) GetJobRun(_ context.Context, applicationID, jobRunID str
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.applications[applicationID]; !exists {
+	if _, exists := m.Applications[applicationID]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Application %s does not exist", applicationID),
 		}
 	}
 
-	jobRun, exists := m.jobRuns[applicationID][jobRunID]
+	jobRun, exists := m.JobRuns[applicationID][jobRunID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -467,7 +548,7 @@ func (m *MemoryStorage) ListJobRuns(_ context.Context, req *ListJobRunsInput) (*
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.applications[req.ApplicationID]; !exists {
+	if _, exists := m.Applications[req.ApplicationID]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Application %s does not exist", req.ApplicationID),
@@ -486,7 +567,7 @@ func (m *MemoryStorage) ListJobRuns(_ context.Context, req *ListJobRunsInput) (*
 
 	var summaries []*JobRunSummary
 
-	for _, jr := range m.jobRuns[req.ApplicationID] {
+	for _, jr := range m.JobRuns[req.ApplicationID] {
 		// Apply state filter.
 		if len(stateFilter) > 0 && !stateFilter[jr.State] {
 			continue
@@ -528,14 +609,14 @@ func (m *MemoryStorage) CancelJobRun(_ context.Context, applicationID, jobRunID 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.applications[applicationID]; !exists {
+	if _, exists := m.Applications[applicationID]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Application %s does not exist", applicationID),
 		}
 	}
 
-	jobRun, exists := m.jobRuns[applicationID][jobRunID]
+	jobRun, exists := m.JobRuns[applicationID][jobRunID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,

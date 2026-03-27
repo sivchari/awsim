@@ -2,11 +2,14 @@ package apigateway
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -48,25 +51,99 @@ type Storage interface {
 	DeleteStage(ctx context.Context, restAPIID, stageName string) error
 }
 
-// MemoryStorage implements Storage with in-memory data.
-type MemoryStorage struct {
-	mu       sync.RWMutex
-	restAPIs map[string]*restAPIData
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
 }
 
-// restAPIData holds REST API information and its resources.
-type restAPIData struct {
-	api         *RestAPI
-	resources   map[string]*Resource // keyed by resource ID
-	deployments map[string]*Deployment
-	stages      map[string]*Stage // keyed by stage name
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu       sync.RWMutex            `json:"-"`
+	RestAPIs map[string]*RestAPIData `json:"restApis"`
+	dataDir  string
+}
+
+// RestAPIData holds REST API information and its resources.
+type RestAPIData struct {
+	API         *RestAPI               `json:"api"`
+	Resources   map[string]*Resource   `json:"resources"` // keyed by resource ID
+	Deployments map[string]*Deployment `json:"deployments"`
+	Stages      map[string]*Stage      `json:"stages"` // keyed by stage name
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		restAPIs: make(map[string]*restAPIData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		RestAPIs: make(map[string]*RestAPIData),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "apigateway", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.RestAPIs == nil {
+		s.RestAPIs = make(map[string]*RestAPIData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "apigateway", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateRestAPI creates a new REST API.
@@ -98,11 +175,11 @@ func (s *MemoryStorage) CreateRestAPI(_ context.Context, req *CreateRestAPIReque
 		ResourceMethods: make(map[string]Method),
 	}
 
-	s.restAPIs[id] = &restAPIData{
-		api:         api,
-		resources:   map[string]*Resource{rootResourceID: rootResource},
-		deployments: make(map[string]*Deployment),
-		stages:      make(map[string]*Stage),
+	s.RestAPIs[id] = &RestAPIData{
+		API:         api,
+		Resources:   map[string]*Resource{rootResourceID: rootResource},
+		Deployments: make(map[string]*Deployment),
+		Stages:      make(map[string]*Stage),
 	}
 
 	return api, nil
@@ -113,12 +190,12 @@ func (s *MemoryStorage) GetRestAPI(_ context.Context, restAPIID string) (*RestAP
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	return data.api, nil
+	return data.API, nil
 }
 
 // GetRestAPIs returns all REST APIs.
@@ -132,8 +209,8 @@ func (s *MemoryStorage) GetRestAPIs(_ context.Context, limit int32, _ string) ([
 
 	var apis []*RestAPI
 
-	for _, data := range s.restAPIs {
-		apis = append(apis, data.api)
+	for _, data := range s.RestAPIs {
+		apis = append(apis, data.API)
 
 		if int32(len(apis)) >= limit { //nolint:gosec // slice length bounded by limit parameter
 			break
@@ -148,11 +225,11 @@ func (s *MemoryStorage) DeleteRestAPI(_ context.Context, restAPIID string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.restAPIs[restAPIID]; !exists {
+	if _, exists := s.RestAPIs[restAPIID]; !exists {
 		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	delete(s.restAPIs, restAPIID)
+	delete(s.RestAPIs, restAPIID)
 
 	return nil
 }
@@ -162,12 +239,12 @@ func (s *MemoryStorage) CreateResource(_ context.Context, restAPIID, parentID, p
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	parent, exists := data.resources[parentID]
+	parent, exists := data.Resources[parentID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -183,7 +260,7 @@ func (s *MemoryStorage) CreateResource(_ context.Context, restAPIID, parentID, p
 		ResourceMethods: make(map[string]Method),
 	}
 
-	data.resources[id] = resource
+	data.Resources[id] = resource
 
 	return resource, nil
 }
@@ -193,12 +270,12 @@ func (s *MemoryStorage) GetResource(_ context.Context, restAPIID, resourceID str
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -211,7 +288,7 @@ func (s *MemoryStorage) GetResources(_ context.Context, restAPIID string, limit 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, "", &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
@@ -222,7 +299,7 @@ func (s *MemoryStorage) GetResources(_ context.Context, restAPIID string, limit 
 
 	var resources []*Resource
 
-	for _, r := range data.resources {
+	for _, r := range data.Resources {
 		resources = append(resources, r)
 
 		if int32(len(resources)) >= limit { //nolint:gosec // slice length bounded by limit parameter
@@ -238,12 +315,12 @@ func (s *MemoryStorage) DeleteResource(_ context.Context, restAPIID, resourceID 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -253,7 +330,7 @@ func (s *MemoryStorage) DeleteResource(_ context.Context, restAPIID, resourceID 
 		return &ServiceError{Code: errBadRequest, Message: "Cannot delete root resource"}
 	}
 
-	delete(data.resources, resourceID)
+	delete(data.Resources, resourceID)
 
 	return nil
 }
@@ -263,12 +340,12 @@ func (s *MemoryStorage) PutMethod(_ context.Context, restAPIID, resourceID, http
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -290,12 +367,12 @@ func (s *MemoryStorage) GetMethod(_ context.Context, restAPIID, resourceID, http
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -313,12 +390,12 @@ func (s *MemoryStorage) PutIntegration(_ context.Context, restAPIID, resourceID,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -354,12 +431,12 @@ func (s *MemoryStorage) GetIntegration(_ context.Context, restAPIID, resourceID,
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	resource, exists := data.resources[resourceID]
+	resource, exists := data.Resources[resourceID]
 	if !exists {
 		return nil, &ServiceError{Code: errResourceNotFound, Message: "Invalid resource identifier specified"}
 	}
@@ -381,7 +458,7 @@ func (s *MemoryStorage) CreateDeployment(_ context.Context, restAPIID string, re
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
@@ -395,7 +472,7 @@ func (s *MemoryStorage) CreateDeployment(_ context.Context, restAPIID string, re
 		CreatedDate: now,
 	}
 
-	data.deployments[id] = deployment
+	data.Deployments[id] = deployment
 
 	// If stage name is specified, create or update the stage.
 	if req.StageName != "" {
@@ -405,7 +482,7 @@ func (s *MemoryStorage) CreateDeployment(_ context.Context, restAPIID string, re
 			CreatedDate:     now,
 			LastUpdatedDate: now,
 		}
-		data.stages[req.StageName] = stage
+		data.Stages[req.StageName] = stage
 	}
 
 	return deployment, nil
@@ -416,12 +493,12 @@ func (s *MemoryStorage) GetDeployment(_ context.Context, restAPIID, deploymentID
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	deployment, exists := data.deployments[deploymentID]
+	deployment, exists := data.Deployments[deploymentID]
 	if !exists {
 		return nil, &ServiceError{Code: errDeploymentNotFound, Message: "Invalid deployment identifier specified"}
 	}
@@ -434,7 +511,7 @@ func (s *MemoryStorage) GetDeployments(_ context.Context, restAPIID string, limi
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, "", &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
@@ -445,7 +522,7 @@ func (s *MemoryStorage) GetDeployments(_ context.Context, restAPIID string, limi
 
 	var deployments []*Deployment
 
-	for _, d := range data.deployments {
+	for _, d := range data.Deployments {
 		deployments = append(deployments, d)
 
 		if int32(len(deployments)) >= limit { //nolint:gosec // slice length bounded by limit parameter
@@ -461,16 +538,16 @@ func (s *MemoryStorage) DeleteDeployment(_ context.Context, restAPIID, deploymen
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	if _, exists := data.deployments[deploymentID]; !exists {
+	if _, exists := data.Deployments[deploymentID]; !exists {
 		return &ServiceError{Code: errDeploymentNotFound, Message: "Invalid deployment identifier specified"}
 	}
 
-	delete(data.deployments, deploymentID)
+	delete(data.Deployments, deploymentID)
 
 	return nil
 }
@@ -480,13 +557,13 @@ func (s *MemoryStorage) CreateStage(_ context.Context, restAPIID string, req *Cr
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	// Verify deployment exists.
-	if _, exists := data.deployments[req.DeploymentID]; !exists {
+	if _, exists := data.Deployments[req.DeploymentID]; !exists {
 		return nil, &ServiceError{Code: errDeploymentNotFound, Message: "Invalid deployment identifier specified"}
 	}
 
@@ -503,7 +580,7 @@ func (s *MemoryStorage) CreateStage(_ context.Context, restAPIID string, req *Cr
 		Tags:                req.Tags,
 	}
 
-	data.stages[req.StageName] = stage
+	data.Stages[req.StageName] = stage
 
 	return stage, nil
 }
@@ -513,12 +590,12 @@ func (s *MemoryStorage) GetStage(_ context.Context, restAPIID, stageName string)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	stage, exists := data.stages[stageName]
+	stage, exists := data.Stages[stageName]
 	if !exists {
 		return nil, &ServiceError{Code: errStageNotFound, Message: "Invalid stage identifier specified"}
 	}
@@ -531,14 +608,14 @@ func (s *MemoryStorage) GetStages(_ context.Context, restAPIID string) ([]*Stage
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return nil, &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
 	var stages []*Stage
 
-	for _, stage := range data.stages {
+	for _, stage := range data.Stages {
 		stages = append(stages, stage)
 	}
 
@@ -550,16 +627,16 @@ func (s *MemoryStorage) DeleteStage(_ context.Context, restAPIID, stageName stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.restAPIs[restAPIID]
+	data, exists := s.RestAPIs[restAPIID]
 	if !exists {
 		return &ServiceError{Code: errRestAPINotFound, Message: "Invalid REST API identifier specified"}
 	}
 
-	if _, exists := data.stages[stageName]; !exists {
+	if _, exists := data.Stages[stageName]; !exists {
 		return &ServiceError{Code: errStageNotFound, Message: "Invalid stage identifier specified"}
 	}
 
-	delete(data.stages, stageName)
+	delete(data.Stages, stageName)
 
 	return nil
 }

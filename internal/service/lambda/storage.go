@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the Lambda storage interface.
@@ -26,25 +29,103 @@ type Storage interface {
 	UpdateEventSourceMapping(ctx context.Context, uuid string, req *UpdateEventSourceMappingRequest) (*EventSourceMapping, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                  sync.RWMutex
-	functions           map[string]*Function
-	eventSourceMappings map[string]*EventSourceMapping
+	mu                  sync.RWMutex                   `json:"-"`
+	Functions           map[string]*Function           `json:"functions"`
+	EventSourceMappings map[string]*EventSourceMapping `json:"eventSourceMappings"`
 	baseURL             string
 	region              string
 	accountID           string
+	dataDir             string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		functions:           make(map[string]*Function),
-		eventSourceMappings: make(map[string]*EventSourceMapping),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Functions:           make(map[string]*Function),
+		EventSourceMappings: make(map[string]*EventSourceMapping),
 		baseURL:             baseURL,
 		region:              "us-east-1",
 		accountID:           "000000000000",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "lambda", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Functions == nil {
+		s.Functions = make(map[string]*Function)
+	}
+
+	if s.EventSourceMappings == nil {
+		s.EventSourceMappings = make(map[string]*EventSourceMapping)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "lambda", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateFunction creates a new Lambda function.
@@ -52,7 +133,7 @@ func (s *MemoryStorage) CreateFunction(_ context.Context, req *CreateFunctionReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.functions[req.FunctionName]; exists {
+	if _, exists := s.Functions[req.FunctionName]; exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceConflict,
 			Message: fmt.Sprintf("Function already exist: %s", req.FunctionName),
@@ -60,7 +141,7 @@ func (s *MemoryStorage) CreateFunction(_ context.Context, req *CreateFunctionReq
 	}
 
 	fn := s.buildFunction(req)
-	s.functions[req.FunctionName] = fn
+	s.Functions[req.FunctionName] = fn
 
 	return fn, nil
 }
@@ -123,7 +204,7 @@ func (s *MemoryStorage) GetFunction(_ context.Context, name string) (*Function, 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	fn, exists := s.functions[name]
+	fn, exists := s.Functions[name]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -139,14 +220,14 @@ func (s *MemoryStorage) DeleteFunction(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.functions[name]; !exists {
+	if _, exists := s.Functions[name]; !exists {
 		return &FunctionError{
 			Type:    ErrResourceNotFound,
 			Message: fmt.Sprintf("Function not found: %s", name),
 		}
 	}
 
-	delete(s.functions, name)
+	delete(s.Functions, name)
 
 	return nil
 }
@@ -160,8 +241,8 @@ func (s *MemoryStorage) ListFunctions(_ context.Context, marker string, maxItems
 		maxItems = 50
 	}
 
-	functions := make([]*Function, 0, len(s.functions))
-	for _, fn := range s.functions {
+	functions := make([]*Function, 0, len(s.Functions))
+	for _, fn := range s.Functions {
 		functions = append(functions, fn)
 	}
 
@@ -198,7 +279,7 @@ func (s *MemoryStorage) UpdateFunctionCode(_ context.Context, name string, req *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	fn, exists := s.functions[name]
+	fn, exists := s.Functions[name]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -244,7 +325,7 @@ func (s *MemoryStorage) UpdateFunctionConfiguration(_ context.Context, name stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	fn, exists := s.functions[name]
+	fn, exists := s.Functions[name]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -295,7 +376,7 @@ func (s *MemoryStorage) CreateEventSourceMapping(_ context.Context, req *CreateE
 	defer s.mu.Unlock()
 
 	// Validate function exists
-	fn, exists := s.functions[req.FunctionName]
+	fn, exists := s.Functions[req.FunctionName]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -334,7 +415,7 @@ func (s *MemoryStorage) CreateEventSourceMapping(_ context.Context, req *CreateE
 		LastProcessingResult:           "No records processed",
 	}
 
-	s.eventSourceMappings[mappingUUID] = mapping
+	s.EventSourceMappings[mappingUUID] = mapping
 
 	return mapping, nil
 }
@@ -344,7 +425,7 @@ func (s *MemoryStorage) GetEventSourceMapping(_ context.Context, uuid string) (*
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	mapping, exists := s.eventSourceMappings[uuid]
+	mapping, exists := s.EventSourceMappings[uuid]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -360,7 +441,7 @@ func (s *MemoryStorage) DeleteEventSourceMapping(_ context.Context, uuid string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	mapping, exists := s.eventSourceMappings[uuid]
+	mapping, exists := s.EventSourceMappings[uuid]
 	if !exists {
 		return &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -371,7 +452,7 @@ func (s *MemoryStorage) DeleteEventSourceMapping(_ context.Context, uuid string)
 	// Mark as deleting state before removing
 	mapping.State = "Deleting"
 
-	delete(s.eventSourceMappings, uuid)
+	delete(s.EventSourceMappings, uuid)
 
 	return nil
 }
@@ -388,7 +469,7 @@ func (s *MemoryStorage) ListEventSourceMappings(_ context.Context, functionName,
 	// Collect matching mappings
 	var mappings []*EventSourceMapping
 
-	for _, m := range s.eventSourceMappings {
+	for _, m := range s.EventSourceMappings {
 		// Filter by function name if specified
 		if functionName != "" && !matchesFunctionName(m.FunctionArn, functionName) {
 			continue
@@ -435,7 +516,7 @@ func (s *MemoryStorage) UpdateEventSourceMapping(_ context.Context, uuid string,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	mapping, exists := s.eventSourceMappings[uuid]
+	mapping, exists := s.EventSourceMappings[uuid]
 	if !exists {
 		return nil, &FunctionError{
 			Type:    ErrResourceNotFound,
@@ -445,7 +526,7 @@ func (s *MemoryStorage) UpdateEventSourceMapping(_ context.Context, uuid string,
 
 	// Update function ARN if function name is specified
 	if req.FunctionName != "" {
-		fn, fnExists := s.functions[req.FunctionName]
+		fn, fnExists := s.Functions[req.FunctionName]
 		if !fnExists {
 			return nil, &FunctionError{
 				Type:    ErrResourceNotFound,

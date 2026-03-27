@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -28,17 +31,91 @@ type Storage interface {
 	ImportCertificate(ctx context.Context, req *ImportCertificateInput) (*Certificate, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data structures.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	certificates map[string]*Certificate
+	mu           sync.RWMutex            `json:"-"`
+	Certificates map[string]*Certificate `json:"certificates"`
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		certificates: make(map[string]*Certificate),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Certificates: make(map[string]*Certificate),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "acm", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Certificates == nil {
+		s.Certificates = make(map[string]*Certificate)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "acm", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // buildDomainValidations creates domain validation options for the certificate.
@@ -118,7 +195,7 @@ func (s *MemoryStorage) RequestCertificate(_ context.Context, req *RequestCertif
 		Tags:                    req.Tags,
 	}
 
-	s.certificates[arn] = cert
+	s.Certificates[arn] = cert
 
 	return cert, nil
 }
@@ -128,7 +205,7 @@ func (s *MemoryStorage) DescribeCertificate(_ context.Context, arn string) (*Cer
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cert, exists := s.certificates[arn]
+	cert, exists := s.Certificates[arn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -148,9 +225,9 @@ func (s *MemoryStorage) ListCertificates(_ context.Context, statuses []string, m
 		maxItems = 100
 	}
 
-	certs := make([]*Certificate, 0, len(s.certificates))
+	certs := make([]*Certificate, 0, len(s.Certificates))
 
-	for _, cert := range s.certificates {
+	for _, cert := range s.Certificates {
 		// Filter by status if specified.
 		if len(statuses) > 0 && !slices.Contains(statuses, cert.Status) {
 			continue
@@ -172,14 +249,14 @@ func (s *MemoryStorage) DeleteCertificate(_ context.Context, arn string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.certificates[arn]; !exists {
+	if _, exists := s.Certificates[arn]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Certificate with arn %s not found", arn),
 		}
 	}
 
-	delete(s.certificates, arn)
+	delete(s.Certificates, arn)
 
 	return nil
 }
@@ -189,7 +266,7 @@ func (s *MemoryStorage) GetCertificate(_ context.Context, arn string) (*Certific
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cert, exists := s.certificates[arn]
+	cert, exists := s.Certificates[arn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -265,7 +342,7 @@ func (s *MemoryStorage) ImportCertificate(_ context.Context, req *ImportCertific
 		Tags:               req.Tags,
 	}
 
-	s.certificates[arn] = cert
+	s.Certificates[arn] = cert
 
 	return cert, nil
 }

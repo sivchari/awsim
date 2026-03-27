@@ -2,12 +2,15 @@ package ecs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -43,25 +46,115 @@ type Storage interface {
 	UpdateService(ctx context.Context, req *UpdateServiceRequest) (*ServiceResource, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	clusters        map[string]*Cluster
-	taskDefinitions map[string]*TaskDefinition
-	taskDefFamilies map[string][]string // family -> list of task definition ARNs
-	tasks           map[string]*Task
-	services        map[string]*ServiceResource
+	mu              sync.RWMutex                `json:"-"`
+	Clusters        map[string]*Cluster         `json:"clusters"`
+	TaskDefinitions map[string]*TaskDefinition  `json:"taskDefinitions"`
+	TaskDefFamilies map[string][]string         `json:"taskDefFamilies"`
+	Tasks           map[string]*Task            `json:"tasks"`
+	Services        map[string]*ServiceResource `json:"services"`
+	dataDir         string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		clusters:        make(map[string]*Cluster),
-		taskDefinitions: make(map[string]*TaskDefinition),
-		taskDefFamilies: make(map[string][]string),
-		tasks:           make(map[string]*Task),
-		services:        make(map[string]*ServiceResource),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Clusters:        make(map[string]*Cluster),
+		TaskDefinitions: make(map[string]*TaskDefinition),
+		TaskDefFamilies: make(map[string][]string),
+		Tasks:           make(map[string]*Task),
+		Services:        make(map[string]*ServiceResource),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ecs", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Clusters == nil {
+		m.Clusters = make(map[string]*Cluster)
+	}
+
+	if m.TaskDefinitions == nil {
+		m.TaskDefinitions = make(map[string]*TaskDefinition)
+	}
+
+	if m.TaskDefFamilies == nil {
+		m.TaskDefFamilies = make(map[string][]string)
+	}
+
+	if m.Tasks == nil {
+		m.Tasks = make(map[string]*Task)
+	}
+
+	if m.Services == nil {
+		m.Services = make(map[string]*ServiceResource)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "ecs", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 func generateID() string {
@@ -101,7 +194,7 @@ func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	arn := clusterArn(name)
 
 	// Check if cluster already exists.
-	if existing, ok := m.clusters[arn]; ok {
+	if existing, ok := m.Clusters[arn]; ok {
 		return existing, nil
 	}
 
@@ -112,7 +205,7 @@ func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 		Tags:        req.Tags,
 	}
 
-	m.clusters[arn] = cluster
+	m.Clusters[arn] = cluster
 
 	return cluster, nil
 }
@@ -124,7 +217,7 @@ func (m *MemoryStorage) DeleteCluster(_ context.Context, cluster string) (*Clust
 
 	arn := m.resolveClusterArn(cluster)
 
-	existing, ok := m.clusters[arn]
+	existing, ok := m.Clusters[arn]
 	if !ok {
 		return nil, &Error{
 			Code:    "ClusterNotFoundException",
@@ -149,7 +242,7 @@ func (m *MemoryStorage) DeleteCluster(_ context.Context, cluster string) (*Clust
 
 	existing.Status = statusInactive
 
-	delete(m.clusters, arn)
+	delete(m.Clusters, arn)
 
 	return existing, nil
 }
@@ -166,7 +259,7 @@ func (m *MemoryStorage) DescribeClusters(_ context.Context, clusters []string) (
 
 	// If no clusters specified, return all.
 	if len(clusters) == 0 {
-		for _, c := range m.clusters {
+		for _, c := range m.Clusters {
 			result = append(result, *c)
 		}
 
@@ -176,7 +269,7 @@ func (m *MemoryStorage) DescribeClusters(_ context.Context, clusters []string) (
 	for _, cluster := range clusters {
 		arn := m.resolveClusterArn(cluster)
 
-		if c, ok := m.clusters[arn]; ok {
+		if c, ok := m.Clusters[arn]; ok {
 			result = append(result, *c)
 		} else {
 			failures = append(failures, Failure{
@@ -194,8 +287,8 @@ func (m *MemoryStorage) ListClusters(_ context.Context, _ int, _ string) ([]stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	arns := make([]string, 0, len(m.clusters))
-	for arn := range m.clusters {
+	arns := make([]string, 0, len(m.Clusters))
+	for arn := range m.Clusters {
 		arns = append(arns, arn)
 	}
 
@@ -209,7 +302,7 @@ func (m *MemoryStorage) RegisterTaskDefinition(_ context.Context, req *RegisterT
 
 	// Determine revision number.
 	revision := 1
-	if existing, ok := m.taskDefFamilies[req.Family]; ok {
+	if existing, ok := m.TaskDefFamilies[req.Family]; ok {
 		revision = len(existing) + 1
 	}
 
@@ -230,8 +323,8 @@ func (m *MemoryStorage) RegisterTaskDefinition(_ context.Context, req *RegisterT
 		Tags:                    req.Tags,
 	}
 
-	m.taskDefinitions[arn] = td
-	m.taskDefFamilies[req.Family] = append(m.taskDefFamilies[req.Family], arn)
+	m.TaskDefinitions[arn] = td
+	m.TaskDefFamilies[req.Family] = append(m.TaskDefFamilies[req.Family], arn)
 
 	return td, nil
 }
@@ -243,7 +336,7 @@ func (m *MemoryStorage) DeregisterTaskDefinition(_ context.Context, taskDefiniti
 
 	arn := m.resolveTaskDefinitionArn(taskDefinition)
 
-	td, ok := m.taskDefinitions[arn]
+	td, ok := m.TaskDefinitions[arn]
 	if !ok {
 		return nil, &Error{
 			Code:    "ClientException",
@@ -290,7 +383,7 @@ func (m *MemoryStorage) RunTask(_ context.Context, req *RunTaskRequest) ([]Task,
 }
 
 func (m *MemoryStorage) getOrCreateCluster(clusterArn, clusterName string) (*Cluster, error) {
-	cluster, ok := m.clusters[clusterArn]
+	cluster, ok := m.Clusters[clusterArn]
 	if ok {
 		return cluster, nil
 	}
@@ -301,7 +394,7 @@ func (m *MemoryStorage) getOrCreateCluster(clusterArn, clusterName string) (*Clu
 			ClusterName: "default",
 			Status:      statusActive,
 		}
-		m.clusters[clusterArn] = cluster
+		m.Clusters[clusterArn] = cluster
 
 		return cluster, nil
 	}
@@ -315,7 +408,7 @@ func (m *MemoryStorage) getOrCreateCluster(clusterArn, clusterName string) (*Clu
 func (m *MemoryStorage) getTaskDefinitionForRun(taskDef string) (*TaskDefinition, error) {
 	tdArn := m.resolveTaskDefinitionArn(taskDef)
 
-	td, ok := m.taskDefinitions[tdArn]
+	td, ok := m.TaskDefinitions[tdArn]
 	if !ok {
 		return nil, &Error{
 			Code:    "ClientException",
@@ -332,7 +425,7 @@ func (m *MemoryStorage) createTasks(clusterArn string, td *TaskDefinition, req *
 
 	for range count {
 		task := m.createSingleTask(clusterArn, td, tdArn, req, launchType)
-		m.tasks[task.TaskArn] = &task
+		m.Tasks[task.TaskArn] = &task
 		tasks = append(tasks, task)
 	}
 
@@ -382,10 +475,10 @@ func (m *MemoryStorage) StopTask(_ context.Context, cluster, taskID, reason stri
 
 	clusterArn := m.resolveClusterArn(cluster)
 
-	task, ok := m.tasks[taskID]
+	task, ok := m.Tasks[taskID]
 	if !ok {
 		// Try to find by short ID.
-		for arn, t := range m.tasks {
+		for arn, t := range m.Tasks {
 			if strings.HasSuffix(arn, "/"+taskID) && t.ClusterArn == clusterArn {
 				task = t
 
@@ -411,7 +504,7 @@ func (m *MemoryStorage) StopTask(_ context.Context, cluster, taskID, reason stri
 	}
 
 	// Update cluster task count.
-	if c, ok := m.clusters[task.ClusterArn]; ok && c.RunningTasksCount > 0 {
+	if c, ok := m.Clusters[task.ClusterArn]; ok && c.RunningTasksCount > 0 {
 		c.RunningTasksCount--
 	}
 
@@ -433,7 +526,7 @@ func (m *MemoryStorage) DescribeTasks(_ context.Context, cluster string, taskIDs
 	for _, taskID := range taskIDs {
 		found := false
 
-		for arn, task := range m.tasks {
+		for arn, task := range m.Tasks {
 			if task.ClusterArn != clusterArn {
 				continue
 			}
@@ -464,7 +557,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 
 	clusterArn := m.resolveClusterArn(req.Cluster)
 
-	cluster, ok := m.clusters[clusterArn]
+	cluster, ok := m.Clusters[clusterArn]
 	if !ok {
 		return nil, &Error{
 			Code:    "ClusterNotFoundException",
@@ -476,7 +569,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 	arn := serviceArn(clusterName, req.ServiceName)
 
 	// Check if service already exists.
-	if _, ok := m.services[arn]; ok {
+	if _, ok := m.Services[arn]; ok {
 		return nil, &Error{
 			Code:    "ServiceAlreadyExistsException",
 			Message: "A service with that name already exists",
@@ -514,7 +607,7 @@ func (m *MemoryStorage) CreateService(_ context.Context, req *CreateServiceReque
 		Tags: req.Tags,
 	}
 
-	m.services[arn] = svc
+	m.Services[arn] = svc
 	cluster.ActiveServicesCount++
 
 	return svc, nil
@@ -530,10 +623,10 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 	svcArn := serviceArn(clusterName, service)
 
 	// Try to find by ARN or name.
-	svc, ok := m.services[svcArn]
+	svc, ok := m.Services[svcArn]
 	if !ok {
 		// Try to find by full ARN.
-		svc, ok = m.services[service]
+		svc, ok = m.Services[service]
 		if !ok {
 			return nil, &Error{
 				Code:    "ServiceNotFoundException",
@@ -553,10 +646,10 @@ func (m *MemoryStorage) DeleteService(_ context.Context, cluster, service string
 
 	svc.Status = statusDraining
 
-	delete(m.services, svcArn)
+	delete(m.Services, svcArn)
 
 	// Update cluster service count.
-	if c, ok := m.clusters[svc.ClusterArn]; ok && c.ActiveServicesCount > 0 {
+	if c, ok := m.Clusters[svc.ClusterArn]; ok && c.ActiveServicesCount > 0 {
 		c.ActiveServicesCount--
 	}
 
@@ -573,9 +666,9 @@ func (m *MemoryStorage) UpdateService(_ context.Context, req *UpdateServiceReque
 	svcArn := serviceArn(clusterName, req.Service)
 
 	// Try to find by ARN or name.
-	svc, ok := m.services[svcArn]
+	svc, ok := m.Services[svcArn]
 	if !ok {
-		svc, ok = m.services[req.Service]
+		svc, ok = m.Services[req.Service]
 		if !ok {
 			return nil, &Error{
 				Code:    "ServiceNotFoundException",
@@ -629,7 +722,7 @@ func (m *MemoryStorage) resolveTaskDefinitionArn(taskDefinition string) string {
 	}
 
 	// Try to find latest revision.
-	if arns, ok := m.taskDefFamilies[taskDefinition]; ok && len(arns) > 0 {
+	if arns, ok := m.TaskDefFamilies[taskDefinition]; ok && len(arns) > 0 {
 		return arns[len(arns)-1]
 	}
 

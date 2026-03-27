@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -30,24 +33,98 @@ type Storage interface {
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu      sync.RWMutex
-	tables  map[string]*tableData
+	mu      sync.RWMutex          `json:"-"`
+	Tables  map[string]*tableData `json:"tables"`
 	baseURL string
+	dataDir string
 }
 
 type tableData struct {
-	table *Table
-	items map[string]Item // key is the serialized primary key
+	Table *Table          `json:"table"`
+	Items map[string]Item `json:"items"`
 }
 
 // NewMemoryStorage creates a new in-memory DynamoDB storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		tables:  make(map[string]*tableData),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Tables:  make(map[string]*tableData),
 		baseURL: baseURL,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "dynamodb", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Tables == nil {
+		m.Tables = make(map[string]*tableData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "dynamodb", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateTable creates a new table.
@@ -55,7 +132,7 @@ func (m *MemoryStorage) CreateTable(_ context.Context, req *CreateTableRequest) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.tables[req.TableName]; exists {
+	if _, exists := m.Tables[req.TableName]; exists {
 		return nil, &TableError{
 			Code:    "ResourceInUseException",
 			Message: fmt.Sprintf("Table already exists: %s", req.TableName),
@@ -81,9 +158,9 @@ func (m *MemoryStorage) CreateTable(_ context.Context, req *CreateTableRequest) 
 		DeletionProtection:    req.DeletionProtectionEnabled,
 	}
 
-	m.tables[req.TableName] = &tableData{
-		table: table,
-		items: make(map[string]Item),
+	m.Tables[req.TableName] = &tableData{
+		Table: table,
+		Items: make(map[string]Item),
 	}
 
 	return table, nil
@@ -94,7 +171,7 @@ func (m *MemoryStorage) DeleteTable(_ context.Context, tableName string) (*Table
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -102,10 +179,10 @@ func (m *MemoryStorage) DeleteTable(_ context.Context, tableName string) (*Table
 		}
 	}
 
-	table := td.table
+	table := td.Table
 	table.TableStatus = "DELETING"
 
-	delete(m.tables, tableName)
+	delete(m.Tables, tableName)
 
 	return table, nil
 }
@@ -119,8 +196,8 @@ func (m *MemoryStorage) ListTables(_ context.Context, exclusiveStartTableName st
 		limit = 100
 	}
 
-	names := make([]string, 0, len(m.tables))
-	for name := range m.tables {
+	names := make([]string, 0, len(m.Tables))
+	for name := range m.Tables {
 		names = append(names, name)
 	}
 
@@ -160,7 +237,7 @@ func (m *MemoryStorage) DescribeTable(_ context.Context, tableName string) (*Tab
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -169,9 +246,9 @@ func (m *MemoryStorage) DescribeTable(_ context.Context, tableName string) (*Tab
 	}
 
 	// Update item count.
-	td.table.ItemCount = int64(len(td.items))
+	td.Table.ItemCount = int64(len(td.Items))
 
-	return td.table, nil
+	return td.Table, nil
 }
 
 // PutItem puts an item into a table.
@@ -179,7 +256,7 @@ func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -187,17 +264,17 @@ func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, 
 		}
 	}
 
-	key := m.serializeKey(td.table, item)
+	key := m.serializeKey(td.Table, item)
 
 	var oldItem Item
 
 	if returnOld {
-		if existing, ok := td.items[key]; ok {
+		if existing, ok := td.Items[key]; ok {
 			oldItem = m.copyItem(existing)
 		}
 	}
 
-	td.items[key] = m.copyItem(item)
+	td.Items[key] = m.copyItem(item)
 
 	return oldItem, nil
 }
@@ -207,7 +284,7 @@ func (m *MemoryStorage) GetItem(_ context.Context, tableName string, key Item) (
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -215,8 +292,8 @@ func (m *MemoryStorage) GetItem(_ context.Context, tableName string, key Item) (
 		}
 	}
 
-	keyStr := m.serializeKey(td.table, key)
-	if item, ok := td.items[keyStr]; ok {
+	keyStr := m.serializeKey(td.Table, key)
+	if item, ok := td.Items[keyStr]; ok {
 		return m.copyItem(item), nil
 	}
 
@@ -229,7 +306,7 @@ func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -237,16 +314,16 @@ func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item
 		}
 	}
 
-	keyStr := m.serializeKey(td.table, key)
+	keyStr := m.serializeKey(td.Table, key)
 
 	var oldItem Item
 
-	if existing, ok := td.items[keyStr]; ok {
+	if existing, ok := td.Items[keyStr]; ok {
 		if returnOld {
 			oldItem = m.copyItem(existing)
 		}
 
-		delete(td.items, keyStr)
+		delete(td.Items, keyStr)
 	}
 
 	return oldItem, nil
@@ -257,7 +334,7 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -265,8 +342,8 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 		}
 	}
 
-	keyStr := m.serializeKey(td.table, key)
-	item, itemExists := td.items[keyStr]
+	keyStr := m.serializeKey(td.Table, key)
+	item, itemExists := td.Items[keyStr]
 
 	var oldItem Item
 	if itemExists {
@@ -281,7 +358,7 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 		item = m.applyUpdateExpression(item, updateExpr, exprNames, exprValues)
 	}
 
-	td.items[keyStr] = item
+	td.Items[keyStr] = item
 
 	// Return based on returnValues.
 	switch returnValues {
@@ -309,7 +386,7 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, nil, 0, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -320,7 +397,7 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 	// Get partition key attribute name.
 	var partitionKeyName string
 
-	for _, ks := range td.table.KeySchema {
+	for _, ks := range td.Table.KeySchema {
 		if ks.KeyType == "HASH" {
 			partitionKeyName = ks.AttributeName
 
@@ -336,7 +413,7 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 
 	scannedCount := 0
 
-	for _, item := range td.items {
+	for _, item := range td.Items {
 		scannedCount++
 
 		// Check partition key match.
@@ -370,10 +447,10 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 	startIdx := 0
 
 	if exclusiveStartKey != nil {
-		startKeyStr := m.serializeKey(td.table, exclusiveStartKey)
+		startKeyStr := m.serializeKey(td.Table, exclusiveStartKey)
 
 		for i, item := range results {
-			itemKeyStr := m.serializeKey(td.table, item)
+			itemKeyStr := m.serializeKey(td.Table, item)
 			if itemKeyStr == startKeyStr {
 				startIdx = i + 1
 
@@ -392,7 +469,7 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
-		lastEvaluatedKey = m.extractKey(td.table, results[len(results)-1])
+		lastEvaluatedKey = m.extractKey(td.Table, results[len(results)-1])
 	}
 
 	return results, lastEvaluatedKey, scannedCount, nil
@@ -405,7 +482,7 @@ func (m *MemoryStorage) Scan(_ context.Context, tableName, filterExpr string, ex
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	td, exists := m.tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return nil, nil, 0, &TableError{
 			Code:    "ResourceNotFoundException",
@@ -418,7 +495,7 @@ func (m *MemoryStorage) Scan(_ context.Context, tableName, filterExpr string, ex
 
 	scannedCount := 0
 
-	for _, item := range td.items {
+	for _, item := range td.Items {
 		scannedCount++
 
 		// Apply filter expression.
@@ -431,8 +508,8 @@ func (m *MemoryStorage) Scan(_ context.Context, tableName, filterExpr string, ex
 
 	// Sort by key for consistent pagination.
 	sort.Slice(results, func(i, j int) bool {
-		keyI := m.serializeKey(td.table, results[i])
-		keyJ := m.serializeKey(td.table, results[j])
+		keyI := m.serializeKey(td.Table, results[i])
+		keyJ := m.serializeKey(td.Table, results[j])
 
 		return keyI < keyJ
 	})
@@ -441,10 +518,10 @@ func (m *MemoryStorage) Scan(_ context.Context, tableName, filterExpr string, ex
 	startIdx := 0
 
 	if exclusiveStartKey != nil {
-		startKeyStr := m.serializeKey(td.table, exclusiveStartKey)
+		startKeyStr := m.serializeKey(td.Table, exclusiveStartKey)
 
 		for i, item := range results {
-			itemKeyStr := m.serializeKey(td.table, item)
+			itemKeyStr := m.serializeKey(td.Table, item)
 			if itemKeyStr == startKeyStr {
 				startIdx = i + 1
 
@@ -463,7 +540,7 @@ func (m *MemoryStorage) Scan(_ context.Context, tableName, filterExpr string, ex
 
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
-		lastEvaluatedKey = m.extractKey(td.table, results[len(results)-1])
+		lastEvaluatedKey = m.extractKey(td.Table, results[len(results)-1])
 	}
 
 	return results, lastEvaluatedKey, scannedCount, nil

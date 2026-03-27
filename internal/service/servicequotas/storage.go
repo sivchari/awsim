@@ -2,11 +2,14 @@ package servicequotas
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -32,14 +35,14 @@ const (
 	quotaAppliedAtLevelAccount = "ACCOUNT"
 )
 
-// quotaDefinition represents a quota definition for initialization.
-type quotaDefinition struct {
-	code        string
-	name        string
-	value       float64
-	unit        string
-	adjustable  bool
-	description string
+// QuotaDefinition represents a quota definition for initialization.
+type QuotaDefinition struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Value       float64 `json:"value"`
+	Unit        string  `json:"unit"`
+	Adjustable  bool    `json:"adjustable"`
+	Description string  `json:"description"`
 }
 
 // Storage defines the Service Quotas storage interface.
@@ -59,31 +62,116 @@ type Storage interface {
 	ListRequestedServiceQuotaChangeHistory(ctx context.Context, serviceCode, quotaCode, status string, maxResults int32, nextToken string) ([]*QuotaChangeRequest, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu            sync.RWMutex
-	services      map[string]*ServiceInfo
-	quotas        map[string]map[string]*ServiceQuota // serviceCode -> quotaCode -> quota
-	defaultQuotas map[string]map[string]*ServiceQuota // serviceCode -> quotaCode -> quota
-	requests      map[string]*QuotaChangeRequest
+	mu            sync.RWMutex                        `json:"-"`
+	Services      map[string]*ServiceInfo             `json:"services"`
+	Quotas        map[string]map[string]*ServiceQuota `json:"quotas"`        // serviceCode -> quotaCode -> quota
+	DefaultQuotas map[string]map[string]*ServiceQuota `json:"defaultQuotas"` // serviceCode -> quotaCode -> quota
+	Requests      map[string]*QuotaChangeRequest      `json:"requests"`
 	region        string
 	accountID     string
+	dataDir       string
 }
 
 // NewMemoryStorage creates a new MemoryStorage with predefined services and quotas.
-func NewMemoryStorage() *MemoryStorage {
-	storage := &MemoryStorage{
-		services:      make(map[string]*ServiceInfo),
-		quotas:        make(map[string]map[string]*ServiceQuota),
-		defaultQuotas: make(map[string]map[string]*ServiceQuota),
-		requests:      make(map[string]*QuotaChangeRequest),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Services:      make(map[string]*ServiceInfo),
+		Quotas:        make(map[string]map[string]*ServiceQuota),
+		DefaultQuotas: make(map[string]map[string]*ServiceQuota),
+		Requests:      make(map[string]*QuotaChangeRequest),
 		region:        defaultRegion,
 		accountID:     defaultAccountID,
 	}
 
-	storage.initializeDefaultData()
+	for _, o := range opts {
+		o(s)
+	}
 
-	return storage
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "service-quotas", s)
+	}
+
+	s.initializeDefaultData()
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Services == nil {
+		m.Services = make(map[string]*ServiceInfo)
+	}
+
+	if m.Quotas == nil {
+		m.Quotas = make(map[string]map[string]*ServiceQuota)
+	}
+
+	if m.DefaultQuotas == nil {
+		m.DefaultQuotas = make(map[string]map[string]*ServiceQuota)
+	}
+
+	if m.Requests == nil {
+		m.Requests = make(map[string]*QuotaChangeRequest)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "service-quotas", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // initializeDefaultData sets up predefined services and quotas.
@@ -111,12 +199,12 @@ func (m *MemoryStorage) initializeServices() {
 	}
 
 	for i := range services {
-		m.services[services[i].ServiceCode] = &services[i]
+		m.Services[services[i].ServiceCode] = &services[i]
 	}
 }
 
 func (m *MemoryStorage) initializeEC2Quotas() {
-	m.addServiceQuotas("ec2", "Amazon Elastic Compute Cloud (Amazon EC2)", []quotaDefinition{
+	m.addServiceQuotas("ec2", "Amazon Elastic Compute Cloud (Amazon EC2)", []QuotaDefinition{
 		{"L-1216C47A", "Running On-Demand Standard instances", 1920, "None", true, "Max vCPUs for On-Demand Standard instances"},
 		{"L-34B43A08", "All Standard Spot Instance Requests", 1920, "None", true, "Max vCPUs for Standard Spot Requests"},
 		{"L-0E3CBAB9", "EC2-VPC Elastic IPs", 5, "None", true, "Max Elastic IP addresses for EC2-VPC"},
@@ -125,61 +213,61 @@ func (m *MemoryStorage) initializeEC2Quotas() {
 }
 
 func (m *MemoryStorage) initializeS3Quotas() {
-	m.addServiceQuotas("s3", "Amazon Simple Storage Service (Amazon S3)", []quotaDefinition{
+	m.addServiceQuotas("s3", "Amazon Simple Storage Service (Amazon S3)", []QuotaDefinition{
 		{"L-DC2B2D3D", "Buckets", 100, "None", true, "Maximum number of buckets per account"},
 	})
 }
 
 func (m *MemoryStorage) initializeLambdaQuotas() {
-	m.addServiceQuotas("lambda", "AWS Lambda", []quotaDefinition{
+	m.addServiceQuotas("lambda", "AWS Lambda", []QuotaDefinition{
 		{"L-B99A9384", "Concurrent executions", 1000, "None", true, "Maximum number of concurrent executions"},
 		{"L-2ACBD22F", "Function and layer storage", 75, "Gigabytes", true, "Max total storage for functions and layers"},
 	})
 }
 
 func (m *MemoryStorage) initializeDynamoDBQuotas() {
-	m.addServiceQuotas("dynamodb", "Amazon DynamoDB", []quotaDefinition{
+	m.addServiceQuotas("dynamodb", "Amazon DynamoDB", []QuotaDefinition{
 		{"L-F98FE922", "Table-level read throughput", 40000, "None", true, "Max read capacity units per table"},
 		{"L-82ACEF56", "Table-level write throughput", 40000, "None", true, "Max write capacity units per table"},
 	})
 }
 
 func (m *MemoryStorage) initializeSQSQuotas() {
-	m.addServiceQuotas("sqs", "Amazon Simple Queue Service (Amazon SQS)", []quotaDefinition{
+	m.addServiceQuotas("sqs", "Amazon Simple Queue Service (Amazon SQS)", []QuotaDefinition{
 		{"L-06F64E4A", "Messages per queue (backlog)", 120000, "None", false, "Max inflight messages per queue"},
 	})
 }
 
 // addServiceQuotas adds quotas for a service.
-func (m *MemoryStorage) addServiceQuotas(serviceCode, serviceName string, quotas []quotaDefinition) {
-	if m.quotas[serviceCode] == nil {
-		m.quotas[serviceCode] = make(map[string]*ServiceQuota)
+func (m *MemoryStorage) addServiceQuotas(serviceCode, serviceName string, quotas []QuotaDefinition) {
+	if m.Quotas[serviceCode] == nil {
+		m.Quotas[serviceCode] = make(map[string]*ServiceQuota)
 	}
 
-	if m.defaultQuotas[serviceCode] == nil {
-		m.defaultQuotas[serviceCode] = make(map[string]*ServiceQuota)
+	if m.DefaultQuotas[serviceCode] == nil {
+		m.DefaultQuotas[serviceCode] = make(map[string]*ServiceQuota)
 	}
 
 	for _, q := range quotas {
 		quota := &ServiceQuota{
-			QuotaARN:            generateQuotaARN(m.region, serviceCode, q.code),
-			QuotaCode:           q.code,
-			QuotaName:           q.name,
+			QuotaARN:            generateQuotaARN(m.region, serviceCode, q.Code),
+			QuotaCode:           q.Code,
+			QuotaName:           q.Name,
 			ServiceCode:         serviceCode,
 			ServiceName:         serviceName,
-			Value:               q.value,
-			Unit:                q.unit,
-			Adjustable:          q.adjustable,
+			Value:               q.Value,
+			Unit:                q.Unit,
+			Adjustable:          q.Adjustable,
 			GlobalQuota:         false,
-			Description:         q.description,
+			Description:         q.Description,
 			QuotaAppliedAtLevel: quotaAppliedAtLevelAccount,
 		}
 
-		m.quotas[serviceCode][q.code] = quota
+		m.Quotas[serviceCode][q.Code] = quota
 
 		// Default quotas are the same initially
 		defaultQuota := *quota
-		m.defaultQuotas[serviceCode][q.code] = &defaultQuota
+		m.DefaultQuotas[serviceCode][q.Code] = &defaultQuota
 	}
 }
 
@@ -188,9 +276,9 @@ func (m *MemoryStorage) ListServices(_ context.Context, maxResults int32, _ stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*ServiceInfo, 0, len(m.services))
+	result := make([]*ServiceInfo, 0, len(m.Services))
 
-	for _, svc := range m.services {
+	for _, svc := range m.Services {
 		result = append(result, svc)
 
 		//nolint:gosec // len(result) is bounded by the number of services which is limited.
@@ -207,7 +295,7 @@ func (m *MemoryStorage) GetServiceQuota(_ context.Context, serviceCode, quotaCod
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	serviceQuotas, exists := m.quotas[serviceCode]
+	serviceQuotas, exists := m.Quotas[serviceCode]
 	if !exists {
 		return nil, &Error{Code: errNoSuchResourceException, Message: "Service not found: " + serviceCode}
 	}
@@ -225,7 +313,7 @@ func (m *MemoryStorage) ListServiceQuotas(_ context.Context, serviceCode string,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	serviceQuotas, exists := m.quotas[serviceCode]
+	serviceQuotas, exists := m.Quotas[serviceCode]
 	if !exists {
 		return nil, "", &Error{Code: errNoSuchResourceException, Message: "Service not found: " + serviceCode}
 	}
@@ -249,7 +337,7 @@ func (m *MemoryStorage) GetAWSDefaultServiceQuota(_ context.Context, serviceCode
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	serviceQuotas, exists := m.defaultQuotas[serviceCode]
+	serviceQuotas, exists := m.DefaultQuotas[serviceCode]
 	if !exists {
 		return nil, &Error{Code: errNoSuchResourceException, Message: "Service not found: " + serviceCode}
 	}
@@ -267,7 +355,7 @@ func (m *MemoryStorage) ListAWSDefaultServiceQuotas(_ context.Context, serviceCo
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	serviceQuotas, exists := m.defaultQuotas[serviceCode]
+	serviceQuotas, exists := m.DefaultQuotas[serviceCode]
 	if !exists {
 		return nil, "", &Error{Code: errNoSuchResourceException, Message: "Service not found: " + serviceCode}
 	}
@@ -292,7 +380,7 @@ func (m *MemoryStorage) RequestServiceQuotaIncrease(_ context.Context, serviceCo
 	defer m.mu.Unlock()
 
 	// Check if the service exists
-	serviceQuotas, exists := m.quotas[serviceCode]
+	serviceQuotas, exists := m.Quotas[serviceCode]
 	if !exists {
 		return nil, &Error{Code: errNoSuchResourceException, Message: "Service not found: " + serviceCode}
 	}
@@ -327,7 +415,7 @@ func (m *MemoryStorage) RequestServiceQuotaIncrease(_ context.Context, serviceCo
 		QuotaRequestedAtLevel: quotaAppliedAtLevelAccount,
 	}
 
-	m.requests[requestID] = request
+	m.Requests[requestID] = request
 
 	return request, nil
 }
@@ -337,7 +425,7 @@ func (m *MemoryStorage) GetRequestedServiceQuotaChange(_ context.Context, reques
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	request, exists := m.requests[requestID]
+	request, exists := m.Requests[requestID]
 	if !exists {
 		return nil, &Error{Code: errNoSuchResourceException, Message: "Request not found: " + requestID}
 	}
@@ -350,9 +438,9 @@ func (m *MemoryStorage) ListRequestedServiceQuotaChangeHistory(_ context.Context
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*QuotaChangeRequest, 0, len(m.requests))
+	result := make([]*QuotaChangeRequest, 0, len(m.Requests))
 
-	for _, request := range m.requests {
+	for _, request := range m.Requests {
 		if serviceCode != "" && request.ServiceCode != serviceCode {
 			continue
 		}

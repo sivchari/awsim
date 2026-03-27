@@ -2,6 +2,7 @@ package sns
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -33,27 +36,105 @@ type Storage interface {
 	ListSubscriptionsByTopic(ctx context.Context, topicARN, nextToken string) ([]*Subscription, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu            sync.RWMutex
-	topics        map[string]*Topic        // keyed by ARN
-	subscriptions map[string]*Subscription // keyed by ARN
+	mu            sync.RWMutex             `json:"-"`
+	Topics        map[string]*Topic        `json:"topics"`        // keyed by ARN
+	Subscriptions map[string]*Subscription `json:"subscriptions"` // keyed by ARN
 	baseURL       string
-	sqsPublisher  SQSPublisher
+	SqsPublisher  SQSPublisher `json:"-"`
+	dataDir       string
 }
 
 // NewMemoryStorage creates a new in-memory SNS storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		topics:        make(map[string]*Topic),
-		subscriptions: make(map[string]*Subscription),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Topics:        make(map[string]*Topic),
+		Subscriptions: make(map[string]*Subscription),
 		baseURL:       baseURL,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "sns", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Topics == nil {
+		m.Topics = make(map[string]*Topic)
+	}
+
+	if m.Subscriptions == nil {
+		m.Subscriptions = make(map[string]*Subscription)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "sns", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // SetSQSPublisher sets the SQS publisher for SNS to SQS integration.
 func (m *MemoryStorage) SetSQSPublisher(publisher SQSPublisher) {
-	m.sqsPublisher = publisher
+	m.SqsPublisher = publisher
 }
 
 // CreateTopic creates a new topic.
@@ -64,7 +145,7 @@ func (m *MemoryStorage) CreateTopic(_ context.Context, name string, attributes m
 	arn := m.buildTopicARN(name)
 
 	// Return existing topic if it exists.
-	if topic, exists := m.topics[arn]; exists {
+	if topic, exists := m.Topics[arn]; exists {
 		return topic, nil
 	}
 
@@ -82,7 +163,7 @@ func (m *MemoryStorage) CreateTopic(_ context.Context, name string, attributes m
 		}
 	}
 
-	m.topics[arn] = topic
+	m.Topics[arn] = topic
 
 	return topic, nil
 }
@@ -92,7 +173,7 @@ func (m *MemoryStorage) DeleteTopic(_ context.Context, topicARN string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	topic, exists := m.topics[topicARN]
+	topic, exists := m.Topics[topicARN]
 	if !exists {
 		return &TopicError{
 			Code:    "NotFound",
@@ -102,10 +183,10 @@ func (m *MemoryStorage) DeleteTopic(_ context.Context, topicARN string) error {
 
 	// Delete all subscriptions for this topic.
 	for subARN := range topic.Subscriptions {
-		delete(m.subscriptions, subARN)
+		delete(m.Subscriptions, subARN)
 	}
 
-	delete(m.topics, topicARN)
+	delete(m.Topics, topicARN)
 
 	return nil
 }
@@ -116,8 +197,8 @@ func (m *MemoryStorage) ListTopics(_ context.Context, nextToken string) ([]*Topi
 	defer m.mu.RUnlock()
 
 	// Collect all topics.
-	allTopics := make([]*Topic, 0, len(m.topics))
-	for _, topic := range m.topics {
+	allTopics := make([]*Topic, 0, len(m.Topics))
+	for _, topic := range m.Topics {
 		allTopics = append(allTopics, topic)
 	}
 
@@ -156,7 +237,7 @@ func (m *MemoryStorage) Subscribe(_ context.Context, topicARN, protocol, endpoin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	topic, exists := m.topics[topicARN]
+	topic, exists := m.Topics[topicARN]
 	if !exists {
 		return nil, &TopicError{
 			Code:    "NotFound",
@@ -194,7 +275,7 @@ func (m *MemoryStorage) Subscribe(_ context.Context, topicARN, protocol, endpoin
 		subscription.ConfirmationWasAuthenticated = true
 	}
 
-	m.subscriptions[subscriptionARN] = subscription
+	m.Subscriptions[subscriptionARN] = subscription
 	topic.Subscriptions[subscriptionARN] = subscription
 
 	return subscription, nil
@@ -205,7 +286,7 @@ func (m *MemoryStorage) Unsubscribe(_ context.Context, subscriptionARN string) e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	subscription, exists := m.subscriptions[subscriptionARN]
+	subscription, exists := m.Subscriptions[subscriptionARN]
 	if !exists {
 		return &TopicError{
 			Code:    "NotFound",
@@ -214,11 +295,11 @@ func (m *MemoryStorage) Unsubscribe(_ context.Context, subscriptionARN string) e
 	}
 
 	// Remove from topic's subscriptions.
-	if topic, exists := m.topics[subscription.TopicARN]; exists {
+	if topic, exists := m.Topics[subscription.TopicARN]; exists {
 		delete(topic.Subscriptions, subscriptionARN)
 	}
 
-	delete(m.subscriptions, subscriptionARN)
+	delete(m.Subscriptions, subscriptionARN)
 
 	return nil
 }
@@ -227,7 +308,7 @@ func (m *MemoryStorage) Unsubscribe(_ context.Context, subscriptionARN string) e
 func (m *MemoryStorage) Publish(ctx context.Context, topicARN, message, subject string, attributes map[string]MessageAttribute) (string, error) {
 	m.mu.RLock()
 
-	topic, exists := m.topics[topicARN]
+	topic, exists := m.Topics[topicARN]
 	if !exists {
 		m.mu.RUnlock()
 
@@ -261,7 +342,7 @@ func (m *MemoryStorage) Publish(ctx context.Context, topicARN, message, subject 
 func (m *MemoryStorage) deliverMessage(ctx context.Context, sub *Subscription, message, subject, messageID string, _ map[string]MessageAttribute) error {
 	switch sub.Protocol {
 	case "sqs":
-		if m.sqsPublisher != nil {
+		if m.SqsPublisher != nil {
 			attrs := map[string]string{
 				"MessageId": messageID,
 			}
@@ -269,7 +350,7 @@ func (m *MemoryStorage) deliverMessage(ctx context.Context, sub *Subscription, m
 				attrs["Subject"] = subject
 			}
 
-			if err := m.sqsPublisher.PublishToSQS(ctx, sub.Endpoint, message, attrs); err != nil {
+			if err := m.SqsPublisher.PublishToSQS(ctx, sub.Endpoint, message, attrs); err != nil {
 				return fmt.Errorf("failed to publish to SQS: %w", err)
 			}
 
@@ -292,8 +373,8 @@ func (m *MemoryStorage) ListSubscriptions(_ context.Context, nextToken string) (
 	defer m.mu.RUnlock()
 
 	// Collect all subscriptions.
-	allSubs := make([]*Subscription, 0, len(m.subscriptions))
-	for _, sub := range m.subscriptions {
+	allSubs := make([]*Subscription, 0, len(m.Subscriptions))
+	for _, sub := range m.Subscriptions {
 		allSubs = append(allSubs, sub)
 	}
 
@@ -332,7 +413,7 @@ func (m *MemoryStorage) ListSubscriptionsByTopic(_ context.Context, topicARN, ne
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	topic, exists := m.topics[topicARN]
+	topic, exists := m.Topics[topicARN]
 	if !exists {
 		return nil, "", &TopicError{
 			Code:    "NotFound",

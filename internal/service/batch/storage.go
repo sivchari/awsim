@@ -2,10 +2,13 @@ package batch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -29,25 +32,115 @@ type Storage interface {
 	TerminateJob(ctx context.Context, jobID, reason string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data structures.
 type MemoryStorage struct {
-	mu                  sync.RWMutex
-	computeEnvironments map[string]*ComputeEnvironment // key: name
-	jobQueues           map[string]*JobQueue           // key: name
-	jobDefinitions      map[string]*JobDefinition      // key: name:revision
-	jobs                map[string]*Job                // key: jobID
-	jobDefRevisions     map[string]int32               // key: name -> latest revision
+	mu                  sync.RWMutex                   `json:"-"`
+	ComputeEnvironments map[string]*ComputeEnvironment `json:"computeEnvironments"` // key: name
+	JobQueues           map[string]*JobQueue           `json:"jobQueues"`           // key: name
+	JobDefinitions      map[string]*JobDefinition      `json:"jobDefinitions"`      // key: name:revision
+	Jobs                map[string]*Job                `json:"jobs"`                // key: jobID
+	JobDefRevisions     map[string]int32               `json:"jobDefRevisions"`     // key: name -> latest revision
+	dataDir             string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		computeEnvironments: make(map[string]*ComputeEnvironment),
-		jobQueues:           make(map[string]*JobQueue),
-		jobDefinitions:      make(map[string]*JobDefinition),
-		jobs:                make(map[string]*Job),
-		jobDefRevisions:     make(map[string]int32),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		ComputeEnvironments: make(map[string]*ComputeEnvironment),
+		JobQueues:           make(map[string]*JobQueue),
+		JobDefinitions:      make(map[string]*JobDefinition),
+		Jobs:                make(map[string]*Job),
+		JobDefRevisions:     make(map[string]int32),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "batch", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.ComputeEnvironments == nil {
+		s.ComputeEnvironments = make(map[string]*ComputeEnvironment)
+	}
+
+	if s.JobQueues == nil {
+		s.JobQueues = make(map[string]*JobQueue)
+	}
+
+	if s.JobDefinitions == nil {
+		s.JobDefinitions = make(map[string]*JobDefinition)
+	}
+
+	if s.Jobs == nil {
+		s.Jobs = make(map[string]*Job)
+	}
+
+	if s.JobDefRevisions == nil {
+		s.JobDefRevisions = make(map[string]int32)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "batch", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateComputeEnvironment creates a new compute environment.
@@ -62,7 +155,7 @@ func (s *MemoryStorage) CreateComputeEnvironment(_ context.Context, input *Creat
 		}
 	}
 
-	if _, exists := s.computeEnvironments[input.ComputeEnvironmentName]; exists {
+	if _, exists := s.ComputeEnvironments[input.ComputeEnvironmentName]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Compute environment %s already exists", input.ComputeEnvironmentName),
@@ -89,7 +182,7 @@ func (s *MemoryStorage) CreateComputeEnvironment(_ context.Context, input *Creat
 		UUID:                   uuid.New().String(),
 	}
 
-	s.computeEnvironments[input.ComputeEnvironmentName] = ce
+	s.ComputeEnvironments[input.ComputeEnvironmentName] = ce
 
 	return ce, nil
 }
@@ -99,14 +192,14 @@ func (s *MemoryStorage) DeleteComputeEnvironment(_ context.Context, name string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.computeEnvironments[name]; !exists {
+	if _, exists := s.ComputeEnvironments[name]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Compute environment %s not found", name),
 		}
 	}
 
-	delete(s.computeEnvironments, name)
+	delete(s.ComputeEnvironments, name)
 
 	return nil
 }
@@ -120,13 +213,13 @@ func (s *MemoryStorage) DescribeComputeEnvironments(_ context.Context, names []s
 
 	if len(names) == 0 {
 		// Return all compute environments.
-		for _, ce := range s.computeEnvironments {
+		for _, ce := range s.ComputeEnvironments {
 			result = append(result, *ce)
 		}
 	} else {
 		// Return specified compute environments.
 		for _, name := range names {
-			if ce, exists := s.computeEnvironments[name]; exists {
+			if ce, exists := s.ComputeEnvironments[name]; exists {
 				result = append(result, *ce)
 			}
 		}
@@ -147,7 +240,7 @@ func (s *MemoryStorage) CreateJobQueue(_ context.Context, input *CreateJobQueueI
 		}
 	}
 
-	if _, exists := s.jobQueues[input.JobQueueName]; exists {
+	if _, exists := s.JobQueues[input.JobQueueName]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Job queue %s already exists", input.JobQueueName),
@@ -173,7 +266,7 @@ func (s *MemoryStorage) CreateJobQueue(_ context.Context, input *CreateJobQueueI
 		Tags:                     input.Tags,
 	}
 
-	s.jobQueues[input.JobQueueName] = jq
+	s.JobQueues[input.JobQueueName] = jq
 
 	return jq, nil
 }
@@ -183,14 +276,14 @@ func (s *MemoryStorage) DeleteJobQueue(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.jobQueues[name]; !exists {
+	if _, exists := s.JobQueues[name]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Job queue %s not found", name),
 		}
 	}
 
-	delete(s.jobQueues, name)
+	delete(s.JobQueues, name)
 
 	return nil
 }
@@ -204,13 +297,13 @@ func (s *MemoryStorage) DescribeJobQueues(_ context.Context, names []string) ([]
 
 	if len(names) == 0 {
 		// Return all job queues.
-		for _, jq := range s.jobQueues {
+		for _, jq := range s.JobQueues {
 			result = append(result, *jq)
 		}
 	} else {
 		// Return specified job queues.
 		for _, name := range names {
-			if jq, exists := s.jobQueues[name]; exists {
+			if jq, exists := s.JobQueues[name]; exists {
 				result = append(result, *jq)
 			}
 		}
@@ -239,8 +332,8 @@ func (s *MemoryStorage) RegisterJobDefinition(_ context.Context, input *Register
 	}
 
 	// Increment revision.
-	revision := s.jobDefRevisions[input.JobDefinitionName] + 1
-	s.jobDefRevisions[input.JobDefinitionName] = revision
+	revision := s.JobDefRevisions[input.JobDefinitionName] + 1
+	s.JobDefRevisions[input.JobDefinitionName] = revision
 
 	jdARN := fmt.Sprintf("arn:aws:batch:us-east-1:000000000000:job-definition/%s:%d", input.JobDefinitionName, revision)
 	jdKey := fmt.Sprintf("%s:%d", input.JobDefinitionName, revision)
@@ -263,7 +356,7 @@ func (s *MemoryStorage) RegisterJobDefinition(_ context.Context, input *Register
 		Type:                 input.Type,
 	}
 
-	s.jobDefinitions[jdKey] = jd
+	s.JobDefinitions[jdKey] = jd
 
 	return jd, nil
 }
@@ -315,7 +408,7 @@ func (s *MemoryStorage) SubmitJob(_ context.Context, input *SubmitJobInput) (*Jo
 		Timeout:            input.Timeout,
 	}
 
-	s.jobs[jobID] = job
+	s.Jobs[jobID] = job
 
 	return job, nil
 }
@@ -328,7 +421,7 @@ func (s *MemoryStorage) DescribeJobs(_ context.Context, jobIDs []string) ([]Job,
 	var result []Job
 
 	for _, id := range jobIDs {
-		if job, exists := s.jobs[id]; exists {
+		if job, exists := s.Jobs[id]; exists {
 			result = append(result, *job)
 		}
 	}
@@ -341,7 +434,7 @@ func (s *MemoryStorage) TerminateJob(_ context.Context, jobID, reason string) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	job, exists := s.jobs[jobID]
+	job, exists := s.Jobs[jobID]
 	if !exists {
 		return &Error{
 			Code:    errNotFound,

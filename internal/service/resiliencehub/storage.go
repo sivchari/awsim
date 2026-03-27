@@ -1,12 +1,15 @@
 package resiliencehub
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -42,23 +45,109 @@ type Storage interface {
 	ListTagsForResource(resourceARN string) (map[string]string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage provides an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	apps        map[string]*App
-	policies    map[string]*ResiliencyPolicy
-	assessments map[string]*AppAssessment
-	tags        map[string]map[string]string
+	mu          sync.RWMutex                 `json:"-"`
+	Apps        map[string]*App              `json:"apps"`
+	Policies    map[string]*ResiliencyPolicy `json:"policies"`
+	Assessments map[string]*AppAssessment    `json:"assessments"`
+	Tags        map[string]map[string]string `json:"tags"`
+	dataDir     string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		apps:        make(map[string]*App),
-		policies:    make(map[string]*ResiliencyPolicy),
-		assessments: make(map[string]*AppAssessment),
-		tags:        make(map[string]map[string]string),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Apps:        make(map[string]*App),
+		Policies:    make(map[string]*ResiliencyPolicy),
+		Assessments: make(map[string]*AppAssessment),
+		Tags:        make(map[string]map[string]string),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "resiliencehub", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Apps == nil {
+		s.Apps = make(map[string]*App)
+	}
+
+	if s.Policies == nil {
+		s.Policies = make(map[string]*ResiliencyPolicy)
+	}
+
+	if s.Assessments == nil {
+		s.Assessments = make(map[string]*AppAssessment)
+	}
+
+	if s.Tags == nil {
+		s.Tags = make(map[string]map[string]string)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "resiliencehub", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateApp creates a new application.
@@ -67,7 +156,7 @@ func (s *MemoryStorage) CreateApp(req *CreateAppRequest) (*App, error) {
 	defer s.mu.Unlock()
 
 	// Check for duplicate name
-	for _, app := range s.apps {
+	for _, app := range s.Apps {
 		if app.Name == req.Name {
 			return nil, &Error{
 				Code:    errConflict,
@@ -95,10 +184,10 @@ func (s *MemoryStorage) CreateApp(req *CreateAppRequest) (*App, error) {
 		Tags:               req.Tags,
 	}
 
-	s.apps[appARN] = app
+	s.Apps[appARN] = app
 
 	if req.Tags != nil {
-		s.tags[appARN] = req.Tags
+		s.Tags[appARN] = req.Tags
 	}
 
 	return app, nil
@@ -109,7 +198,7 @@ func (s *MemoryStorage) DescribeApp(appARN string) (*App, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	app, ok := s.apps[appARN]
+	app, ok := s.Apps[appARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -125,7 +214,7 @@ func (s *MemoryStorage) UpdateApp(req *UpdateAppRequest) (*App, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	app, ok := s.apps[req.AppARN]
+	app, ok := s.Apps[req.AppARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -165,15 +254,15 @@ func (s *MemoryStorage) DeleteApp(appARN string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.apps[appARN]; !ok {
+	if _, ok := s.Apps[appARN]; !ok {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("App not found: %s", appARN),
 		}
 	}
 
-	delete(s.apps, appARN)
-	delete(s.tags, appARN)
+	delete(s.Apps, appARN)
+	delete(s.Tags, appARN)
 
 	return nil
 }
@@ -183,9 +272,9 @@ func (s *MemoryStorage) ListApps(req *ListAppsRequest) ([]*AppSummary, string, e
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	summaries := make([]*AppSummary, 0, len(s.apps))
+	summaries := make([]*AppSummary, 0, len(s.Apps))
 
-	for _, app := range s.apps {
+	for _, app := range s.Apps {
 		// Apply filters
 		if req.Name != "" && app.Name != req.Name {
 			continue
@@ -221,7 +310,7 @@ func (s *MemoryStorage) CreateResiliencyPolicy(req *CreateResiliencyPolicyReques
 	defer s.mu.Unlock()
 
 	// Check for duplicate name
-	for _, policy := range s.policies {
+	for _, policy := range s.Policies {
 		if policy.PolicyName == req.PolicyName {
 			return nil, &Error{
 				Code:    errConflict,
@@ -245,10 +334,10 @@ func (s *MemoryStorage) CreateResiliencyPolicy(req *CreateResiliencyPolicyReques
 		Tier:                   req.Tier,
 	}
 
-	s.policies[policyARN] = policy
+	s.Policies[policyARN] = policy
 
 	if req.Tags != nil {
-		s.tags[policyARN] = req.Tags
+		s.Tags[policyARN] = req.Tags
 	}
 
 	return policy, nil
@@ -259,7 +348,7 @@ func (s *MemoryStorage) DescribeResiliencyPolicy(policyARN string) (*ResiliencyP
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	policy, ok := s.policies[policyARN]
+	policy, ok := s.Policies[policyARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -275,7 +364,7 @@ func (s *MemoryStorage) UpdateResiliencyPolicy(req *UpdateResiliencyPolicyReques
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	policy, ok := s.policies[req.PolicyARN]
+	policy, ok := s.Policies[req.PolicyARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -311,15 +400,15 @@ func (s *MemoryStorage) DeleteResiliencyPolicy(policyARN string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.policies[policyARN]; !ok {
+	if _, ok := s.Policies[policyARN]; !ok {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Policy not found: %s", policyARN),
 		}
 	}
 
-	delete(s.policies, policyARN)
-	delete(s.tags, policyARN)
+	delete(s.Policies, policyARN)
+	delete(s.Tags, policyARN)
 
 	return nil
 }
@@ -329,9 +418,9 @@ func (s *MemoryStorage) ListResiliencyPolicies(req *ListResiliencyPoliciesReques
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	policies := make([]*ResiliencyPolicy, 0, len(s.policies))
+	policies := make([]*ResiliencyPolicy, 0, len(s.Policies))
 
-	for _, policy := range s.policies {
+	for _, policy := range s.Policies {
 		// Apply filters
 		if req.PolicyName != "" && policy.PolicyName != req.PolicyName {
 			continue
@@ -348,7 +437,7 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	app, ok := s.apps[req.AppARN]
+	app, ok := s.Apps[req.AppARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -361,7 +450,7 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 
 	var policy *ResiliencyPolicy
 	if app.PolicyARN != "" {
-		policy = s.policies[app.PolicyARN]
+		policy = s.Policies[app.PolicyARN]
 	}
 
 	assessment := &AppAssessment{
@@ -377,10 +466,10 @@ func (s *MemoryStorage) StartAppAssessment(req *StartAppAssessmentRequest) (*App
 		ResiliencyScore: defaultResiliencyScore(),
 	}
 
-	s.assessments[assessmentARN] = assessment
+	s.Assessments[assessmentARN] = assessment
 
 	if req.Tags != nil {
-		s.tags[assessmentARN] = req.Tags
+		s.Tags[assessmentARN] = req.Tags
 	}
 
 	return assessment, nil
@@ -404,7 +493,7 @@ func (s *MemoryStorage) DescribeAppAssessment(assessmentARN string) (*AppAssessm
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	assessment, ok := s.assessments[assessmentARN]
+	assessment, ok := s.Assessments[assessmentARN]
 	if !ok {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -420,15 +509,15 @@ func (s *MemoryStorage) DeleteAppAssessment(assessmentARN string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.assessments[assessmentARN]; !ok {
+	if _, ok := s.Assessments[assessmentARN]; !ok {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Assessment not found: %s", assessmentARN),
 		}
 	}
 
-	delete(s.assessments, assessmentARN)
-	delete(s.tags, assessmentARN)
+	delete(s.Assessments, assessmentARN)
+	delete(s.Tags, assessmentARN)
 
 	return nil
 }
@@ -438,9 +527,9 @@ func (s *MemoryStorage) ListAppAssessments(req *ListAppAssessmentsRequest) ([]*A
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	summaries := make([]*AppAssessmentSummary, 0, len(s.assessments))
+	summaries := make([]*AppAssessmentSummary, 0, len(s.Assessments))
 
-	for _, assessment := range s.assessments {
+	for _, assessment := range s.Assessments {
 		// Apply filters
 		if req.AppARN != "" && assessment.AppARN != req.AppARN {
 			continue
@@ -495,9 +584,9 @@ func (s *MemoryStorage) TagResource(resourceARN string, tags map[string]string) 
 	defer s.mu.Unlock()
 
 	// Check if resource exists
-	_, appOK := s.apps[resourceARN]
-	_, policyOK := s.policies[resourceARN]
-	_, assessmentOK := s.assessments[resourceARN]
+	_, appOK := s.Apps[resourceARN]
+	_, policyOK := s.Policies[resourceARN]
+	_, assessmentOK := s.Assessments[resourceARN]
 
 	if !appOK && !policyOK && !assessmentOK {
 		return &Error{
@@ -506,11 +595,11 @@ func (s *MemoryStorage) TagResource(resourceARN string, tags map[string]string) 
 		}
 	}
 
-	if s.tags[resourceARN] == nil {
-		s.tags[resourceARN] = make(map[string]string)
+	if s.Tags[resourceARN] == nil {
+		s.Tags[resourceARN] = make(map[string]string)
 	}
 
-	maps.Copy(s.tags[resourceARN], tags)
+	maps.Copy(s.Tags[resourceARN], tags)
 
 	return nil
 }
@@ -521,9 +610,9 @@ func (s *MemoryStorage) UntagResource(resourceARN string, tagKeys []string) erro
 	defer s.mu.Unlock()
 
 	// Check if resource exists
-	_, appOK := s.apps[resourceARN]
-	_, policyOK := s.policies[resourceARN]
-	_, assessmentOK := s.assessments[resourceARN]
+	_, appOK := s.Apps[resourceARN]
+	_, policyOK := s.Policies[resourceARN]
+	_, assessmentOK := s.Assessments[resourceARN]
 
 	if !appOK && !policyOK && !assessmentOK {
 		return &Error{
@@ -532,9 +621,9 @@ func (s *MemoryStorage) UntagResource(resourceARN string, tagKeys []string) erro
 		}
 	}
 
-	if s.tags[resourceARN] != nil {
+	if s.Tags[resourceARN] != nil {
 		for _, key := range tagKeys {
-			delete(s.tags[resourceARN], key)
+			delete(s.Tags[resourceARN], key)
 		}
 	}
 
@@ -547,9 +636,9 @@ func (s *MemoryStorage) ListTagsForResource(resourceARN string) (map[string]stri
 	defer s.mu.RUnlock()
 
 	// Check if resource exists
-	_, appOK := s.apps[resourceARN]
-	_, policyOK := s.policies[resourceARN]
-	_, assessmentOK := s.assessments[resourceARN]
+	_, appOK := s.Apps[resourceARN]
+	_, policyOK := s.Policies[resourceARN]
+	_, assessmentOK := s.Assessments[resourceARN]
 
 	if !appOK && !policyOK && !assessmentOK {
 		return nil, &Error{
@@ -558,7 +647,7 @@ func (s *MemoryStorage) ListTagsForResource(resourceARN string) (map[string]stri
 		}
 	}
 
-	tags := s.tags[resourceARN]
+	tags := s.Tags[resourceARN]
 	if tags == nil {
 		return make(map[string]string), nil
 	}

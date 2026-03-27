@@ -2,9 +2,12 @@ package glacier
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -32,17 +35,91 @@ type Storage interface {
 	ListVaults(ctx context.Context) ([]Vault, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu     sync.RWMutex
-	vaults map[string]*Vault
+	mu      sync.RWMutex      `json:"-"`
+	Vaults  map[string]*Vault `json:"vaults"`
+	dataDir string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		vaults: make(map[string]*Vault),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Vaults: make(map[string]*Vault),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "glacier", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Vaults == nil {
+		m.Vaults = make(map[string]*Vault)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "glacier", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateVault creates a new vault.
@@ -51,7 +128,7 @@ func (m *MemoryStorage) CreateVault(_ context.Context, vaultName string) (*Vault
 	defer m.mu.Unlock()
 
 	// CreateVault is idempotent - no error if vault already exists
-	if v, exists := m.vaults[vaultName]; exists {
+	if v, exists := m.Vaults[vaultName]; exists {
 		return v, nil
 	}
 
@@ -63,7 +140,7 @@ func (m *MemoryStorage) CreateVault(_ context.Context, vaultName string) (*Vault
 		VaultName:        vaultName,
 	}
 
-	m.vaults[vaultName] = vault
+	m.Vaults[vaultName] = vault
 
 	return vault, nil
 }
@@ -73,7 +150,7 @@ func (m *MemoryStorage) DescribeVault(_ context.Context, vaultName string) (*Vau
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	vault, exists := m.vaults[vaultName]
+	vault, exists := m.Vaults[vaultName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errVaultNotFound,
@@ -89,14 +166,14 @@ func (m *MemoryStorage) DeleteVault(_ context.Context, vaultName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.vaults[vaultName]; !exists {
+	if _, exists := m.Vaults[vaultName]; !exists {
 		return &ServiceError{
 			Code:    errVaultNotFound,
 			Message: fmt.Sprintf("Vault not found: arn:aws:glacier:%s:%s:vaults/%s", defaultRegion, defaultAccountID, vaultName),
 		}
 	}
 
-	delete(m.vaults, vaultName)
+	delete(m.Vaults, vaultName)
 
 	return nil
 }
@@ -106,8 +183,8 @@ func (m *MemoryStorage) ListVaults(_ context.Context) ([]Vault, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	vaults := make([]Vault, 0, len(m.vaults))
-	for _, v := range m.vaults {
+	vaults := make([]Vault, 0, len(m.Vaults))
+	for _, v := range m.Vaults {
 		vaults = append(vaults, *v)
 	}
 

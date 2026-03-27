@@ -1,11 +1,14 @@
 package codeguruprofiler
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for CodeGuru Profiler storage operations.
@@ -17,17 +20,91 @@ type Storage interface {
 	ListProfilingGroups() []ProfilingGroup
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu     sync.RWMutex
-	groups map[string]*ProfilingGroup
+	mu      sync.RWMutex               `json:"-"`
+	Groups  map[string]*ProfilingGroup `json:"groups"`
+	dataDir string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		groups: make(map[string]*ProfilingGroup),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Groups: make(map[string]*ProfilingGroup),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "codeguru-profiler", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Groups == nil {
+		m.Groups = make(map[string]*ProfilingGroup)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "codeguru-profiler", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateProfilingGroup creates a new profiling group.
@@ -60,7 +137,7 @@ func (m *MemoryStorage) CreateProfilingGroup(input *CreateProfilingGroupInput) *
 		}
 	}
 
-	m.groups[input.ProfilingGroupName] = group
+	m.Groups[input.ProfilingGroupName] = group
 
 	return group
 }
@@ -70,7 +147,7 @@ func (m *MemoryStorage) DescribeProfilingGroup(name string) (*ProfilingGroup, er
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	group, ok := m.groups[name]
+	group, ok := m.Groups[name]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: profiling group %s not found", name)
 	}
@@ -83,7 +160,7 @@ func (m *MemoryStorage) UpdateProfilingGroup(name string, input *UpdateProfiling
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	group, ok := m.groups[name]
+	group, ok := m.Groups[name]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: profiling group %s not found", name)
 	}
@@ -102,11 +179,11 @@ func (m *MemoryStorage) DeleteProfilingGroup(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.groups[name]; !ok {
+	if _, ok := m.Groups[name]; !ok {
 		return fmt.Errorf("ResourceNotFoundException: profiling group %s not found", name)
 	}
 
-	delete(m.groups, name)
+	delete(m.Groups, name)
 
 	return nil
 }
@@ -116,8 +193,8 @@ func (m *MemoryStorage) ListProfilingGroups() []ProfilingGroup {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]ProfilingGroup, 0, len(m.groups))
-	for _, group := range m.groups {
+	result := make([]ProfilingGroup, 0, len(m.Groups))
+	for _, group := range m.Groups {
 		result = append(result, *group)
 	}
 

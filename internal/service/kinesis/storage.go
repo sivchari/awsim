@@ -5,12 +5,15 @@ import (
 	"crypto/md5" //nolint:gosec // MD5 used for partition key hashing, not security
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -48,26 +51,43 @@ type Storage interface {
 	DispatchAction(action string) bool
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	streams         map[string]*streamData
-	shardIterators  map[string]*shardIteratorData
+	mu              sync.RWMutex                  `json:"-"`
+	Streams         map[string]*StreamData        `json:"streams"`
+	shardIterators  map[string]*shardIteratorData `json:"-"`
 	region          string
 	accountID       string
-	sequenceCounter uint64
+	SequenceCounter uint64 `json:"sequenceCounter"`
+	dataDir         string
 }
 
-// streamData holds stream information and its shards.
-type streamData struct {
-	stream *Stream
-	shards map[string]*shardData
+// StreamData holds stream information and its shards.
+type StreamData struct {
+	Stream *Stream               `json:"stream"`
+	Shards map[string]*ShardData `json:"shards"`
 }
 
-// shardData holds shard information and its records.
-type shardData struct {
-	shard   *Shard
-	records []*Record
+// ShardData holds shard information and its records.
+type ShardData struct {
+	Shard   *Shard    `json:"shard"`
+	Records []*Record `json:"records"`
 }
 
 // shardIteratorData holds shard iterator state.
@@ -79,13 +99,74 @@ type shardIteratorData struct {
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		streams:        make(map[string]*streamData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Streams:        make(map[string]*StreamData),
 		shardIterators: make(map[string]*shardIteratorData),
 		region:         "us-east-1",
 		accountID:      "000000000000",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "kinesis", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Streams == nil {
+		s.Streams = make(map[string]*StreamData)
+	}
+
+	if s.shardIterators == nil {
+		s.shardIterators = make(map[string]*shardIteratorData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "kinesis", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateStream creates a new stream.
@@ -93,7 +174,7 @@ func (s *MemoryStorage) CreateStream(_ context.Context, req *CreateStreamRequest
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.streams[req.StreamName]; exists {
+	if _, exists := s.Streams[req.StreamName]; exists {
 		return &ServiceError{Code: errResourceInUse, Message: "Stream already exists"}
 	}
 
@@ -120,7 +201,7 @@ func (s *MemoryStorage) CreateStream(_ context.Context, req *CreateStreamRequest
 	}
 
 	// Create shards.
-	shards := make(map[string]*shardData)
+	shards := make(map[string]*ShardData)
 	hashKeyRange := calculateHashKeyRanges(shardCount)
 
 	for i := int32(0); i < shardCount; i++ {
@@ -135,15 +216,15 @@ func (s *MemoryStorage) CreateStream(_ context.Context, req *CreateStreamRequest
 			},
 		}
 
-		shards[shardID] = &shardData{
-			shard:   shard,
-			records: make([]*Record, 0),
+		shards[shardID] = &ShardData{
+			Shard:   shard,
+			Records: make([]*Record, 0),
 		}
 	}
 
-	s.streams[req.StreamName] = &streamData{
-		stream: stream,
-		shards: shards,
+	s.Streams[req.StreamName] = &StreamData{
+		Stream: stream,
+		Shards: shards,
 	}
 
 	return nil
@@ -154,11 +235,11 @@ func (s *MemoryStorage) DeleteStream(_ context.Context, streamName string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.streams[streamName]; !exists {
+	if _, exists := s.Streams[streamName]; !exists {
 		return &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
 
-	delete(s.streams, streamName)
+	delete(s.Streams, streamName)
 
 	return nil
 }
@@ -168,15 +249,15 @@ func (s *MemoryStorage) DescribeStream(_ context.Context, streamName string, lim
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	sd, exists := s.streams[streamName]
+	sd, exists := s.Streams[streamName]
 	if !exists {
 		return nil, nil, false, &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
 
 	// Collect and sort shards.
-	shards := make([]*Shard, 0, len(sd.shards))
-	for _, shardData := range sd.shards {
-		shards = append(shards, shardData.shard)
+	shards := make([]*Shard, 0, len(sd.Shards))
+	for _, shardData := range sd.Shards {
+		shards = append(shards, shardData.Shard)
 	}
 
 	sort.Slice(shards, func(i, j int) bool {
@@ -209,7 +290,7 @@ func (s *MemoryStorage) DescribeStream(_ context.Context, streamName string, lim
 		hasMoreShards = true
 	}
 
-	return sd.stream, shards[startIndex:endIndex], hasMoreShards, nil
+	return sd.Stream, shards[startIndex:endIndex], hasMoreShards, nil
 }
 
 // ListStreams lists all streams.
@@ -222,8 +303,8 @@ func (s *MemoryStorage) ListStreams(_ context.Context, exclusiveStartStreamName 
 	}
 
 	// Collect and sort stream names.
-	names := make([]string, 0, len(s.streams))
-	for name := range s.streams {
+	names := make([]string, 0, len(s.Streams))
+	for name := range s.Streams {
 		names = append(names, name)
 	}
 
@@ -253,7 +334,7 @@ func (s *MemoryStorage) ListStreams(_ context.Context, exclusiveStartStreamName 
 
 	streams := make([]*Stream, endIndex-startIndex)
 	for i, name := range names[startIndex:endIndex] {
-		streams[i] = s.streams[name].stream
+		streams[i] = s.Streams[name].Stream
 	}
 
 	return streams, hasMoreStreams, nil
@@ -264,7 +345,7 @@ func (s *MemoryStorage) ListShards(_ context.Context, streamName, _ string, maxR
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	sd, exists := s.streams[streamName]
+	sd, exists := s.Streams[streamName]
 	if !exists {
 		return nil, "", &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
@@ -274,9 +355,9 @@ func (s *MemoryStorage) ListShards(_ context.Context, streamName, _ string, maxR
 	}
 
 	// Collect and sort shards.
-	shards := make([]*Shard, 0, len(sd.shards))
-	for _, shardData := range sd.shards {
-		shards = append(shards, shardData.shard)
+	shards := make([]*Shard, 0, len(sd.Shards))
+	for _, shardData := range sd.Shards {
+		shards = append(shards, shardData.Shard)
 	}
 
 	sort.Slice(shards, func(i, j int) bool {
@@ -295,7 +376,7 @@ func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, data []b
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	sd, exists := s.streams[streamName]
+	sd, exists := s.Streams[streamName]
 	if !exists {
 		return "", "", &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
@@ -319,7 +400,7 @@ func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, data []b
 		ApproximateArrivalTimestamp: time.Now(),
 	}
 
-	sd.shards[shardID].records = append(sd.shards[shardID].records, record)
+	sd.Shards[shardID].Records = append(sd.Shards[shardID].Records, record)
 
 	return shardID, seqNum, nil
 }
@@ -329,7 +410,7 @@ func (s *MemoryStorage) PutRecords(_ context.Context, streamName string, records
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	sd, exists := s.streams[streamName]
+	sd, exists := s.Streams[streamName]
 	if !exists {
 		return nil, 0, &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
@@ -360,7 +441,7 @@ func (s *MemoryStorage) PutRecords(_ context.Context, streamName string, records
 			ApproximateArrivalTimestamp: time.Now(),
 		}
 
-		sd.shards[shardID].records = append(sd.shards[shardID].records, record)
+		sd.Shards[shardID].Records = append(sd.Shards[shardID].Records, record)
 
 		results[i] = PutRecordsResultEntry{
 			ShardID:        shardID,
@@ -384,12 +465,12 @@ func (s *MemoryStorage) GetShardIterator(_ context.Context, streamName, shardID,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	sd, exists := s.streams[streamName]
+	sd, exists := s.Streams[streamName]
 	if !exists {
 		return "", &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
 
-	shardData, exists := sd.shards[shardID]
+	shardData, exists := sd.Shards[shardID]
 	if !exists {
 		return "", &ServiceError{Code: errResourceNotFound, Message: "Shard not found"}
 	}
@@ -400,11 +481,11 @@ func (s *MemoryStorage) GetShardIterator(_ context.Context, streamName, shardID,
 	case string(ShardIteratorTypeTrimHorizon):
 		position = 0
 	case string(ShardIteratorTypeLatest):
-		position = len(shardData.records)
+		position = len(shardData.Records)
 	case string(ShardIteratorTypeAtSequenceNumber):
-		position = s.findPositionAtSequenceNumber(shardData.records, startingSeqNum)
+		position = s.findPositionAtSequenceNumber(shardData.Records, startingSeqNum)
 	case string(ShardIteratorTypeAfterSequenceNumber):
-		position = s.findPositionAtSequenceNumber(shardData.records, startingSeqNum) + 1
+		position = s.findPositionAtSequenceNumber(shardData.Records, startingSeqNum) + 1
 	default:
 		return "", &ServiceError{Code: errInvalidArgument, Message: "Invalid ShardIteratorType"}
 	}
@@ -438,12 +519,12 @@ func (s *MemoryStorage) GetRecords(_ context.Context, shardIterator string, limi
 		return nil, "", 0, &ServiceError{Code: errExpiredIterator, Message: "Shard iterator has expired"}
 	}
 
-	sd, exists := s.streams[iterData.streamName]
+	sd, exists := s.Streams[iterData.streamName]
 	if !exists {
 		return nil, "", 0, &ServiceError{Code: errResourceNotFound, Message: "Stream not found"}
 	}
 
-	shardData, exists := sd.shards[iterData.shardID]
+	shardData, exists := sd.Shards[iterData.shardID]
 	if !exists {
 		return nil, "", 0, &ServiceError{Code: errResourceNotFound, Message: "Shard not found"}
 	}
@@ -453,10 +534,10 @@ func (s *MemoryStorage) GetRecords(_ context.Context, shardIterator string, limi
 	}
 
 	startPos := iterData.position
-	endPos := min(startPos+int(limit), len(shardData.records))
+	endPos := min(startPos+int(limit), len(shardData.Records))
 
 	records := make([]*Record, endPos-startPos)
-	copy(records, shardData.records[startPos:endPos])
+	copy(records, shardData.Records[startPos:endPos])
 
 	// Create next iterator.
 	delete(s.shardIterators, shardIterator)
@@ -482,21 +563,21 @@ func (s *MemoryStorage) DispatchAction(_ string) bool {
 // Helper functions.
 
 func (s *MemoryStorage) nextSequenceNumber() string {
-	seq := atomic.AddUint64(&s.sequenceCounter, 1)
+	seq := atomic.AddUint64(&s.SequenceCounter, 1)
 
 	return fmt.Sprintf("%021d", seq)
 }
 
-func (s *MemoryStorage) findShardForHashKey(sd *streamData, hashKey string) string {
+func (s *MemoryStorage) findShardForHashKey(sd *StreamData, hashKey string) string {
 	hashKeyBig := new(big.Int)
 	hashKeyBig.SetString(hashKey, 10)
 
-	for shardID, shardData := range sd.shards {
+	for shardID, shardData := range sd.Shards {
 		startKey := new(big.Int)
 		endKey := new(big.Int)
 
-		startKey.SetString(shardData.shard.HashKeyRange.StartingHashKey, 10)
-		endKey.SetString(shardData.shard.HashKeyRange.EndingHashKey, 10)
+		startKey.SetString(shardData.Shard.HashKeyRange.StartingHashKey, 10)
+		endKey.SetString(shardData.Shard.HashKeyRange.EndingHashKey, 10)
 
 		if hashKeyBig.Cmp(startKey) >= 0 && hashKeyBig.Cmp(endKey) <= 0 {
 			return shardID

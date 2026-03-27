@@ -1,8 +1,12 @@
 package route53
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 var (
@@ -30,19 +34,97 @@ type Storage interface {
 	ChangeRecordSets(hostedZoneID string, changes []Change) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	hostedZones map[string]*HostedZone
-	recordSets  map[string][]ResourceRecordSet // key: hostedZoneID
+	mu          sync.RWMutex                   `json:"-"`
+	HostedZones map[string]*HostedZone         `json:"hostedZones"`
+	RecordSets  map[string][]ResourceRecordSet `json:"recordSets"` // key: hostedZoneID
+	dataDir     string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		hostedZones: make(map[string]*HostedZone),
-		recordSets:  make(map[string][]ResourceRecordSet),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		HostedZones: make(map[string]*HostedZone),
+		RecordSets:  make(map[string][]ResourceRecordSet),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "route53", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.HostedZones == nil {
+		s.HostedZones = make(map[string]*HostedZone)
+	}
+
+	if s.RecordSets == nil {
+		s.RecordSets = make(map[string][]ResourceRecordSet)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "route53", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateHostedZone creates a new hosted zone.
@@ -50,12 +132,12 @@ func (s *MemoryStorage) CreateHostedZone(zone *HostedZone) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.hostedZones[zone.ID]; exists {
+	if _, exists := s.HostedZones[zone.ID]; exists {
 		return ErrHostedZoneAlreadyExists
 	}
 
-	s.hostedZones[zone.ID] = zone
-	s.recordSets[zone.ID] = []ResourceRecordSet{}
+	s.HostedZones[zone.ID] = zone
+	s.RecordSets[zone.ID] = []ResourceRecordSet{}
 
 	return nil
 }
@@ -65,7 +147,7 @@ func (s *MemoryStorage) GetHostedZone(id string) (*HostedZone, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	zone, exists := s.hostedZones[id]
+	zone, exists := s.HostedZones[id]
 	if !exists {
 		return nil, ErrHostedZoneNotFound
 	}
@@ -78,8 +160,8 @@ func (s *MemoryStorage) ListHostedZones() ([]*HostedZone, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	zones := make([]*HostedZone, 0, len(s.hostedZones))
-	for _, zone := range s.hostedZones {
+	zones := make([]*HostedZone, 0, len(s.HostedZones))
+	for _, zone := range s.HostedZones {
 		zones = append(zones, zone)
 	}
 
@@ -91,12 +173,12 @@ func (s *MemoryStorage) DeleteHostedZone(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.hostedZones[id]; !exists {
+	if _, exists := s.HostedZones[id]; !exists {
 		return ErrHostedZoneNotFound
 	}
 
 	// Check if hosted zone has record sets (other than NS and SOA)
-	if records, ok := s.recordSets[id]; ok {
+	if records, ok := s.RecordSets[id]; ok {
 		for i := range records {
 			if records[i].Type != "NS" && records[i].Type != "SOA" {
 				return ErrHostedZoneNotEmpty
@@ -104,8 +186,8 @@ func (s *MemoryStorage) DeleteHostedZone(id string) error {
 		}
 	}
 
-	delete(s.hostedZones, id)
-	delete(s.recordSets, id)
+	delete(s.HostedZones, id)
+	delete(s.RecordSets, id)
 
 	return nil
 }
@@ -115,11 +197,11 @@ func (s *MemoryStorage) GetRecordSets(hostedZoneID string) ([]ResourceRecordSet,
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.hostedZones[hostedZoneID]; !exists {
+	if _, exists := s.HostedZones[hostedZoneID]; !exists {
 		return nil, ErrHostedZoneNotFound
 	}
 
-	records, ok := s.recordSets[hostedZoneID]
+	records, ok := s.RecordSets[hostedZoneID]
 	if !ok {
 		return []ResourceRecordSet{}, nil
 	}
@@ -132,11 +214,11 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.hostedZones[hostedZoneID]; !exists {
+	if _, exists := s.HostedZones[hostedZoneID]; !exists {
 		return ErrHostedZoneNotFound
 	}
 
-	records := s.recordSets[hostedZoneID]
+	records := s.RecordSets[hostedZoneID]
 
 	for i := range changes {
 		switch changes[i].Action {
@@ -165,10 +247,10 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 		}
 	}
 
-	s.recordSets[hostedZoneID] = records
+	s.RecordSets[hostedZoneID] = records
 
 	// Update record count
-	if zone, exists := s.hostedZones[hostedZoneID]; exists {
+	if zone, exists := s.HostedZones[hostedZoneID]; exists {
 		zone.ResourceRecordSetCount = int64(len(records))
 	}
 

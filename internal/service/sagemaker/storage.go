@@ -2,9 +2,12 @@ package sagemaker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -52,27 +55,113 @@ type Storage interface {
 	DescribeEndpoint(ctx context.Context, name string) (*Endpoint, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                sync.RWMutex
-	notebookInstances map[string]*NotebookInstance
-	trainingJobs      map[string]*TrainingJob
-	models            map[string]*Model
-	endpoints         map[string]*Endpoint
+	mu                sync.RWMutex                 `json:"-"`
+	NotebookInstances map[string]*NotebookInstance `json:"notebookInstances"`
+	TrainingJobs      map[string]*TrainingJob      `json:"trainingJobs"`
+	Models            map[string]*Model            `json:"models"`
+	Endpoints         map[string]*Endpoint         `json:"endpoints"`
 	region            string
 	accountID         string
+	dataDir           string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		notebookInstances: make(map[string]*NotebookInstance),
-		trainingJobs:      make(map[string]*TrainingJob),
-		models:            make(map[string]*Model),
-		endpoints:         make(map[string]*Endpoint),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		NotebookInstances: make(map[string]*NotebookInstance),
+		TrainingJobs:      make(map[string]*TrainingJob),
+		Models:            make(map[string]*Model),
+		Endpoints:         make(map[string]*Endpoint),
 		region:            defaultRegion,
 		accountID:         defaultAccountID,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "sagemaker", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.NotebookInstances == nil {
+		m.NotebookInstances = make(map[string]*NotebookInstance)
+	}
+
+	if m.TrainingJobs == nil {
+		m.TrainingJobs = make(map[string]*TrainingJob)
+	}
+
+	if m.Models == nil {
+		m.Models = make(map[string]*Model)
+	}
+
+	if m.Endpoints == nil {
+		m.Endpoints = make(map[string]*Endpoint)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "sagemaker", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateNotebookInstance creates a new notebook instance.
@@ -80,7 +169,7 @@ func (m *MemoryStorage) CreateNotebookInstance(_ context.Context, req *CreateNot
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.notebookInstances[req.NotebookInstanceName]; exists {
+	if _, exists := m.NotebookInstances[req.NotebookInstanceName]; exists {
 		return nil, &Error{
 			Code:    errResourceInUse,
 			Message: fmt.Sprintf("Notebook instance %s already exists", req.NotebookInstanceName),
@@ -126,7 +215,7 @@ func (m *MemoryStorage) CreateNotebookInstance(_ context.Context, req *CreateNot
 		instance.RootAccess = "Enabled"
 	}
 
-	m.notebookInstances[req.NotebookInstanceName] = instance
+	m.NotebookInstances[req.NotebookInstanceName] = instance
 
 	return instance, nil
 }
@@ -136,14 +225,14 @@ func (m *MemoryStorage) DeleteNotebookInstance(_ context.Context, name string) e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.notebookInstances[name]; !exists {
+	if _, exists := m.NotebookInstances[name]; !exists {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Notebook instance %s not found", name),
 		}
 	}
 
-	delete(m.notebookInstances, name)
+	delete(m.NotebookInstances, name)
 
 	return nil
 }
@@ -153,7 +242,7 @@ func (m *MemoryStorage) DescribeNotebookInstance(_ context.Context, name string)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	instance, exists := m.notebookInstances[name]
+	instance, exists := m.NotebookInstances[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -173,9 +262,9 @@ func (m *MemoryStorage) ListNotebookInstances(_ context.Context, maxResults int3
 		maxResults = 100
 	}
 
-	result := make([]*NotebookInstance, 0, len(m.notebookInstances))
+	result := make([]*NotebookInstance, 0, len(m.NotebookInstances))
 
-	for _, instance := range m.notebookInstances {
+	for _, instance := range m.NotebookInstances {
 		result = append(result, instance)
 
 		if len(result) >= int(maxResults) {
@@ -191,7 +280,7 @@ func (m *MemoryStorage) CreateTrainingJob(_ context.Context, req *CreateTraining
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.trainingJobs[req.TrainingJobName]; exists {
+	if _, exists := m.TrainingJobs[req.TrainingJobName]; exists {
 		return nil, &Error{
 			Code:    errResourceInUse,
 			Message: fmt.Sprintf("Training job %s already exists", req.TrainingJobName),
@@ -217,7 +306,7 @@ func (m *MemoryStorage) CreateTrainingJob(_ context.Context, req *CreateTraining
 		TrainingEndTime:   &now,
 	}
 
-	m.trainingJobs[req.TrainingJobName] = job
+	m.TrainingJobs[req.TrainingJobName] = job
 
 	return job, nil
 }
@@ -227,7 +316,7 @@ func (m *MemoryStorage) DescribeTrainingJob(_ context.Context, name string) (*Tr
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	job, exists := m.trainingJobs[name]
+	job, exists := m.TrainingJobs[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -243,7 +332,7 @@ func (m *MemoryStorage) CreateModel(_ context.Context, req *CreateModelRequest) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.models[req.ModelName]; exists {
+	if _, exists := m.Models[req.ModelName]; exists {
 		return nil, &Error{
 			Code:    errResourceInUse,
 			Message: fmt.Sprintf("Model %s already exists", req.ModelName),
@@ -262,7 +351,7 @@ func (m *MemoryStorage) CreateModel(_ context.Context, req *CreateModelRequest) 
 		CreationTime:           now,
 	}
 
-	m.models[req.ModelName] = model
+	m.Models[req.ModelName] = model
 
 	return model, nil
 }
@@ -272,14 +361,14 @@ func (m *MemoryStorage) DeleteModel(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.models[name]; !exists {
+	if _, exists := m.Models[name]; !exists {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Model %s not found", name),
 		}
 	}
 
-	delete(m.models, name)
+	delete(m.Models, name)
 
 	return nil
 }
@@ -289,7 +378,7 @@ func (m *MemoryStorage) CreateEndpoint(_ context.Context, req *CreateEndpointReq
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.endpoints[req.EndpointName]; exists {
+	if _, exists := m.Endpoints[req.EndpointName]; exists {
 		return nil, &Error{
 			Code:    errResourceInUse,
 			Message: fmt.Sprintf("Endpoint %s already exists", req.EndpointName),
@@ -308,7 +397,7 @@ func (m *MemoryStorage) CreateEndpoint(_ context.Context, req *CreateEndpointReq
 		LastModifiedTime:   now,
 	}
 
-	m.endpoints[req.EndpointName] = endpoint
+	m.Endpoints[req.EndpointName] = endpoint
 
 	return endpoint, nil
 }
@@ -318,14 +407,14 @@ func (m *MemoryStorage) DeleteEndpoint(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.endpoints[name]; !exists {
+	if _, exists := m.Endpoints[name]; !exists {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Endpoint %s not found", name),
 		}
 	}
 
-	delete(m.endpoints, name)
+	delete(m.Endpoints, name)
 
 	return nil
 }
@@ -335,7 +424,7 @@ func (m *MemoryStorage) DescribeEndpoint(_ context.Context, name string) (*Endpo
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	endpoint, exists := m.endpoints[name]
+	endpoint, exists := m.Endpoints[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,

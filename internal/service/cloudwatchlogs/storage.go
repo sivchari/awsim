@@ -2,6 +2,7 @@ package cloudwatchlogs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -32,31 +35,105 @@ type Storage interface {
 	DescribeLogStreams(ctx context.Context, req *DescribeLogStreamsRequest) (*DescribeLogStreamsResponse, error)
 }
 
-// logStreamData holds log stream data with events.
-type logStreamData struct {
-	stream *LogStream
-	events []*LogEvent
+// LogStreamData holds log stream data with events.
+type LogStreamData struct {
+	Stream *LogStream  `json:"stream"`
+	Events []*LogEvent `json:"events"`
 }
 
-// logGroupData holds log group data with streams.
-type logGroupData struct {
-	group   *LogGroup
-	streams map[string]*logStreamData
+// LogGroupData holds log group data with streams.
+type LogGroupData struct {
+	Group   *LogGroup                 `json:"group"`
+	Streams map[string]*LogStreamData `json:"streams"`
 }
+
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	logGroups map[string]*logGroupData
+	mu        sync.RWMutex             `json:"-"`
+	LogGroups map[string]*LogGroupData `json:"logGroups"`
 	baseURL   string
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new in-memory CloudWatch Logs storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		logGroups: make(map[string]*logGroupData),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		LogGroups: make(map[string]*LogGroupData),
 		baseURL:   baseURL,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "logs", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.LogGroups == nil {
+		m.LogGroups = make(map[string]*LogGroupData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "logs", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateLogGroup creates a new log group.
@@ -64,7 +141,7 @@ func (m *MemoryStorage) CreateLogGroup(_ context.Context, req *CreateLogGroupReq
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.logGroups[req.LogGroupName]; exists {
+	if _, exists := m.LogGroups[req.LogGroupName]; exists {
 		return &LogsError{
 			Code:    "ResourceAlreadyExistsException",
 			Message: fmt.Sprintf("The specified log group already exists: %s", req.LogGroupName),
@@ -80,9 +157,9 @@ func (m *MemoryStorage) CreateLogGroup(_ context.Context, req *CreateLogGroupReq
 		LogGroupClass: req.LogGroupClass,
 	}
 
-	m.logGroups[req.LogGroupName] = &logGroupData{
-		group:   logGroup,
-		streams: make(map[string]*logStreamData),
+	m.LogGroups[req.LogGroupName] = &LogGroupData{
+		Group:   logGroup,
+		Streams: make(map[string]*LogStreamData),
 	}
 
 	return nil
@@ -93,14 +170,14 @@ func (m *MemoryStorage) DeleteLogGroup(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.logGroups[name]; !exists {
+	if _, exists := m.LogGroups[name]; !exists {
 		return &LogsError{
 			Code:    "ResourceNotFoundException",
 			Message: fmt.Sprintf("The specified log group does not exist: %s", name),
 		}
 	}
 
-	delete(m.logGroups, name)
+	delete(m.LogGroups, name)
 
 	return nil
 }
@@ -110,7 +187,7 @@ func (m *MemoryStorage) CreateLogStream(_ context.Context, groupName, streamName
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	groupData, exists := m.logGroups[groupName]
+	groupData, exists := m.LogGroups[groupName]
 	if !exists {
 		return &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -118,7 +195,7 @@ func (m *MemoryStorage) CreateLogStream(_ context.Context, groupName, streamName
 		}
 	}
 
-	if _, exists := groupData.streams[streamName]; exists {
+	if _, exists := groupData.Streams[streamName]; exists {
 		return &LogsError{
 			Code:    "ResourceAlreadyExistsException",
 			Message: fmt.Sprintf("The specified log stream already exists: %s", streamName),
@@ -133,9 +210,9 @@ func (m *MemoryStorage) CreateLogStream(_ context.Context, groupName, streamName
 		LogStreamARN:        m.buildLogStreamARN(groupName, streamName),
 	}
 
-	groupData.streams[streamName] = &logStreamData{
-		stream: stream,
-		events: make([]*LogEvent, 0),
+	groupData.Streams[streamName] = &LogStreamData{
+		Stream: stream,
+		Events: make([]*LogEvent, 0),
 	}
 
 	return nil
@@ -146,7 +223,7 @@ func (m *MemoryStorage) DeleteLogStream(_ context.Context, groupName, streamName
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	groupData, exists := m.logGroups[groupName]
+	groupData, exists := m.LogGroups[groupName]
 	if !exists {
 		return &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -154,14 +231,14 @@ func (m *MemoryStorage) DeleteLogStream(_ context.Context, groupName, streamName
 		}
 	}
 
-	if _, exists := groupData.streams[streamName]; !exists {
+	if _, exists := groupData.Streams[streamName]; !exists {
 		return &LogsError{
 			Code:    "ResourceNotFoundException",
 			Message: fmt.Sprintf("The specified log stream does not exist: %s", streamName),
 		}
 	}
 
-	delete(groupData.streams, streamName)
+	delete(groupData.Streams, streamName)
 
 	return nil
 }
@@ -171,7 +248,7 @@ func (m *MemoryStorage) PutLogEvents(_ context.Context, groupName, streamName st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	groupData, exists := m.logGroups[groupName]
+	groupData, exists := m.LogGroups[groupName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -179,7 +256,7 @@ func (m *MemoryStorage) PutLogEvents(_ context.Context, groupName, streamName st
 		}
 	}
 
-	streamData, exists := groupData.streams[streamName]
+	streamData, exists := groupData.Streams[streamName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -194,24 +271,24 @@ func (m *MemoryStorage) PutLogEvents(_ context.Context, groupName, streamName st
 			Timestamp: event.Timestamp,
 			Message:   event.Message,
 		}
-		streamData.events = append(streamData.events, logEvent)
+		streamData.Events = append(streamData.Events, logEvent)
 
 		// Update stream timestamps
-		if streamData.stream.FirstEventTimestamp == nil {
-			streamData.stream.FirstEventTimestamp = &event.Timestamp
+		if streamData.Stream.FirstEventTimestamp == nil {
+			streamData.Stream.FirstEventTimestamp = &event.Timestamp
 		}
 
-		streamData.stream.LastEventTimestamp = &event.Timestamp
-		streamData.stream.LastIngestionTime = &now
-		streamData.stream.StoredBytes += int64(len(event.Message))
+		streamData.Stream.LastEventTimestamp = &event.Timestamp
+		streamData.Stream.LastIngestionTime = &now
+		streamData.Stream.StoredBytes += int64(len(event.Message))
 	}
 
 	// Update group stored bytes
-	groupData.group.StoredBytes += sumEventBytes(events)
+	groupData.Group.StoredBytes += sumEventBytes(events)
 
 	// Generate new sequence token
 	newToken := uuid.New().String()
-	streamData.stream.UploadSequenceToken = newToken
+	streamData.Stream.UploadSequenceToken = newToken
 
 	return &PutLogEventsResponse{
 		NextSequenceToken: newToken,
@@ -223,7 +300,7 @@ func (m *MemoryStorage) GetLogEvents(_ context.Context, req *GetLogEventsRequest
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	groupData, exists := m.logGroups[req.LogGroupName]
+	groupData, exists := m.LogGroups[req.LogGroupName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -231,7 +308,7 @@ func (m *MemoryStorage) GetLogEvents(_ context.Context, req *GetLogEventsRequest
 		}
 	}
 
-	streamData, exists := groupData.streams[req.LogStreamName]
+	streamData, exists := groupData.Streams[req.LogStreamName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -245,7 +322,7 @@ func (m *MemoryStorage) GetLogEvents(_ context.Context, req *GetLogEventsRequest
 	}
 
 	// Filter events by time range
-	filteredEvents := filterEventsByTime(streamData.events, req.StartTime, req.EndTime)
+	filteredEvents := filterEventsByTime(streamData.Events, req.StartTime, req.EndTime)
 
 	// Sort events
 	startFromHead := req.StartFromHead != nil && *req.StartFromHead
@@ -293,7 +370,7 @@ func (m *MemoryStorage) FilterLogEvents(_ context.Context, req *FilterLogEventsR
 		groupName = req.LogGroupIdentifier
 	}
 
-	groupData, exists := m.logGroups[groupName]
+	groupData, exists := m.LogGroups[groupName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -321,12 +398,12 @@ func (m *MemoryStorage) FilterLogEvents(_ context.Context, req *FilterLogEventsR
 }
 
 // filterEventsFromStreams filters events from log streams based on request criteria.
-func (m *MemoryStorage) filterEventsFromStreams(groupData *logGroupData, req *FilterLogEventsRequest) ([]FilteredLogEvent, []SearchedLogStream) {
+func (m *MemoryStorage) filterEventsFromStreams(groupData *LogGroupData, req *FilterLogEventsRequest) ([]FilteredLogEvent, []SearchedLogStream) {
 	var allEvents []FilteredLogEvent
 
 	var searchedStreams []SearchedLogStream
 
-	for streamName, streamData := range groupData.streams {
+	for streamName, streamData := range groupData.Streams {
 		if !m.shouldIncludeStream(streamName, req.LogStreamNames, req.LogStreamNamePrefix) {
 			continue
 		}
@@ -336,7 +413,7 @@ func (m *MemoryStorage) filterEventsFromStreams(groupData *logGroupData, req *Fi
 			SearchedCompletely: true,
 		})
 
-		events := m.filterStreamEvents(streamName, streamData.events, req)
+		events := m.filterStreamEvents(streamName, streamData.Events, req)
 		allEvents = append(allEvents, events...)
 	}
 
@@ -428,12 +505,12 @@ func (m *MemoryStorage) DescribeLogGroups(_ context.Context, req *DescribeLogGro
 func (m *MemoryStorage) filterLogGroups(req *DescribeLogGroupsRequest) []LogGroupResponse {
 	var groups []LogGroupResponse
 
-	for name, groupData := range m.logGroups {
-		if !m.matchLogGroupFilters(name, groupData.group, req) {
+	for name, groupData := range m.LogGroups {
+		if !m.matchLogGroupFilters(name, groupData.Group, req) {
 			continue
 		}
 
-		groups = append(groups, buildLogGroupResponse(groupData.group))
+		groups = append(groups, buildLogGroupResponse(groupData.Group))
 	}
 
 	return groups
@@ -510,7 +587,7 @@ func (m *MemoryStorage) DescribeLogStreams(_ context.Context, req *DescribeLogSt
 		groupName = req.LogGroupIdentifier
 	}
 
-	groupData, exists := m.logGroups[groupName]
+	groupData, exists := m.LogGroups[groupName]
 	if !exists {
 		return nil, &LogsError{
 			Code:    "ResourceNotFoundException",
@@ -530,15 +607,15 @@ func (m *MemoryStorage) DescribeLogStreams(_ context.Context, req *DescribeLogSt
 }
 
 // filterLogStreams filters log streams based on prefix.
-func (m *MemoryStorage) filterLogStreams(groupData *logGroupData, prefix string) []LogStreamResponse {
+func (m *MemoryStorage) filterLogStreams(groupData *LogGroupData, prefix string) []LogStreamResponse {
 	var streams []LogStreamResponse
 
-	for name, streamData := range groupData.streams {
+	for name, streamData := range groupData.Streams {
 		if prefix != "" && !strings.HasPrefix(name, prefix) {
 			continue
 		}
 
-		streams = append(streams, buildLogStreamResponse(streamData.stream))
+		streams = append(streams, buildLogStreamResponse(streamData.Stream))
 	}
 
 	return streams

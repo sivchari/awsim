@@ -2,11 +2,14 @@ package elasticache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -25,19 +28,97 @@ type Storage interface {
 	DescribeReplicationGroups(ctx context.Context, groupID string) ([]ReplicationGroup, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                sync.RWMutex
-	cacheClusters     map[string]*CacheCluster
-	replicationGroups map[string]*ReplicationGroup
+	mu                sync.RWMutex                 `json:"-"`
+	CacheClusters     map[string]*CacheCluster     `json:"cacheClusters"`
+	ReplicationGroups map[string]*ReplicationGroup `json:"replicationGroups"`
+	dataDir           string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		cacheClusters:     make(map[string]*CacheCluster),
-		replicationGroups: make(map[string]*ReplicationGroup),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		CacheClusters:     make(map[string]*CacheCluster),
+		ReplicationGroups: make(map[string]*ReplicationGroup),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "elasticache", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.CacheClusters == nil {
+		m.CacheClusters = make(map[string]*CacheCluster)
+	}
+
+	if m.ReplicationGroups == nil {
+		m.ReplicationGroups = make(map[string]*ReplicationGroup)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "elasticache", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateCacheCluster creates a new cache cluster.
@@ -45,7 +126,7 @@ func (m *MemoryStorage) CreateCacheCluster(_ context.Context, input *CreateCache
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.cacheClusters[input.CacheClusterID]; exists {
+	if _, exists := m.CacheClusters[input.CacheClusterID]; exists {
 		return nil, &Error{
 			Code:    errCacheClusterAlreadyExists,
 			Message: fmt.Sprintf("Cache cluster already exists: %s", input.CacheClusterID),
@@ -53,7 +134,7 @@ func (m *MemoryStorage) CreateCacheCluster(_ context.Context, input *CreateCache
 	}
 
 	cluster := m.buildCacheCluster(input)
-	m.cacheClusters[input.CacheClusterID] = cluster
+	m.CacheClusters[input.CacheClusterID] = cluster
 
 	return cluster, nil
 }
@@ -128,7 +209,7 @@ func (m *MemoryStorage) DeleteCacheCluster(_ context.Context, clusterID string) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.cacheClusters[clusterID]
+	cluster, exists := m.CacheClusters[clusterID]
 	if !exists {
 		return nil, &Error{
 			Code:    errCacheClusterNotFound,
@@ -138,7 +219,7 @@ func (m *MemoryStorage) DeleteCacheCluster(_ context.Context, clusterID string) 
 
 	cluster.CacheClusterStatus = CacheClusterStatusDeleting
 
-	delete(m.cacheClusters, clusterID)
+	delete(m.CacheClusters, clusterID)
 
 	return cluster, nil
 }
@@ -149,7 +230,7 @@ func (m *MemoryStorage) DescribeCacheClusters(_ context.Context, clusterID strin
 	defer m.mu.RUnlock()
 
 	if clusterID != "" {
-		cluster, exists := m.cacheClusters[clusterID]
+		cluster, exists := m.CacheClusters[clusterID]
 		if !exists {
 			return nil, &Error{
 				Code:    errCacheClusterNotFound,
@@ -165,9 +246,9 @@ func (m *MemoryStorage) DescribeCacheClusters(_ context.Context, clusterID strin
 		return []CacheCluster{result}, nil
 	}
 
-	clusters := make([]CacheCluster, 0, len(m.cacheClusters))
+	clusters := make([]CacheCluster, 0, len(m.CacheClusters))
 
-	for _, cluster := range m.cacheClusters {
+	for _, cluster := range m.CacheClusters {
 		result := *cluster
 		if !showNodeInfo {
 			result.CacheNodes = nil
@@ -184,7 +265,7 @@ func (m *MemoryStorage) ModifyCacheCluster(_ context.Context, input *ModifyCache
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.cacheClusters[input.CacheClusterID]
+	cluster, exists := m.CacheClusters[input.CacheClusterID]
 	if !exists {
 		return nil, &Error{
 			Code:    errCacheClusterNotFound,
@@ -236,7 +317,7 @@ func (m *MemoryStorage) CreateReplicationGroup(_ context.Context, input *CreateR
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.replicationGroups[input.ReplicationGroupID]; exists {
+	if _, exists := m.ReplicationGroups[input.ReplicationGroupID]; exists {
 		return nil, &Error{
 			Code:    errReplicationGroupAlreadyExists,
 			Message: fmt.Sprintf("Replication group already exists: %s", input.ReplicationGroupID),
@@ -244,7 +325,7 @@ func (m *MemoryStorage) CreateReplicationGroup(_ context.Context, input *CreateR
 	}
 
 	group := m.buildReplicationGroup(input)
-	m.replicationGroups[input.ReplicationGroupID] = group
+	m.ReplicationGroups[input.ReplicationGroupID] = group
 
 	return group, nil
 }
@@ -348,7 +429,7 @@ func (m *MemoryStorage) DeleteReplicationGroup(_ context.Context, groupID string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	group, exists := m.replicationGroups[groupID]
+	group, exists := m.ReplicationGroups[groupID]
 	if !exists {
 		return nil, &Error{
 			Code:    errReplicationGroupNotFound,
@@ -358,7 +439,7 @@ func (m *MemoryStorage) DeleteReplicationGroup(_ context.Context, groupID string
 
 	group.Status = ReplicationGroupStatusDeleting
 
-	delete(m.replicationGroups, groupID)
+	delete(m.ReplicationGroups, groupID)
 
 	return group, nil
 }
@@ -369,7 +450,7 @@ func (m *MemoryStorage) DescribeReplicationGroups(_ context.Context, groupID str
 	defer m.mu.RUnlock()
 
 	if groupID != "" {
-		group, exists := m.replicationGroups[groupID]
+		group, exists := m.ReplicationGroups[groupID]
 		if !exists {
 			return nil, &Error{
 				Code:    errReplicationGroupNotFound,
@@ -380,8 +461,8 @@ func (m *MemoryStorage) DescribeReplicationGroups(_ context.Context, groupID str
 		return []ReplicationGroup{*group}, nil
 	}
 
-	groups := make([]ReplicationGroup, 0, len(m.replicationGroups))
-	for _, group := range m.replicationGroups {
+	groups := make([]ReplicationGroup, 0, len(m.ReplicationGroups))
+	for _, group := range m.ReplicationGroups {
 		groups = append(groups, *group)
 	}
 

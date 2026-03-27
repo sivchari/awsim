@@ -2,12 +2,15 @@ package s3tables
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -37,21 +40,103 @@ type Storage interface {
 	ListTables(ctx context.Context, tableBucketArn, namespace, prefix string, maxTables int) ([]TableSummary, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	tableBuckets map[string]*TableBucket          // ARN -> TableBucket
-	namespaces   map[string]map[string]*Namespace // TableBucketARN -> namespace -> Namespace
-	tables       map[string]map[string]*Table     // TableBucketARN/namespace -> tableName -> Table
+	mu           sync.RWMutex                     `json:"-"`
+	TableBuckets map[string]*TableBucket          `json:"tableBuckets"` // ARN -> TableBucket
+	Namespaces   map[string]map[string]*Namespace `json:"namespaces"`   // TableBucketARN -> namespace -> Namespace
+	Tables       map[string]map[string]*Table     `json:"tables"`       // TableBucketARN/namespace -> tableName -> Table
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		tableBuckets: make(map[string]*TableBucket),
-		namespaces:   make(map[string]map[string]*Namespace),
-		tables:       make(map[string]map[string]*Table),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		TableBuckets: make(map[string]*TableBucket),
+		Namespaces:   make(map[string]map[string]*Namespace),
+		Tables:       make(map[string]map[string]*Table),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "s3tables", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.TableBuckets == nil {
+		s.TableBuckets = make(map[string]*TableBucket)
+	}
+
+	if s.Namespaces == nil {
+		s.Namespaces = make(map[string]map[string]*Namespace)
+	}
+
+	if s.Tables == nil {
+		s.Tables = make(map[string]map[string]*Table)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "s3tables", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateTableBucket creates a new table bucket.
@@ -60,7 +145,7 @@ func (s *MemoryStorage) CreateTableBucket(_ context.Context, name string) (*Tabl
 	defer s.mu.Unlock()
 
 	// Check if bucket with same name already exists
-	for _, bucket := range s.tableBuckets {
+	for _, bucket := range s.TableBuckets {
 		if bucket.Name == name {
 			return nil, &Error{
 				Code:    errConflict,
@@ -81,8 +166,8 @@ func (s *MemoryStorage) CreateTableBucket(_ context.Context, name string) (*Tabl
 		CreatedAt: time.Now().UTC(),
 	}
 
-	s.tableBuckets[arn] = bucket
-	s.namespaces[arn] = make(map[string]*Namespace)
+	s.TableBuckets[arn] = bucket
+	s.Namespaces[arn] = make(map[string]*Namespace)
 
 	return bucket, nil
 }
@@ -92,7 +177,7 @@ func (s *MemoryStorage) DeleteTableBucket(_ context.Context, arn string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tableBuckets[arn]; !exists {
+	if _, exists := s.TableBuckets[arn]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", arn),
@@ -100,15 +185,15 @@ func (s *MemoryStorage) DeleteTableBucket(_ context.Context, arn string) error {
 	}
 
 	// Check if bucket has namespaces
-	if namespaces, exists := s.namespaces[arn]; exists && len(namespaces) > 0 {
+	if namespaces, exists := s.Namespaces[arn]; exists && len(namespaces) > 0 {
 		return &Error{
 			Code:    errConflict,
 			Message: "Table bucket contains namespaces and cannot be deleted",
 		}
 	}
 
-	delete(s.tableBuckets, arn)
-	delete(s.namespaces, arn)
+	delete(s.TableBuckets, arn)
+	delete(s.Namespaces, arn)
 
 	return nil
 }
@@ -118,7 +203,7 @@ func (s *MemoryStorage) GetTableBucket(_ context.Context, arn string) (*TableBuc
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	bucket, exists := s.tableBuckets[arn]
+	bucket, exists := s.TableBuckets[arn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -141,7 +226,7 @@ func (s *MemoryStorage) ListTableBuckets(_ context.Context, prefix, continuation
 	// Collect all matching buckets sorted by name for consistent pagination
 	allBuckets := make([]TableBucketSummary, 0)
 
-	for _, bucket := range s.tableBuckets {
+	for _, bucket := range s.TableBuckets {
 		if prefix != "" && !strings.HasPrefix(bucket.Name, prefix) {
 			continue
 		}
@@ -199,7 +284,7 @@ func (s *MemoryStorage) CreateNamespace(_ context.Context, tableBucketArn string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
@@ -208,11 +293,11 @@ func (s *MemoryStorage) CreateNamespace(_ context.Context, tableBucketArn string
 
 	namespaceKey := strings.Join(namespace, ".")
 
-	if s.namespaces[tableBucketArn] == nil {
-		s.namespaces[tableBucketArn] = make(map[string]*Namespace)
+	if s.Namespaces[tableBucketArn] == nil {
+		s.Namespaces[tableBucketArn] = make(map[string]*Namespace)
 	}
 
-	if _, exists := s.namespaces[tableBucketArn][namespaceKey]; exists {
+	if _, exists := s.Namespaces[tableBucketArn][namespaceKey]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Namespace '%s' already exists", namespaceKey),
@@ -227,7 +312,7 @@ func (s *MemoryStorage) CreateNamespace(_ context.Context, tableBucketArn string
 		CreatedBy:      defaultAccountID,
 	}
 
-	s.namespaces[tableBucketArn][namespaceKey] = ns
+	s.Namespaces[tableBucketArn][namespaceKey] = ns
 
 	return ns, nil
 }
@@ -237,14 +322,14 @@ func (s *MemoryStorage) DeleteNamespace(_ context.Context, tableBucketArn, names
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
 		}
 	}
 
-	if _, exists := s.namespaces[tableBucketArn][namespace]; !exists {
+	if _, exists := s.Namespaces[tableBucketArn][namespace]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Namespace '%s' not found", namespace),
@@ -253,14 +338,14 @@ func (s *MemoryStorage) DeleteNamespace(_ context.Context, tableBucketArn, names
 
 	// Check if namespace has tables
 	tableKey := tableBucketArn + "/" + namespace
-	if tables, exists := s.tables[tableKey]; exists && len(tables) > 0 {
+	if tables, exists := s.Tables[tableKey]; exists && len(tables) > 0 {
 		return &Error{
 			Code:    errConflict,
 			Message: "Namespace contains tables and cannot be deleted",
 		}
 	}
 
-	delete(s.namespaces[tableBucketArn], namespace)
+	delete(s.Namespaces[tableBucketArn], namespace)
 
 	return nil
 }
@@ -270,14 +355,14 @@ func (s *MemoryStorage) GetNamespace(_ context.Context, tableBucketArn, namespac
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
 		}
 	}
 
-	ns, exists := s.namespaces[tableBucketArn][namespace]
+	ns, exists := s.Namespaces[tableBucketArn][namespace]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -293,7 +378,7 @@ func (s *MemoryStorage) ListNamespaces(_ context.Context, tableBucketArn, prefix
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
@@ -306,7 +391,7 @@ func (s *MemoryStorage) ListNamespaces(_ context.Context, tableBucketArn, prefix
 
 	namespaces := make([]NamespaceSummary, 0)
 
-	for _, ns := range s.namespaces[tableBucketArn] {
+	for _, ns := range s.Namespaces[tableBucketArn] {
 		nsName := strings.Join(ns.Namespace, ".")
 		if prefix != "" && !strings.HasPrefix(nsName, prefix) {
 			continue
@@ -332,14 +417,14 @@ func (s *MemoryStorage) CreateTable(_ context.Context, tableBucketArn, namespace
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
 		}
 	}
 
-	if _, exists := s.namespaces[tableBucketArn][namespace]; !exists {
+	if _, exists := s.Namespaces[tableBucketArn][namespace]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Namespace '%s' not found", namespace),
@@ -347,11 +432,11 @@ func (s *MemoryStorage) CreateTable(_ context.Context, tableBucketArn, namespace
 	}
 
 	tableKey := tableBucketArn + "/" + namespace
-	if s.tables[tableKey] == nil {
-		s.tables[tableKey] = make(map[string]*Table)
+	if s.Tables[tableKey] == nil {
+		s.Tables[tableKey] = make(map[string]*Table)
 	}
 
-	if _, exists := s.tables[tableKey][name]; exists {
+	if _, exists := s.Tables[tableKey][name]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Table '%s' already exists in namespace '%s'", name, namespace),
@@ -381,7 +466,7 @@ func (s *MemoryStorage) CreateTable(_ context.Context, tableBucketArn, namespace
 		OwnerID:        defaultAccountID,
 	}
 
-	s.tables[tableKey][name] = table
+	s.Tables[tableKey][name] = table
 
 	return table, nil
 }
@@ -391,7 +476,7 @@ func (s *MemoryStorage) DeleteTable(_ context.Context, tableBucketArn, namespace
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
@@ -399,14 +484,14 @@ func (s *MemoryStorage) DeleteTable(_ context.Context, tableBucketArn, namespace
 	}
 
 	tableKey := tableBucketArn + "/" + namespace
-	if _, exists := s.tables[tableKey][name]; !exists {
+	if _, exists := s.Tables[tableKey][name]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table '%s' not found in namespace '%s'", name, namespace),
 		}
 	}
 
-	delete(s.tables[tableKey], name)
+	delete(s.Tables[tableKey], name)
 
 	return nil
 }
@@ -416,7 +501,7 @@ func (s *MemoryStorage) GetTable(_ context.Context, tableBucketArn, namespace, n
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
@@ -424,7 +509,7 @@ func (s *MemoryStorage) GetTable(_ context.Context, tableBucketArn, namespace, n
 	}
 
 	tableKey := tableBucketArn + "/" + namespace
-	table, exists := s.tables[tableKey][name]
+	table, exists := s.Tables[tableKey][name]
 
 	if !exists {
 		return nil, &Error{
@@ -441,7 +526,7 @@ func (s *MemoryStorage) ListTables(_ context.Context, tableBucketArn, namespace,
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.tableBuckets[tableBucketArn]; !exists {
+	if _, exists := s.TableBuckets[tableBucketArn]; !exists {
 		return nil, &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Table bucket '%s' not found", tableBucketArn),
@@ -464,7 +549,7 @@ func (s *MemoryStorage) listTablesInNamespace(tableBucketArn, namespace, prefix 
 	tables := make([]TableSummary, 0)
 	tableKey := tableBucketArn + "/" + namespace
 
-	for _, table := range s.tables[tableKey] {
+	for _, table := range s.Tables[tableKey] {
 		if prefix != "" && !strings.HasPrefix(table.Name, prefix) {
 			continue
 		}
@@ -483,7 +568,7 @@ func (s *MemoryStorage) listTablesInNamespace(tableBucketArn, namespace, prefix 
 func (s *MemoryStorage) listTablesAcrossNamespaces(tableBucketArn, prefix string, maxTables int) []TableSummary {
 	tables := make([]TableSummary, 0)
 
-	for key, tablemap := range s.tables {
+	for key, tablemap := range s.Tables {
 		if !strings.HasPrefix(key, tableBucketArn+"/") {
 			continue
 		}

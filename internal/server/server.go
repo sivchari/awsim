@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -183,6 +184,15 @@ func (s *Server) Start() error {
 // Shutdown gracefully shuts down the server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutting down server")
+
+	// Save snapshots for services that implement io.Closer.
+	for _, svc := range s.registry.All() {
+		if c, ok := svc.(io.Closer); ok {
+			if err := c.Close(); err != nil {
+				s.logger.Error("failed to save snapshot", "service", svc.Name(), "error", err)
+			}
+		}
+	}
 
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)

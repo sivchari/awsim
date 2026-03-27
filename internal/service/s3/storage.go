@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec // MD5 is required for S3 ETag calculation per AWS specification
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Versioning status constants.
@@ -50,27 +53,102 @@ type Storage interface {
 	ListParts(ctx context.Context, bucket, key, uploadID string, maxParts int) ([]*Part, error)
 }
 
-// MemoryStorage implements Storage with in-memory data.
-type MemoryStorage struct {
-	mu      sync.RWMutex
-	buckets map[string]*memoryBucket
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
 }
 
-type memoryBucket struct {
-	name             string
-	creationDate     time.Time
-	objects          map[string]*Object          // current/latest version per key
-	versions         map[string][]*Object        // all versions per key (newest first)
-	versioningStatus string                      // "", "Enabled", "Suspended"
-	versionIDCounter uint64                      // counter for generating version IDs
-	multipartUploads map[string]*MultipartUpload // uploadID -> MultipartUpload
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
+// MemoryStorage implements Storage with in-memory data.
+type MemoryStorage struct {
+	mu      sync.RWMutex             `json:"-"`
+	Buckets map[string]*MemoryBucket `json:"buckets"`
+	dataDir string
+}
+
+// MemoryBucket holds the data for a single S3 bucket.
+type MemoryBucket struct {
+	Name             string                      `json:"name"`
+	CreationDate     time.Time                   `json:"creationDate"`
+	Objects          map[string]*Object          `json:"objects"`          // current/latest version per key
+	Versions         map[string][]*Object        `json:"versions"`         // all versions per key (newest first)
+	VersioningStatus string                      `json:"versioningStatus"` // "", "Enabled", "Suspended"
+	VersionIDCounter uint64                      `json:"versionIdcounter"` // counter for generating version IDs
+	MultipartUploads map[string]*MultipartUpload `json:"-"`                // uploadID -> MultipartUpload
 }
 
 // NewMemoryStorage creates a new in-memory S3 storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		buckets: make(map[string]*memoryBucket),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Buckets: make(map[string]*MemoryBucket),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "s3", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Buckets == nil {
+		s.Buckets = make(map[string]*MemoryBucket)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "s3", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateBucket creates a new bucket.
@@ -78,17 +156,17 @@ func (s *MemoryStorage) CreateBucket(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.buckets[name]; exists {
+	if _, exists := s.Buckets[name]; exists {
 		return &BucketError{Code: "BucketAlreadyOwnedByYou", Message: "Your previous request to create the named bucket succeeded and you already own it.", BucketName: name}
 	}
 
-	s.buckets[name] = &memoryBucket{
-		name:             name,
-		creationDate:     time.Now(),
-		objects:          make(map[string]*Object),
-		versions:         make(map[string][]*Object),
-		versioningStatus: "",
-		multipartUploads: make(map[string]*MultipartUpload),
+	s.Buckets[name] = &MemoryBucket{
+		Name:             name,
+		CreationDate:     time.Now(),
+		Objects:          make(map[string]*Object),
+		Versions:         make(map[string][]*Object),
+		VersioningStatus: "",
+		MultipartUploads: make(map[string]*MultipartUpload),
 	}
 
 	return nil
@@ -99,16 +177,16 @@ func (s *MemoryStorage) DeleteBucket(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	bucket, exists := s.buckets[name]
+	bucket, exists := s.Buckets[name]
 	if !exists {
 		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: name}
 	}
 
-	if len(bucket.objects) > 0 {
+	if len(bucket.Objects) > 0 {
 		return &BucketError{Code: "BucketNotEmpty", Message: "The bucket you tried to delete is not empty", BucketName: name}
 	}
 
-	delete(s.buckets, name)
+	delete(s.Buckets, name)
 
 	return nil
 }
@@ -118,11 +196,11 @@ func (s *MemoryStorage) ListBuckets(_ context.Context) ([]Bucket, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	buckets := make([]Bucket, 0, len(s.buckets))
-	for _, b := range s.buckets {
+	buckets := make([]Bucket, 0, len(s.Buckets))
+	for _, b := range s.Buckets {
 		buckets = append(buckets, Bucket{
-			Name:         b.name,
-			CreationDate: b.creationDate,
+			Name:         b.Name,
+			CreationDate: b.CreationDate,
 		})
 	}
 
@@ -139,7 +217,7 @@ func (s *MemoryStorage) BucketExists(_ context.Context, name string) (bool, erro
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	_, exists := s.buckets[name]
+	_, exists := s.Buckets[name]
 
 	return exists, nil
 }
@@ -149,7 +227,7 @@ func (s *MemoryStorage) PutObject(_ context.Context, bucket, key string, body io
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -181,20 +259,20 @@ func (s *MemoryStorage) PutObject(_ context.Context, bucket, key string, body io
 	}
 
 	// Handle versioning
-	switch b.versioningStatus {
+	switch b.VersioningStatus {
 	case VersioningEnabled:
 		// Generate version ID
-		b.versionIDCounter++
-		obj.VersionID = fmt.Sprintf("v%d", b.versionIDCounter)
+		b.VersionIDCounter++
+		obj.VersionID = fmt.Sprintf("v%d", b.VersionIDCounter)
 
 		// Prepend to versions list (newest first)
-		b.versions[key] = append([]*Object{obj}, b.versions[key]...)
+		b.Versions[key] = append([]*Object{obj}, b.Versions[key]...)
 	case VersioningSuspended:
 		// For suspended versioning, use "null" version ID
 		obj.VersionID = VersionIDNull
 
 		// Remove any existing "null" version
-		versions := b.versions[key]
+		versions := b.Versions[key]
 		newVersions := make([]*Object, 0, len(versions))
 
 		for _, v := range versions {
@@ -203,11 +281,11 @@ func (s *MemoryStorage) PutObject(_ context.Context, bucket, key string, body io
 			}
 		}
 
-		b.versions[key] = append([]*Object{obj}, newVersions...)
+		b.Versions[key] = append([]*Object{obj}, newVersions...)
 	}
 
 	// Always update current object
-	b.objects[key] = obj
+	b.Objects[key] = obj
 
 	return obj, nil
 }
@@ -217,12 +295,12 @@ func (s *MemoryStorage) GetObject(_ context.Context, bucket, key string) (*Objec
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	obj, exists := b.objects[key]
+	obj, exists := b.Objects[key]
 	if !exists {
 		return nil, &ObjectError{Code: "NoSuchKey", Message: "The specified key does not exist.", Key: key}
 	}
@@ -240,12 +318,12 @@ func (s *MemoryStorage) GetObjectVersion(_ context.Context, bucket, key, version
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	versions := b.versions[key]
+	versions := b.Versions[key]
 	for _, obj := range versions {
 		if obj.VersionID == versionID {
 			if obj.IsDeleteMarker {
@@ -265,34 +343,34 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
 	// Handle versioning - create delete marker for enabled buckets
-	if b.versioningStatus == VersioningEnabled {
-		b.versionIDCounter++
+	if b.VersioningStatus == VersioningEnabled {
+		b.VersionIDCounter++
 		deleteMarker := &Object{
 			Key:            key,
-			VersionID:      fmt.Sprintf("v%d", b.versionIDCounter),
+			VersionID:      fmt.Sprintf("v%d", b.VersionIDCounter),
 			IsDeleteMarker: true,
 			LastModified:   time.Now(),
 		}
 
 		// Prepend delete marker to versions
-		b.versions[key] = append([]*Object{deleteMarker}, b.versions[key]...)
-		b.objects[key] = deleteMarker
+		b.Versions[key] = append([]*Object{deleteMarker}, b.Versions[key]...)
+		b.Objects[key] = deleteMarker
 
 		return deleteMarker, nil
 	}
 
 	// For non-versioned or suspended buckets, just delete
-	delete(b.objects, key)
+	delete(b.Objects, key)
 
 	// For suspended buckets, also remove "null" version
-	if b.versioningStatus == VersioningSuspended {
-		versions := b.versions[key]
+	if b.VersioningStatus == VersioningSuspended {
+		versions := b.Versions[key]
 		newVersions := make([]*Object, 0, len(versions))
 
 		for _, v := range versions {
@@ -302,9 +380,9 @@ func (s *MemoryStorage) DeleteObject(_ context.Context, bucket, key string) (*Ob
 		}
 
 		if len(newVersions) == 0 {
-			delete(b.versions, key)
+			delete(b.Versions, key)
 		} else {
-			b.versions[key] = newVersions
+			b.Versions[key] = newVersions
 		}
 	}
 
@@ -317,12 +395,12 @@ func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, vers
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	versions := b.versions[key]
+	versions := b.Versions[key]
 	deletedObj, newVersions := filterOutVersion(versions, versionID)
 
 	// S3 doesn't return error if version doesn't exist, returns empty object
@@ -331,12 +409,12 @@ func (s *MemoryStorage) DeleteObjectVersion(_ context.Context, bucket, key, vers
 	}
 
 	if len(newVersions) == 0 {
-		delete(b.versions, key)
-		delete(b.objects, key)
+		delete(b.Versions, key)
+		delete(b.Objects, key)
 	} else {
-		b.versions[key] = newVersions
+		b.Versions[key] = newVersions
 		// Update current object to the newest version
-		b.objects[key] = newVersions[0]
+		b.Objects[key] = newVersions[0]
 	}
 
 	return deletedObj, nil
@@ -364,12 +442,12 @@ func (s *MemoryStorage) HeadObject(_ context.Context, bucket, key string) (*Obje
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	obj, exists := b.objects[key]
+	obj, exists := b.Objects[key]
 	if !exists {
 		return nil, &ObjectError{Code: "NoSuchKey", Message: "The specified key does not exist.", Key: key}
 	}
@@ -390,7 +468,7 @@ func (s *MemoryStorage) ListObjects(_ context.Context, bucket, prefix, delimiter
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -403,9 +481,9 @@ func (s *MemoryStorage) ListObjects(_ context.Context, bucket, prefix, delimiter
 	commonPrefixes := make(map[string]bool)
 
 	// Collect all matching keys.
-	keys := make([]string, 0, len(b.objects))
+	keys := make([]string, 0, len(b.Objects))
 
-	for key := range b.objects {
+	for key := range b.Objects {
 		if prefix == "" || strings.HasPrefix(key, prefix) {
 			keys = append(keys, key)
 		}
@@ -415,7 +493,7 @@ func (s *MemoryStorage) ListObjects(_ context.Context, bucket, prefix, delimiter
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		obj := b.objects[key]
+		obj := b.Objects[key]
 
 		// Handle delimiter
 		if delimiter != "" {
@@ -458,7 +536,7 @@ func (s *MemoryStorage) PutBucketVersioning(_ context.Context, bucket, status st
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -467,7 +545,7 @@ func (s *MemoryStorage) PutBucketVersioning(_ context.Context, bucket, status st
 		return &BucketError{Code: "MalformedXML", Message: "Invalid versioning status", BucketName: bucket}
 	}
 
-	b.versioningStatus = status
+	b.VersioningStatus = status
 
 	return nil
 }
@@ -477,12 +555,12 @@ func (s *MemoryStorage) GetBucketVersioning(_ context.Context, bucket string) (s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return "", &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	return b.versioningStatus, nil
+	return b.VersioningStatus, nil
 }
 
 // ListObjectVersions lists all versions of objects in a bucket.
@@ -490,7 +568,7 @@ func (s *MemoryStorage) ListObjectVersions(_ context.Context, bucket, prefix, de
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -509,16 +587,16 @@ func (s *MemoryStorage) ListObjectVersions(_ context.Context, bucket, prefix, de
 }
 
 // collectVersionKeys collects all keys that match the prefix from both versions and objects maps.
-func collectVersionKeys(b *memoryBucket, prefix string) []string {
+func collectVersionKeys(b *MemoryBucket, prefix string) []string {
 	keySet := make(map[string]bool)
 
-	for key := range b.versions {
+	for key := range b.Versions {
 		if prefix == "" || strings.HasPrefix(key, prefix) {
 			keySet[key] = true
 		}
 	}
 
-	for key := range b.objects {
+	for key := range b.Objects {
 		if prefix == "" || strings.HasPrefix(key, prefix) {
 			keySet[key] = true
 		}
@@ -533,7 +611,7 @@ func collectVersionKeys(b *memoryBucket, prefix string) []string {
 }
 
 // processVersionKeys processes keys and returns objects and common prefixes.
-func processVersionKeys(b *memoryBucket, keys []string, prefix, delimiter string, maxKeys int) ([]Object, map[string]bool) {
+func processVersionKeys(b *MemoryBucket, keys []string, prefix, delimiter string, maxKeys int) ([]Object, map[string]bool) {
 	objects := make([]Object, 0)
 	commonPrefixes := make(map[string]bool)
 	count := 0
@@ -571,11 +649,11 @@ func extractCommonPrefix(key, prefix, delimiter string) string {
 }
 
 // addKeyVersions adds all versions of a key to the objects slice.
-func addKeyVersions(b *memoryBucket, key string, objects *[]Object, limit int) int {
-	versions := b.versions[key]
+func addKeyVersions(b *MemoryBucket, key string, objects *[]Object, limit int) int {
+	versions := b.Versions[key]
 	if len(versions) == 0 {
 		// No versioning history, include current object if exists
-		if obj, exists := b.objects[key]; exists {
+		if obj, exists := b.Objects[key]; exists {
 			*objects = append(*objects, objectToVersionInfo(obj))
 
 			return 1
@@ -660,7 +738,7 @@ func (s *MemoryStorage) CreateMultipartUpload(_ context.Context, bucket, key str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -674,7 +752,7 @@ func (s *MemoryStorage) CreateMultipartUpload(_ context.Context, bucket, key str
 		Parts:     make(map[int]*Part),
 	}
 
-	b.multipartUploads[uploadID] = upload
+	b.MultipartUploads[uploadID] = upload
 
 	return upload, nil
 }
@@ -684,12 +762,12 @@ func (s *MemoryStorage) UploadPart(_ context.Context, bucket, key, uploadID stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	upload, exists := b.multipartUploads[uploadID]
+	upload, exists := b.MultipartUploads[uploadID]
 	if !exists {
 		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
 	}
@@ -724,12 +802,12 @@ func (s *MemoryStorage) CompleteMultipartUpload(_ context.Context, bucket, key, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	upload, exists := b.multipartUploads[uploadID]
+	upload, exists := b.MultipartUploads[uploadID]
 	if !exists {
 		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
 	}
@@ -767,8 +845,8 @@ func (s *MemoryStorage) CompleteMultipartUpload(_ context.Context, bucket, key, 
 		ContentType:  "application/octet-stream",
 	}
 
-	b.objects[key] = obj
-	delete(b.multipartUploads, uploadID)
+	b.Objects[key] = obj
+	delete(b.MultipartUploads, uploadID)
 
 	return obj, nil
 }
@@ -778,12 +856,12 @@ func (s *MemoryStorage) AbortMultipartUpload(_ context.Context, bucket, key, upl
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	upload, exists := b.multipartUploads[uploadID]
+	upload, exists := b.MultipartUploads[uploadID]
 	if !exists {
 		return &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
 	}
@@ -792,7 +870,7 @@ func (s *MemoryStorage) AbortMultipartUpload(_ context.Context, bucket, key, upl
 		return &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
 	}
 
-	delete(b.multipartUploads, uploadID)
+	delete(b.MultipartUploads, uploadID)
 
 	return nil
 }
@@ -802,7 +880,7 @@ func (s *MemoryStorage) ListMultipartUploads(_ context.Context, bucket, prefix s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
@@ -813,7 +891,7 @@ func (s *MemoryStorage) ListMultipartUploads(_ context.Context, bucket, prefix s
 
 	uploads := make([]*MultipartUpload, 0)
 
-	for _, upload := range b.multipartUploads {
+	for _, upload := range b.MultipartUploads {
 		if prefix == "" || strings.HasPrefix(upload.Key, prefix) {
 			uploads = append(uploads, upload)
 		}
@@ -840,12 +918,12 @@ func (s *MemoryStorage) ListParts(_ context.Context, bucket, key, uploadID strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	b, exists := s.buckets[bucket]
+	b, exists := s.Buckets[bucket]
 	if !exists {
 		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist", BucketName: bucket}
 	}
 
-	upload, exists := b.multipartUploads[uploadID]
+	upload, exists := b.MultipartUploads[uploadID]
 	if !exists {
 		return nil, &MultipartError{Code: "NoSuchUpload", Message: "The specified upload does not exist", UploadID: uploadID}
 	}

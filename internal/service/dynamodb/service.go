@@ -1,13 +1,25 @@
 package dynamodb
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
+
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
 
 const defaultBaseURL = "http://localhost:4566"
 
 func init() {
-	service.Register(New(NewMemoryStorage(defaultBaseURL)))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(defaultBaseURL, opts...)))
 }
 
 // Service implements the DynamoDB service.
@@ -41,3 +53,14 @@ func (s *Service) TargetPrefix() string {
 
 // JSONProtocol is a marker method that indicates DynamoDB uses AWS JSON 1.0 protocol.
 func (s *Service) JSONProtocol() {}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

@@ -2,12 +2,15 @@ package globalaccelerator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -44,21 +47,103 @@ type Storage interface {
 	DeleteEndpointGroup(ctx context.Context, arn string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	accelerators   map[string]*Accelerator
-	listeners      map[string]*Listener
-	endpointGroups map[string]*EndpointGroup
+	mu             sync.RWMutex              `json:"-"`
+	Accelerators   map[string]*Accelerator   `json:"accelerators"`
+	Listeners      map[string]*Listener      `json:"listeners"`
+	EndpointGroups map[string]*EndpointGroup `json:"endpointGroups"`
+	dataDir        string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		accelerators:   make(map[string]*Accelerator),
-		listeners:      make(map[string]*Listener),
-		endpointGroups: make(map[string]*EndpointGroup),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Accelerators:   make(map[string]*Accelerator),
+		Listeners:      make(map[string]*Listener),
+		EndpointGroups: make(map[string]*EndpointGroup),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "globalaccelerator", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Accelerators == nil {
+		s.Accelerators = make(map[string]*Accelerator)
+	}
+
+	if s.Listeners == nil {
+		s.Listeners = make(map[string]*Listener)
+	}
+
+	if s.EndpointGroups == nil {
+		s.EndpointGroups = make(map[string]*EndpointGroup)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "globalaccelerator", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateAccelerator creates a new accelerator.
@@ -113,7 +198,7 @@ func (s *MemoryStorage) CreateAccelerator(_ context.Context, req *CreateAccelera
 		accelerator.DualStackDNS = fmt.Sprintf("%s.dualstack.awsglobalaccelerator.com", acceleratorID[:8])
 	}
 
-	s.accelerators[arn] = accelerator
+	s.Accelerators[arn] = accelerator
 
 	return accelerator, nil
 }
@@ -123,7 +208,7 @@ func (s *MemoryStorage) GetAccelerator(_ context.Context, arn string) (*Accelera
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	accelerator, ok := s.accelerators[arn]
+	accelerator, ok := s.Accelerators[arn]
 	if !ok {
 		return nil, &ServiceError{Code: errNotFound, Message: "Accelerator not found"}
 	}
@@ -142,8 +227,8 @@ func (s *MemoryStorage) ListAccelerators(_ context.Context, maxResults int32, ne
 	}
 
 	// Collect all ARNs and sort for consistent pagination.
-	arns := make([]string, 0, len(s.accelerators))
-	for arn := range s.accelerators {
+	arns := make([]string, 0, len(s.Accelerators))
+	for arn := range s.Accelerators {
 		arns = append(arns, arn)
 	}
 
@@ -165,7 +250,7 @@ func (s *MemoryStorage) ListAccelerators(_ context.Context, maxResults int32, ne
 	// Collect accelerators from startIdx up to maxResults.
 	accelerators := make([]*Accelerator, 0, maxResults)
 	for i := startIdx; i < len(arns) && len(accelerators) < int(maxResults); i++ {
-		accelerators = append(accelerators, s.accelerators[arns[i]])
+		accelerators = append(accelerators, s.Accelerators[arns[i]])
 	}
 
 	// Determine next token.
@@ -182,7 +267,7 @@ func (s *MemoryStorage) UpdateAccelerator(_ context.Context, arn, name, ipAddres
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	accelerator, ok := s.accelerators[arn]
+	accelerator, ok := s.Accelerators[arn]
 	if !ok {
 		return nil, &ServiceError{Code: errNotFound, Message: "Accelerator not found"}
 	}
@@ -209,7 +294,7 @@ func (s *MemoryStorage) DeleteAccelerator(_ context.Context, arn string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	accelerator, ok := s.accelerators[arn]
+	accelerator, ok := s.Accelerators[arn]
 	if !ok {
 		return &ServiceError{Code: errNotFound, Message: "Accelerator not found"}
 	}
@@ -219,20 +304,20 @@ func (s *MemoryStorage) DeleteAccelerator(_ context.Context, arn string) error {
 	}
 
 	// Delete associated listeners and endpoint groups.
-	for listenerArn, listener := range s.listeners {
+	for listenerArn, listener := range s.Listeners {
 		if listener.AcceleratorArn == arn {
 			// Delete endpoint groups for this listener.
-			for egArn, eg := range s.endpointGroups {
+			for egArn, eg := range s.EndpointGroups {
 				if eg.ListenerArn == listenerArn {
-					delete(s.endpointGroups, egArn)
+					delete(s.EndpointGroups, egArn)
 				}
 			}
 
-			delete(s.listeners, listenerArn)
+			delete(s.Listeners, listenerArn)
 		}
 	}
 
-	delete(s.accelerators, arn)
+	delete(s.Accelerators, arn)
 
 	return nil
 }
@@ -243,7 +328,7 @@ func (s *MemoryStorage) CreateListener(_ context.Context, req *CreateListenerReq
 	defer s.mu.Unlock()
 
 	// Verify accelerator exists.
-	if _, ok := s.accelerators[req.AcceleratorArn]; !ok {
+	if _, ok := s.Accelerators[req.AcceleratorArn]; !ok {
 		return nil, &ServiceError{Code: errNotFound, Message: "Accelerator not found"}
 	}
 
@@ -268,7 +353,7 @@ func (s *MemoryStorage) CreateListener(_ context.Context, req *CreateListenerReq
 		ClientAffinity: clientAffinity,
 	}
 
-	s.listeners[arn] = listener
+	s.Listeners[arn] = listener
 
 	return listener, nil
 }
@@ -278,7 +363,7 @@ func (s *MemoryStorage) GetListener(_ context.Context, arn string) (*Listener, e
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	listener, ok := s.listeners[arn]
+	listener, ok := s.Listeners[arn]
 	if !ok {
 		return nil, &ServiceError{Code: errListenerNotFound, Message: "Listener not found"}
 	}
@@ -296,7 +381,8 @@ func (s *MemoryStorage) ListListeners(_ context.Context, acceleratorArn string, 
 	}
 
 	listeners := make([]*Listener, 0)
-	for _, listener := range s.listeners {
+
+	for _, listener := range s.Listeners {
 		if listener.AcceleratorArn == acceleratorArn {
 			listeners = append(listeners, listener)
 			if len(listeners) >= int(maxResults) {
@@ -313,7 +399,7 @@ func (s *MemoryStorage) UpdateListener(_ context.Context, req *UpdateListenerReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	listener, ok := s.listeners[req.ListenerArn]
+	listener, ok := s.Listeners[req.ListenerArn]
 	if !ok {
 		return nil, &ServiceError{Code: errListenerNotFound, Message: "Listener not found"}
 	}
@@ -343,18 +429,18 @@ func (s *MemoryStorage) DeleteListener(_ context.Context, arn string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.listeners[arn]; !ok {
+	if _, ok := s.Listeners[arn]; !ok {
 		return &ServiceError{Code: errListenerNotFound, Message: "Listener not found"}
 	}
 
 	// Delete associated endpoint groups.
-	for egArn, eg := range s.endpointGroups {
+	for egArn, eg := range s.EndpointGroups {
 		if eg.ListenerArn == arn {
-			delete(s.endpointGroups, egArn)
+			delete(s.EndpointGroups, egArn)
 		}
 	}
 
-	delete(s.listeners, arn)
+	delete(s.Listeners, arn)
 
 	return nil
 }
@@ -365,7 +451,7 @@ func (s *MemoryStorage) CreateEndpointGroup(_ context.Context, req *CreateEndpoi
 	defer s.mu.Unlock()
 
 	// Verify listener exists.
-	if _, ok := s.listeners[req.ListenerArn]; !ok {
+	if _, ok := s.Listeners[req.ListenerArn]; !ok {
 		return nil, &ServiceError{Code: errListenerNotFound, Message: "Listener not found"}
 	}
 
@@ -406,7 +492,7 @@ func (s *MemoryStorage) CreateEndpointGroup(_ context.Context, req *CreateEndpoi
 		PortOverrides:              convertPortOverrides(req.PortOverrides),
 	}
 
-	s.endpointGroups[arn] = endpointGroup
+	s.EndpointGroups[arn] = endpointGroup
 
 	return endpointGroup, nil
 }
@@ -416,7 +502,7 @@ func (s *MemoryStorage) GetEndpointGroup(_ context.Context, arn string) (*Endpoi
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	endpointGroup, ok := s.endpointGroups[arn]
+	endpointGroup, ok := s.EndpointGroups[arn]
 	if !ok {
 		return nil, &ServiceError{Code: errEndpointNotFound, Message: "Endpoint group not found"}
 	}
@@ -434,7 +520,8 @@ func (s *MemoryStorage) ListEndpointGroups(_ context.Context, listenerArn string
 	}
 
 	endpointGroups := make([]*EndpointGroup, 0)
-	for _, eg := range s.endpointGroups {
+
+	for _, eg := range s.EndpointGroups {
 		if eg.ListenerArn == listenerArn {
 			endpointGroups = append(endpointGroups, eg)
 			if len(endpointGroups) >= int(maxResults) {
@@ -451,7 +538,7 @@ func (s *MemoryStorage) UpdateEndpointGroup(_ context.Context, req *UpdateEndpoi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	eg, ok := s.endpointGroups[req.EndpointGroupArn]
+	eg, ok := s.EndpointGroups[req.EndpointGroupArn]
 	if !ok {
 		return nil, &ServiceError{Code: errEndpointNotFound, Message: "Endpoint group not found"}
 	}
@@ -496,11 +583,11 @@ func (s *MemoryStorage) DeleteEndpointGroup(_ context.Context, arn string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.endpointGroups[arn]; !ok {
+	if _, ok := s.EndpointGroups[arn]; !ok {
 		return &ServiceError{Code: errEndpointNotFound, Message: "Endpoint group not found"}
 	}
 
-	delete(s.endpointGroups, arn)
+	delete(s.EndpointGroups, arn)
 
 	return nil
 }

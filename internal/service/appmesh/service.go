@@ -1,6 +1,12 @@
 package appmesh
 
-import "github.com/sivchari/kumo/internal/service"
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/sivchari/kumo/internal/service"
+)
 
 // Service implements the App Mesh service.
 type Service struct {
@@ -14,8 +20,16 @@ func New(storage Storage) *Service {
 	}
 }
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage()))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
 }
 
 // Name returns the service name.
@@ -63,3 +77,14 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 // Compile-time interface check.
 var _ service.Service = (*Service)(nil)
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

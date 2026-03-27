@@ -3,11 +3,14 @@ package eks
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -31,23 +34,101 @@ type Storage interface {
 	ListNodegroups(ctx context.Context, clusterName string, maxResults int, nextToken string) ([]string, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu         sync.RWMutex
-	clusters   map[string]*Cluster
-	nodegroups map[string]map[string]*Nodegroup // clusterName -> nodegroupName -> Nodegroup
+	mu         sync.RWMutex                     `json:"-"`
+	Clusters   map[string]*Cluster              `json:"clusters"`
+	Nodegroups map[string]map[string]*Nodegroup `json:"nodegroups"`
 	region     string
 	accountID  string
+	dataDir    string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		clusters:   make(map[string]*Cluster),
-		nodegroups: make(map[string]map[string]*Nodegroup),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Clusters:   make(map[string]*Cluster),
+		Nodegroups: make(map[string]map[string]*Nodegroup),
 		region:     "us-east-1",
 		accountID:  "123456789012",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "eks", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Clusters == nil {
+		s.Clusters = make(map[string]*Cluster)
+	}
+
+	if s.Nodegroups == nil {
+		s.Nodegroups = make(map[string]map[string]*Nodegroup)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "eks", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateCluster creates a new EKS cluster.
@@ -55,7 +136,7 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clusters[req.Name]; exists {
+	if _, exists := s.Clusters[req.Name]; exists {
 		return nil, &Error{
 			Code:    "ResourceInUseException",
 			Message: fmt.Sprintf("Cluster already exists with name: %s", req.Name),
@@ -65,8 +146,8 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	cluster := s.buildCluster(req)
 	cluster.Status = statusActive
 
-	s.clusters[req.Name] = cluster
-	s.nodegroups[req.Name] = make(map[string]*Nodegroup)
+	s.Clusters[req.Name] = cluster
+	s.Nodegroups[req.Name] = make(map[string]*Nodegroup)
 
 	return cluster, nil
 }
@@ -152,7 +233,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, name string) (*Cluster,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cluster, exists := s.clusters[name]
+	cluster, exists := s.Clusters[name]
 	if !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
@@ -161,7 +242,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, name string) (*Cluster,
 	}
 
 	// Check if there are any nodegroups.
-	if nodegroups, ok := s.nodegroups[name]; ok && len(nodegroups) > 0 {
+	if nodegroups, ok := s.Nodegroups[name]; ok && len(nodegroups) > 0 {
 		return nil, &Error{
 			Code:    "ResourceInUseException",
 			Message: "Cluster has nodegroups attached",
@@ -170,8 +251,8 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, name string) (*Cluster,
 
 	cluster.Status = statusDeleting
 
-	delete(s.clusters, name)
-	delete(s.nodegroups, name)
+	delete(s.Clusters, name)
+	delete(s.Nodegroups, name)
 
 	return cluster, nil
 }
@@ -181,7 +262,7 @@ func (s *MemoryStorage) DescribeCluster(_ context.Context, name string) (*Cluste
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cluster, exists := s.clusters[name]
+	cluster, exists := s.Clusters[name]
 	if !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
@@ -197,8 +278,8 @@ func (s *MemoryStorage) ListClusters(_ context.Context, _ int, _ string) ([]stri
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	names := make([]string, 0, len(s.clusters))
-	for name := range s.clusters {
+	names := make([]string, 0, len(s.Clusters))
+	for name := range s.Clusters {
 		names = append(names, name)
 	}
 
@@ -210,7 +291,7 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cluster, exists := s.clusters[req.ClusterName]
+	cluster, exists := s.Clusters[req.ClusterName]
 	if !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
@@ -218,7 +299,7 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 		}
 	}
 
-	if _, exists := s.nodegroups[req.ClusterName][req.NodegroupName]; exists {
+	if _, exists := s.Nodegroups[req.ClusterName][req.NodegroupName]; exists {
 		return nil, &Error{
 			Code:    "ResourceInUseException",
 			Message: fmt.Sprintf("Nodegroup already exists with name: %s", req.NodegroupName),
@@ -228,7 +309,7 @@ func (s *MemoryStorage) CreateNodegroup(_ context.Context, req *CreateNodegroupR
 	nodegroup := s.buildNodegroup(req, cluster.Version)
 	nodegroup.Status = statusActive
 
-	s.nodegroups[req.ClusterName][req.NodegroupName] = nodegroup
+	s.Nodegroups[req.ClusterName][req.NodegroupName] = nodegroup
 
 	return nodegroup, nil
 }
@@ -296,14 +377,14 @@ func (s *MemoryStorage) DeleteNodegroup(_ context.Context, clusterName, nodegrou
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clusters[clusterName]; !exists {
+	if _, exists := s.Clusters[clusterName]; !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
 			Message: fmt.Sprintf("No cluster found for name: %s", clusterName),
 		}
 	}
 
-	nodegroups, exists := s.nodegroups[clusterName]
+	nodegroups, exists := s.Nodegroups[clusterName]
 	if !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
@@ -321,7 +402,7 @@ func (s *MemoryStorage) DeleteNodegroup(_ context.Context, clusterName, nodegrou
 
 	nodegroup.Status = statusDeleting
 
-	delete(s.nodegroups[clusterName], nodegroupName)
+	delete(s.Nodegroups[clusterName], nodegroupName)
 
 	return nodegroup, nil
 }
@@ -331,14 +412,14 @@ func (s *MemoryStorage) DescribeNodegroup(_ context.Context, clusterName, nodegr
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.clusters[clusterName]; !exists {
+	if _, exists := s.Clusters[clusterName]; !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
 			Message: fmt.Sprintf("No cluster found for name: %s", clusterName),
 		}
 	}
 
-	nodegroups, exists := s.nodegroups[clusterName]
+	nodegroups, exists := s.Nodegroups[clusterName]
 	if !exists {
 		return nil, &Error{
 			Code:    "ResourceNotFoundException",
@@ -362,14 +443,14 @@ func (s *MemoryStorage) ListNodegroups(_ context.Context, clusterName string, _ 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.clusters[clusterName]; !exists {
+	if _, exists := s.Clusters[clusterName]; !exists {
 		return nil, "", &Error{
 			Code:    "ResourceNotFoundException",
 			Message: fmt.Sprintf("No cluster found for name: %s", clusterName),
 		}
 	}
 
-	nodegroups, exists := s.nodegroups[clusterName]
+	nodegroups, exists := s.Nodegroups[clusterName]
 	if !exists {
 		return []string{}, "", nil
 	}

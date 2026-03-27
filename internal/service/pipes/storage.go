@@ -2,11 +2,14 @@ package pipes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for pipe storage operations.
@@ -42,17 +45,91 @@ type Storage interface {
 	ListTagsForResource(ctx context.Context, arn string) (map[string]string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements the Storage interface using in-memory storage.
 type MemoryStorage struct {
-	mu    sync.RWMutex
-	pipes map[string]*Pipe // keyed by name
+	mu      sync.RWMutex     `json:"-"`
+	Pipes   map[string]*Pipe `json:"pipes"` // keyed by name
+	dataDir string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		pipes: make(map[string]*Pipe),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Pipes: make(map[string]*Pipe),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "pipes", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Pipes == nil {
+		m.Pipes = make(map[string]*Pipe)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "pipes", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 const (
@@ -73,7 +150,7 @@ func (m *MemoryStorage) CreatePipe(_ context.Context, req *CreatePipeInput) (*Pi
 	defer m.mu.Unlock()
 
 	// Check if pipe already exists.
-	if _, exists := m.pipes[req.Name]; exists {
+	if _, exists := m.Pipes[req.Name]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("Pipe with name %s already exists", req.Name),
@@ -135,7 +212,7 @@ func (m *MemoryStorage) CreatePipe(_ context.Context, req *CreatePipeInput) (*Pi
 		LastModifiedTime:     AWSTimestamp{Time: now},
 	}
 
-	m.pipes[req.Name] = pipe
+	m.Pipes[req.Name] = pipe
 
 	return pipe, nil
 }
@@ -145,7 +222,7 @@ func (m *MemoryStorage) DescribePipe(_ context.Context, name string) (*Pipe, err
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	pipe, exists := m.pipes[name]
+	pipe, exists := m.Pipes[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFoundException,
@@ -163,7 +240,7 @@ func (m *MemoryStorage) UpdatePipe(_ context.Context, req *UpdatePipeInput) (*Pi
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	pipe, exists := m.pipes[req.Name]
+	pipe, exists := m.Pipes[req.Name]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFoundException,
@@ -231,7 +308,7 @@ func (m *MemoryStorage) DeletePipe(_ context.Context, name string) (*Pipe, error
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	pipe, exists := m.pipes[name]
+	pipe, exists := m.Pipes[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFoundException,
@@ -254,7 +331,7 @@ func (m *MemoryStorage) DeletePipe(_ context.Context, name string) (*Pipe, error
 		LastModifiedTime: pipe.LastModifiedTime,
 	}
 
-	delete(m.pipes, name)
+	delete(m.Pipes, name)
 
 	return result, nil
 }
@@ -271,7 +348,7 @@ func (m *MemoryStorage) ListPipes(_ context.Context, req *ListPipesInput) (*List
 
 	var pipes []*PipeSummary
 
-	for _, pipe := range m.pipes {
+	for _, pipe := range m.Pipes {
 		// Apply filters.
 		if req.NamePrefix != "" && !strings.HasPrefix(pipe.Name, req.NamePrefix) {
 			continue
@@ -323,7 +400,7 @@ func (m *MemoryStorage) StartPipe(_ context.Context, name string) (*Pipe, error)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	pipe, exists := m.pipes[name]
+	pipe, exists := m.Pipes[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFoundException,
@@ -351,7 +428,7 @@ func (m *MemoryStorage) StopPipe(_ context.Context, name string) (*Pipe, error) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	pipe, exists := m.pipes[name]
+	pipe, exists := m.Pipes[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFoundException,
@@ -382,7 +459,7 @@ func (m *MemoryStorage) TagResource(_ context.Context, arn string, tags map[stri
 	// Find pipe by ARN.
 	var pipe *Pipe
 
-	for _, p := range m.pipes {
+	for _, p := range m.Pipes {
 		if p.Arn == arn {
 			pipe = p
 
@@ -414,7 +491,7 @@ func (m *MemoryStorage) UntagResource(_ context.Context, arn string, tagKeys []s
 	// Find pipe by ARN.
 	var pipe *Pipe
 
-	for _, p := range m.pipes {
+	for _, p := range m.Pipes {
 		if p.Arn == arn {
 			pipe = p
 
@@ -448,7 +525,7 @@ func (m *MemoryStorage) ListTagsForResource(_ context.Context, arn string) (map[
 	// Find pipe by ARN.
 	var pipe *Pipe
 
-	for _, p := range m.pipes {
+	for _, p := range m.Pipes {
 		if p.Arn == arn {
 			pipe = p
 

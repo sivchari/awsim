@@ -2,11 +2,14 @@ package rekognition
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -52,17 +55,91 @@ type Storage interface {
 	DetectModerationLabels(ctx context.Context, req *DetectModerationLabelsRequest) (*DetectModerationLabelsResponse, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for Rekognition.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	collections map[string]*Collection
+	mu          sync.RWMutex           `json:"-"`
+	Collections map[string]*Collection `json:"collections"`
+	dataDir     string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		collections: make(map[string]*Collection),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Collections: make(map[string]*Collection),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "rekognition", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Collections == nil {
+		s.Collections = make(map[string]*Collection)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "rekognition", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateCollection creates a new collection.
@@ -77,7 +154,7 @@ func (s *MemoryStorage) CreateCollection(_ context.Context, req *CreateCollectio
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.collections[req.CollectionID]; exists {
+	if _, exists := s.Collections[req.CollectionID]; exists {
 		return nil, &ServiceError{
 			Code:    errResourceExists,
 			Message: fmt.Sprintf("Collection with id %s already exists", req.CollectionID),
@@ -97,7 +174,7 @@ func (s *MemoryStorage) CreateCollection(_ context.Context, req *CreateCollectio
 		Faces:             make(map[string]*Face),
 	}
 
-	s.collections[req.CollectionID] = collection
+	s.Collections[req.CollectionID] = collection
 
 	return &CreateCollectionResponse{
 		CollectionArn:    arn,
@@ -111,14 +188,14 @@ func (s *MemoryStorage) DeleteCollection(_ context.Context, collectionID string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.collections[collectionID]; !exists {
+	if _, exists := s.Collections[collectionID]; !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Collection with id %s not found", collectionID),
 		}
 	}
 
-	delete(s.collections, collectionID)
+	delete(s.Collections, collectionID)
 
 	return &DeleteCollectionResponse{
 		StatusCode: 200,
@@ -130,10 +207,10 @@ func (s *MemoryStorage) ListCollections(_ context.Context, _ *ListCollectionsReq
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	collectionIDs := make([]string, 0, len(s.collections))
-	faceModelVersions := make([]string, 0, len(s.collections))
+	collectionIDs := make([]string, 0, len(s.Collections))
+	faceModelVersions := make([]string, 0, len(s.Collections))
 
-	for _, c := range s.collections {
+	for _, c := range s.Collections {
 		collectionIDs = append(collectionIDs, c.CollectionID)
 		faceModelVersions = append(faceModelVersions, c.FaceModelVersion)
 	}
@@ -149,7 +226,7 @@ func (s *MemoryStorage) DescribeCollection(_ context.Context, collectionID strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	collection, exists := s.collections[collectionID]
+	collection, exists := s.Collections[collectionID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,
@@ -178,7 +255,7 @@ func (s *MemoryStorage) IndexFaces(_ context.Context, req *IndexFacesRequest) (*
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	collection, exists := s.collections[req.CollectionID]
+	collection, exists := s.Collections[req.CollectionID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,
@@ -239,7 +316,7 @@ func (s *MemoryStorage) ListFaces(_ context.Context, req *ListFacesRequest) (*Li
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	collection, exists := s.collections[req.CollectionID]
+	collection, exists := s.Collections[req.CollectionID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,
@@ -278,7 +355,7 @@ func (s *MemoryStorage) SearchFaces(_ context.Context, req *SearchFacesRequest) 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	collection, exists := s.collections[req.CollectionID]
+	collection, exists := s.Collections[req.CollectionID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,
@@ -324,7 +401,7 @@ func (s *MemoryStorage) DeleteFaces(_ context.Context, req *DeleteFacesRequest) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	collection, exists := s.collections[req.CollectionID]
+	collection, exists := s.Collections[req.CollectionID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errResourceNotFound,

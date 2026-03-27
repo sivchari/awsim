@@ -2,11 +2,14 @@ package amplify
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -42,19 +45,97 @@ type Storage interface {
 	DeleteBranch(ctx context.Context, appID, branchName string) (*Branch, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu       sync.RWMutex
-	apps     map[string]*App
-	branches map[string]map[string]*Branch // appID -> branchName -> Branch
+	mu       sync.RWMutex                  `json:"-"`
+	Apps     map[string]*App               `json:"apps"`
+	Branches map[string]map[string]*Branch `json:"branches"` // appID -> branchName -> Branch
+	dataDir  string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		apps:     make(map[string]*App),
-		branches: make(map[string]map[string]*Branch),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Apps:     make(map[string]*App),
+		Branches: make(map[string]map[string]*Branch),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "amplify", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Apps == nil {
+		m.Apps = make(map[string]*App)
+	}
+
+	if m.Branches == nil {
+		m.Branches = make(map[string]map[string]*Branch)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "amplify", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateApp creates a new Amplify app.
@@ -86,8 +167,8 @@ func (m *MemoryStorage) CreateApp(_ context.Context, input *CreateAppInput) (*Ap
 		Tags:                  input.Tags,
 	}
 
-	m.apps[appID] = app
-	m.branches[appID] = make(map[string]*Branch)
+	m.Apps[appID] = app
+	m.Branches[appID] = make(map[string]*Branch)
 
 	return app, nil
 }
@@ -97,7 +178,7 @@ func (m *MemoryStorage) GetApp(_ context.Context, appID string) (*App, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	app, exists := m.apps[appID]
+	app, exists := m.Apps[appID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
@@ -114,8 +195,8 @@ func (m *MemoryStorage) ListApps(_ context.Context) ([]App, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	apps := make([]App, 0, len(m.apps))
-	for _, app := range m.apps {
+	apps := make([]App, 0, len(m.Apps))
+	for _, app := range m.Apps {
 		apps = append(apps, *app)
 	}
 
@@ -127,7 +208,7 @@ func (m *MemoryStorage) UpdateApp(_ context.Context, appID string, input *Update
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.apps[appID]
+	app, exists := m.Apps[appID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
@@ -170,7 +251,7 @@ func (m *MemoryStorage) DeleteApp(_ context.Context, appID string) (*App, error)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.apps[appID]
+	app, exists := m.Apps[appID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
@@ -179,9 +260,9 @@ func (m *MemoryStorage) DeleteApp(_ context.Context, appID string) (*App, error)
 		}
 	}
 
-	delete(m.apps, appID)
+	delete(m.Apps, appID)
 
-	delete(m.branches, appID)
+	delete(m.Branches, appID)
 
 	return app, nil
 }
@@ -191,7 +272,7 @@ func (m *MemoryStorage) CreateBranch(_ context.Context, appID string, input *Cre
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.apps[appID]; !exists {
+	if _, exists := m.Apps[appID]; !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
 			Message: fmt.Sprintf("App not found for appId: %s", appID),
@@ -226,7 +307,7 @@ func (m *MemoryStorage) CreateBranch(_ context.Context, appID string, input *Cre
 		Tags:                     input.Tags,
 	}
 
-	m.branches[appID][input.BranchName] = branch
+	m.Branches[appID][input.BranchName] = branch
 
 	return branch, nil
 }
@@ -236,7 +317,7 @@ func (m *MemoryStorage) GetBranch(_ context.Context, appID, branchName string) (
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	appBranches, exists := m.branches[appID]
+	appBranches, exists := m.Branches[appID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
@@ -262,7 +343,7 @@ func (m *MemoryStorage) ListBranches(_ context.Context, appID string) ([]Branch,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.apps[appID]; !exists {
+	if _, exists := m.Apps[appID]; !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
 			Message: fmt.Sprintf("App not found for appId: %s", appID),
@@ -270,7 +351,7 @@ func (m *MemoryStorage) ListBranches(_ context.Context, appID string) ([]Branch,
 		}
 	}
 
-	appBranches := m.branches[appID]
+	appBranches := m.Branches[appID]
 	branches := make([]Branch, 0, len(appBranches))
 
 	for _, branch := range appBranches {
@@ -285,7 +366,7 @@ func (m *MemoryStorage) DeleteBranch(_ context.Context, appID, branchName string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	appBranches, exists := m.branches[appID]
+	appBranches, exists := m.Branches[appID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,

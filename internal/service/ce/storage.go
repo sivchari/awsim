@@ -2,12 +2,15 @@ package ce
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -42,17 +45,91 @@ type Storage interface {
 	ListCostCategoryDefinitions(ctx context.Context, req *ListCostCategoryDefinitionsRequest) (*ListCostCategoryDefinitionsResponse, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for Cost Explorer.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	costCategories map[string]*CostCategoryDefinition
+	mu             sync.RWMutex                       `json:"-"`
+	CostCategories map[string]*CostCategoryDefinition `json:"costCategories"`
+	dataDir        string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		costCategories: make(map[string]*CostCategoryDefinition),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		CostCategories: make(map[string]*CostCategoryDefinition),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ce", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.CostCategories == nil {
+		s.CostCategories = make(map[string]*CostCategoryDefinition)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "ce", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // GetCostAndUsage retrieves cost and usage data.
@@ -185,7 +262,7 @@ func (s *MemoryStorage) CreateCostCategoryDefinition(_ context.Context, req *Cre
 	defer s.mu.Unlock()
 
 	// Check for duplicate name
-	for _, cc := range s.costCategories {
+	for _, cc := range s.CostCategories {
 		if cc.Name == req.Name {
 			return nil, &ServiceError{
 				Code:    errValidation,
@@ -218,7 +295,7 @@ func (s *MemoryStorage) CreateCostCategoryDefinition(_ context.Context, req *Cre
 		},
 	}
 
-	s.costCategories[arn] = cc
+	s.CostCategories[arn] = cc
 
 	return cc, nil
 }
@@ -228,7 +305,7 @@ func (s *MemoryStorage) DescribeCostCategoryDefinition(_ context.Context, arn st
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cc, ok := s.costCategories[arn]
+	cc, ok := s.CostCategories[arn]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errNotFound,
@@ -244,14 +321,14 @@ func (s *MemoryStorage) DeleteCostCategoryDefinition(_ context.Context, arn stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.costCategories[arn]; !ok {
+	if _, ok := s.CostCategories[arn]; !ok {
 		return &ServiceError{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Cost category with ARN %s not found", arn),
 		}
 	}
 
-	delete(s.costCategories, arn)
+	delete(s.CostCategories, arn)
 
 	return nil
 }
@@ -261,9 +338,9 @@ func (s *MemoryStorage) ListCostCategoryDefinitions(_ context.Context, _ *ListCo
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	refs := make([]CostCategoryReference, 0, len(s.costCategories))
+	refs := make([]CostCategoryReference, 0, len(s.CostCategories))
 
-	for _, cc := range s.costCategories {
+	for _, cc := range s.CostCategories {
 		refs = append(refs, CostCategoryReference{
 			CostCategoryArn: cc.CostCategoryArn,
 			Name:            cc.Name,

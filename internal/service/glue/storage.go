@@ -2,11 +2,14 @@ package glue
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -35,23 +38,109 @@ type Storage interface {
 	StartJobRun(ctx context.Context, input *StartJobRunInput) (*JobRun, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data structures.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	databases map[string]*Database // key: catalogID/databaseName
-	tables    map[string]*Table    // key: catalogID/databaseName/tableName
-	jobs      map[string]*Job      // key: jobName
-	jobRuns   map[string]*JobRun   // key: jobRunID
+	mu        sync.RWMutex         `json:"-"`
+	Databases map[string]*Database `json:"databases"` // key: catalogID/databaseName
+	Tables    map[string]*Table    `json:"tables"`    // key: catalogID/databaseName/tableName
+	Jobs      map[string]*Job      `json:"jobs"`      // key: jobName
+	JobRuns   map[string]*JobRun   `json:"jobRuns"`   // key: jobRunID
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		databases: make(map[string]*Database),
-		tables:    make(map[string]*Table),
-		jobs:      make(map[string]*Job),
-		jobRuns:   make(map[string]*JobRun),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Databases: make(map[string]*Database),
+		Tables:    make(map[string]*Table),
+		Jobs:      make(map[string]*Job),
+		JobRuns:   make(map[string]*JobRun),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "glue", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Databases == nil {
+		s.Databases = make(map[string]*Database)
+	}
+
+	if s.Tables == nil {
+		s.Tables = make(map[string]*Table)
+	}
+
+	if s.Jobs == nil {
+		s.Jobs = make(map[string]*Job)
+	}
+
+	if s.JobRuns == nil {
+		s.JobRuns = make(map[string]*JobRun)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "glue", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 func databaseKey(catalogID, name string) string {
@@ -84,7 +173,7 @@ func (s *MemoryStorage) CreateDatabase(_ context.Context, catalogID string, inpu
 
 	key := databaseKey(catalogID, input.Name)
 
-	if _, exists := s.databases[key]; exists {
+	if _, exists := s.Databases[key]; exists {
 		return &Error{
 			Code:    errAlreadyExists,
 			Message: fmt.Sprintf("Database %s already exists", input.Name),
@@ -101,7 +190,7 @@ func (s *MemoryStorage) CreateDatabase(_ context.Context, catalogID string, inpu
 		CreateTableMode: input.CreateTableMode,
 	}
 
-	s.databases[key] = db
+	s.Databases[key] = db
 
 	return nil
 }
@@ -112,7 +201,7 @@ func (s *MemoryStorage) GetDatabase(_ context.Context, catalogID, name string) (
 	defer s.mu.RUnlock()
 
 	key := databaseKey(catalogID, name)
-	db, exists := s.databases[key]
+	db, exists := s.Databases[key]
 
 	if !exists {
 		return nil, &Error{
@@ -140,7 +229,7 @@ func (s *MemoryStorage) GetDatabases(_ context.Context, catalogID string, maxRes
 	prefix := catalogID + "/"
 	databases := make([]*Database, 0)
 
-	for key, db := range s.databases {
+	for key, db := range s.Databases {
 		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
 			databases = append(databases, db)
 
@@ -160,14 +249,14 @@ func (s *MemoryStorage) DeleteDatabase(_ context.Context, catalogID, name string
 
 	key := databaseKey(catalogID, name)
 
-	if _, exists := s.databases[key]; !exists {
+	if _, exists := s.Databases[key]; !exists {
 		return &Error{
 			Code:    errEntityNotFound,
 			Message: fmt.Sprintf("Database %s not found", name),
 		}
 	}
 
-	delete(s.databases, key)
+	delete(s.Databases, key)
 
 	return nil
 }
@@ -186,7 +275,7 @@ func (s *MemoryStorage) CreateTable(_ context.Context, catalogID, databaseName s
 
 	// Check if database exists.
 	dbKey := databaseKey(catalogID, databaseName)
-	if _, exists := s.databases[dbKey]; !exists {
+	if _, exists := s.Databases[dbKey]; !exists {
 		return &Error{
 			Code:    errEntityNotFound,
 			Message: fmt.Sprintf("Database %s not found", databaseName),
@@ -195,7 +284,7 @@ func (s *MemoryStorage) CreateTable(_ context.Context, catalogID, databaseName s
 
 	key := tableKey(catalogID, databaseName, input.Name)
 
-	if _, exists := s.tables[key]; exists {
+	if _, exists := s.Tables[key]; exists {
 		return &Error{
 			Code:    errAlreadyExists,
 			Message: fmt.Sprintf("Table %s already exists", input.Name),
@@ -220,7 +309,7 @@ func (s *MemoryStorage) CreateTable(_ context.Context, catalogID, databaseName s
 		CatalogID:         catalogID,
 	}
 
-	s.tables[key] = table
+	s.Tables[key] = table
 
 	return nil
 }
@@ -231,7 +320,7 @@ func (s *MemoryStorage) GetTable(_ context.Context, catalogID, databaseName, nam
 	defer s.mu.RUnlock()
 
 	key := tableKey(catalogID, databaseName, name)
-	table, exists := s.tables[key]
+	table, exists := s.Tables[key]
 
 	if !exists {
 		return nil, &Error{
@@ -259,7 +348,7 @@ func (s *MemoryStorage) GetTables(_ context.Context, catalogID, databaseName str
 	prefix := catalogID + "/" + databaseName + "/"
 	tables := make([]*Table, 0)
 
-	for key, table := range s.tables {
+	for key, table := range s.Tables {
 		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
 			tables = append(tables, table)
 
@@ -279,14 +368,14 @@ func (s *MemoryStorage) DeleteTable(_ context.Context, catalogID, databaseName, 
 
 	key := tableKey(catalogID, databaseName, name)
 
-	if _, exists := s.tables[key]; !exists {
+	if _, exists := s.Tables[key]; !exists {
 		return &Error{
 			Code:    errEntityNotFound,
 			Message: fmt.Sprintf("Table %s not found", name),
 		}
 	}
 
-	delete(s.tables, key)
+	delete(s.Tables, key)
 
 	return nil
 }
@@ -310,7 +399,7 @@ func (s *MemoryStorage) CreateJob(_ context.Context, input *CreateJobInput) (*Jo
 		}
 	}
 
-	if _, exists := s.jobs[input.Name]; exists {
+	if _, exists := s.Jobs[input.Name]; exists {
 		return nil, &Error{
 			Code:    errAlreadyExists,
 			Message: fmt.Sprintf("Job %s already exists", input.Name),
@@ -337,7 +426,7 @@ func (s *MemoryStorage) CreateJob(_ context.Context, input *CreateJobInput) (*Jo
 		ExecutionProperty:       input.ExecutionProperty,
 	}
 
-	s.jobs[input.Name] = job
+	s.Jobs[input.Name] = job
 
 	return job, nil
 }
@@ -347,14 +436,14 @@ func (s *MemoryStorage) DeleteJob(_ context.Context, jobName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.jobs[jobName]; !exists {
+	if _, exists := s.Jobs[jobName]; !exists {
 		return &Error{
 			Code:    errEntityNotFound,
 			Message: fmt.Sprintf("Job %s not found", jobName),
 		}
 	}
 
-	delete(s.jobs, jobName)
+	delete(s.Jobs, jobName)
 
 	return nil
 }
@@ -364,7 +453,7 @@ func (s *MemoryStorage) StartJobRun(_ context.Context, input *StartJobRunInput) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	job, exists := s.jobs[input.JobName]
+	job, exists := s.Jobs[input.JobName]
 	if !exists {
 		return nil, &Error{
 			Code:    errEntityNotFound,
@@ -394,7 +483,7 @@ func (s *MemoryStorage) StartJobRun(_ context.Context, input *StartJobRunInput) 
 		GlueVersion:       job.GlueVersion,
 	}
 
-	s.jobRuns[runID] = jobRun
+	s.JobRuns[runID] = jobRun
 
 	return jobRun, nil
 }

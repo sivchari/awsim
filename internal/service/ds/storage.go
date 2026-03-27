@@ -2,12 +2,15 @@ package ds
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the Directory Service storage interface.
@@ -20,23 +23,101 @@ type Storage interface {
 	DeleteSnapshot(ctx context.Context, snapshotID string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	directories map[string]*Directory
-	snapshots   map[string]*Snapshot
+	mu          sync.RWMutex          `json:"-"`
+	Directories map[string]*Directory `json:"directories"`
+	Snapshots   map[string]*Snapshot  `json:"snapshots"`
 	region      string
 	accountID   string
+	dataDir     string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		directories: make(map[string]*Directory),
-		snapshots:   make(map[string]*Snapshot),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Directories: make(map[string]*Directory),
+		Snapshots:   make(map[string]*Snapshot),
 		region:      "us-east-1",
 		accountID:   "123456789012",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ds", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Directories == nil {
+		s.Directories = make(map[string]*Directory)
+	}
+
+	if s.Snapshots == nil {
+		s.Snapshots = make(map[string]*Snapshot)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "ds", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateDirectory creates a new directory.
@@ -45,7 +126,7 @@ func (s *MemoryStorage) CreateDirectory(_ context.Context, req *CreateDirectoryR
 	defer s.mu.Unlock()
 
 	// Check for duplicate directory name.
-	for _, d := range s.directories {
+	for _, d := range s.Directories {
 		if d.Name == req.Name {
 			return nil, &Error{
 				Type:    ErrEntityAlreadyExists,
@@ -89,7 +170,7 @@ func (s *MemoryStorage) CreateDirectory(_ context.Context, req *CreateDirectoryR
 		StageLastUpdatedAt: now,
 	}
 
-	s.directories[directoryID] = directory
+	s.Directories[directoryID] = directory
 
 	return directory, nil
 }
@@ -108,13 +189,13 @@ func (s *MemoryStorage) DescribeDirectories(_ context.Context, directoryIDs []st
 	if len(directoryIDs) > 0 {
 		// Return specific directories.
 		for _, id := range directoryIDs {
-			if d, exists := s.directories[id]; exists {
+			if d, exists := s.Directories[id]; exists {
 				directories = append(directories, d)
 			}
 		}
 	} else {
 		// Return all directories.
-		for _, d := range s.directories {
+		for _, d := range s.Directories {
 			directories = append(directories, d)
 		}
 	}
@@ -153,14 +234,14 @@ func (s *MemoryStorage) DeleteDirectory(_ context.Context, directoryID string) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.directories[directoryID]; !exists {
+	if _, exists := s.Directories[directoryID]; !exists {
 		return &Error{
 			Type:    ErrEntityDoesNotExist,
 			Message: fmt.Sprintf("Directory %s does not exist", directoryID),
 		}
 	}
 
-	delete(s.directories, directoryID)
+	delete(s.Directories, directoryID)
 
 	return nil
 }
@@ -170,7 +251,7 @@ func (s *MemoryStorage) CreateSnapshot(_ context.Context, directoryID, name stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.directories[directoryID]; !exists {
+	if _, exists := s.Directories[directoryID]; !exists {
 		return nil, &Error{
 			Type:    ErrEntityDoesNotExist,
 			Message: fmt.Sprintf("Directory %s does not exist", directoryID),
@@ -189,7 +270,7 @@ func (s *MemoryStorage) CreateSnapshot(_ context.Context, directoryID, name stri
 		StartTime:   now,
 	}
 
-	s.snapshots[snapshotID] = snapshot
+	s.Snapshots[snapshotID] = snapshot
 
 	return snapshot, nil
 }
@@ -208,7 +289,7 @@ func (s *MemoryStorage) DescribeSnapshots(_ context.Context, directoryID string,
 	if len(snapshotIDs) > 0 {
 		// Return specific snapshots.
 		for _, id := range snapshotIDs {
-			snap, exists := s.snapshots[id]
+			snap, exists := s.Snapshots[id]
 			if !exists {
 				continue
 			}
@@ -221,7 +302,7 @@ func (s *MemoryStorage) DescribeSnapshots(_ context.Context, directoryID string,
 		}
 	} else {
 		// Return all snapshots.
-		for _, snap := range s.snapshots {
+		for _, snap := range s.Snapshots {
 			if directoryID != "" && snap.DirectoryID != directoryID {
 				continue
 			}
@@ -264,14 +345,14 @@ func (s *MemoryStorage) DeleteSnapshot(_ context.Context, snapshotID string) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.snapshots[snapshotID]; !exists {
+	if _, exists := s.Snapshots[snapshotID]; !exists {
 		return &Error{
 			Type:    ErrEntityDoesNotExist,
 			Message: fmt.Sprintf("Snapshot %s does not exist", snapshotID),
 		}
 	}
 
-	delete(s.snapshots, snapshotID)
+	delete(s.Snapshots, snapshotID)
 
 	return nil
 }

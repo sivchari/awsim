@@ -2,11 +2,14 @@ package organizations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -88,41 +91,130 @@ type Storage interface {
 	ListRoots(ctx context.Context, maxResults int32, nextToken string) ([]*Root, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                  sync.RWMutex
-	organization        *Organization
-	root                *Root
-	accounts            map[string]*Account            // accountID -> account
-	organizationalUnits map[string]*OrganizationalUnit // ouID -> OU
-	ouParents           map[string]string              // ouID -> parentID
-	policies            map[string]*Policy             // policyID -> policy
-	policyAttachments   map[string]map[string]bool     // targetID -> policyID -> attached
+	mu                  sync.RWMutex                   `json:"-"`
+	Organization        *Organization                  `json:"organization"`
+	Root                *Root                          `json:"root"`
+	Accounts            map[string]*Account            `json:"accounts"`            // accountID -> account
+	OrganizationalUnits map[string]*OrganizationalUnit `json:"organizationalUnits"` // ouID -> OU
+	OuParents           map[string]string              `json:"ouParents"`           // ouID -> parentID
+	Policies            map[string]*Policy             `json:"policies"`            // policyID -> policy
+	PolicyAttachments   map[string]map[string]bool     `json:"policyAttachments"`   // targetID -> policyID -> attached
 	region              string
 	accountID           string
+	dataDir             string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	storage := &MemoryStorage{
-		accounts:            make(map[string]*Account),
-		organizationalUnits: make(map[string]*OrganizationalUnit),
-		ouParents:           make(map[string]string),
-		policies:            make(map[string]*Policy),
-		policyAttachments:   make(map[string]map[string]bool),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Accounts:            make(map[string]*Account),
+		OrganizationalUnits: make(map[string]*OrganizationalUnit),
+		OuParents:           make(map[string]string),
+		Policies:            make(map[string]*Policy),
+		PolicyAttachments:   make(map[string]map[string]bool),
 		region:              defaultRegion,
 		accountID:           defaultAccountID,
 	}
 
-	storage.initializeDefaultPolicy()
+	for _, o := range opts {
+		o(s)
+	}
 
-	return storage
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "organizations", s)
+	}
+
+	s.initializeDefaultPolicy()
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Accounts == nil {
+		m.Accounts = make(map[string]*Account)
+	}
+
+	if m.OrganizationalUnits == nil {
+		m.OrganizationalUnits = make(map[string]*OrganizationalUnit)
+	}
+
+	if m.OuParents == nil {
+		m.OuParents = make(map[string]string)
+	}
+
+	if m.Policies == nil {
+		m.Policies = make(map[string]*Policy)
+	}
+
+	if m.PolicyAttachments == nil {
+		m.PolicyAttachments = make(map[string]map[string]bool)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "organizations", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 func (m *MemoryStorage) initializeDefaultPolicy() {
 	// Create a default full access SCP.
 	defaultSCPID := "p-FullAWSAccess"
-	m.policies[defaultSCPID] = &Policy{
+	m.Policies[defaultSCPID] = &Policy{
 		Content: `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}`,
 		PolicySummary: &PolicySummary{
 			ARN:         fmt.Sprintf("arn:aws:organizations::%s:policy/o-example/service_control_policy/%s", defaultAccountID, defaultSCPID),
@@ -140,7 +232,7 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization != nil {
+	if m.Organization != nil {
 		return nil, &Error{Code: errAlreadyInOrganizationException, Message: "You are already a member of an organization"}
 	}
 
@@ -151,7 +243,7 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 	orgID := "o-" + generateShortID()
 	rootID := "r-" + generateShortID()[:4]
 
-	m.organization = &Organization{
+	m.Organization = &Organization{
 		ARN:                fmt.Sprintf("arn:aws:organizations::%s:organization/%s", m.accountID, orgID),
 		FeatureSet:         featureSet,
 		ID:                 orgID,
@@ -161,28 +253,28 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 	}
 
 	if featureSet == featureSetAll {
-		m.organization.AvailablePolicyTypes = []PolicyTypeSummary{
+		m.Organization.AvailablePolicyTypes = []PolicyTypeSummary{
 			{Status: policyStatusEnabled, Type: policyTypeServiceControlPolicy},
 		}
 	}
 
 	// Create the root.
-	m.root = &Root{
+	m.Root = &Root{
 		ARN:  fmt.Sprintf("arn:aws:organizations::%s:root/%s/%s", m.accountID, orgID, rootID),
 		ID:   rootID,
 		Name: "Root",
 	}
 
 	if featureSet == featureSetAll {
-		m.root.PolicyTypes = []PolicyTypeSummary{
+		m.Root.PolicyTypes = []PolicyTypeSummary{
 			{Status: policyStatusEnabled, Type: policyTypeServiceControlPolicy},
 		}
 	}
 
 	// Add the management account.
-	m.accounts[m.accountID] = &Account{
-		ARN:             m.organization.MasterAccountARN,
-		Email:           m.organization.MasterAccountEmail,
+	m.Accounts[m.accountID] = &Account{
+		ARN:             m.Organization.MasterAccountARN,
+		Email:           m.Organization.MasterAccountEmail,
 		ID:              m.accountID,
 		JoinedMethod:    joinedMethodCreated,
 		JoinedTimestamp: ToAWSTimestamp(time.Now()),
@@ -192,11 +284,11 @@ func (m *MemoryStorage) CreateOrganization(_ context.Context, featureSet string)
 	}
 
 	// Attach the default SCP to the root.
-	m.policyAttachments[rootID] = map[string]bool{
+	m.PolicyAttachments[rootID] = map[string]bool{
 		"p-FullAWSAccess": true,
 	}
 
-	return m.organization, nil
+	return m.Organization, nil
 }
 
 // DeleteOrganization deletes the organization.
@@ -204,25 +296,25 @@ func (m *MemoryStorage) DeleteOrganization(_ context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
 	// Check if there are any member accounts (besides the management account).
-	if len(m.accounts) > 1 {
+	if len(m.Accounts) > 1 {
 		return &Error{Code: errOrganizationNotEmptyException, Message: "Organization still has member accounts"}
 	}
 
 	// Check if there are any OUs.
-	if len(m.organizationalUnits) > 0 {
+	if len(m.OrganizationalUnits) > 0 {
 		return &Error{Code: errOrganizationNotEmptyException, Message: "Organization still has organizational units"}
 	}
 
 	// Delete the organization.
-	m.organization = nil
-	m.root = nil
-	m.accounts = make(map[string]*Account)
-	m.policyAttachments = make(map[string]map[string]bool)
+	m.Organization = nil
+	m.Root = nil
+	m.Accounts = make(map[string]*Account)
+	m.PolicyAttachments = make(map[string]map[string]bool)
 
 	return nil
 }
@@ -232,11 +324,11 @@ func (m *MemoryStorage) DescribeOrganization(_ context.Context) (*Organization, 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
-	return m.organization, nil
+	return m.Organization, nil
 }
 
 // CreateAccount creates a new account.
@@ -244,7 +336,7 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
@@ -259,7 +351,7 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 
 	// Create the account.
 	account := &Account{
-		ARN:             fmt.Sprintf("arn:aws:organizations::%s:account/%s/%s", m.accountID, m.organization.ID, accountID),
+		ARN:             fmt.Sprintf("arn:aws:organizations::%s:account/%s/%s", m.accountID, m.Organization.ID, accountID),
 		Email:           req.Email,
 		ID:              accountID,
 		JoinedMethod:    joinedMethodCreated,
@@ -269,10 +361,10 @@ func (m *MemoryStorage) CreateAccount(_ context.Context, req *CreateAccountInput
 		Status:          accountStatusActive,
 	}
 
-	m.accounts[accountID] = account
+	m.Accounts[accountID] = account
 
 	// Attach the default SCP to the new account.
-	m.policyAttachments[accountID] = map[string]bool{
+	m.PolicyAttachments[accountID] = map[string]bool{
 		"p-FullAWSAccess": true,
 	}
 
@@ -294,11 +386,11 @@ func (m *MemoryStorage) DescribeAccount(_ context.Context, accountID string) (*A
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
-	account, exists := m.accounts[accountID]
+	account, exists := m.Accounts[accountID]
 	if !exists {
 		return nil, &Error{Code: errAccountNotFoundException, Message: "Account not found: " + accountID}
 	}
@@ -311,13 +403,13 @@ func (m *MemoryStorage) ListAccounts(_ context.Context, maxResults int32, _ stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, "", &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
-	result := make([]*Account, 0, len(m.accounts))
+	result := make([]*Account, 0, len(m.Accounts))
 
-	for _, account := range m.accounts {
+	for _, account := range m.Accounts {
 		result = append(result, account)
 
 		//nolint:gosec // len(result) is bounded by the number of accounts which is limited.
@@ -334,7 +426,7 @@ func (m *MemoryStorage) CreateOrganizationalUnit(_ context.Context, name, parent
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
@@ -344,8 +436,8 @@ func (m *MemoryStorage) CreateOrganizationalUnit(_ context.Context, name, parent
 	}
 
 	// Check for duplicate OU name under the same parent.
-	for ouID, ou := range m.organizationalUnits {
-		if m.ouParents[ouID] == parentID && ou.Name == name {
+	for ouID, ou := range m.OrganizationalUnits {
+		if m.OuParents[ouID] == parentID && ou.Name == name {
 			return nil, &Error{Code: errDuplicateOrganizationalUnitException, Message: "OU with this name already exists under the parent"}
 		}
 	}
@@ -354,16 +446,16 @@ func (m *MemoryStorage) CreateOrganizationalUnit(_ context.Context, name, parent
 	ouID := fmt.Sprintf("ou-%s-%s", generateShortID()[:4], generateShortID()[:8])
 
 	ou := &OrganizationalUnit{
-		ARN:  fmt.Sprintf("arn:aws:organizations::%s:ou/%s/%s", m.accountID, m.organization.ID, ouID),
+		ARN:  fmt.Sprintf("arn:aws:organizations::%s:ou/%s/%s", m.accountID, m.Organization.ID, ouID),
 		ID:   ouID,
 		Name: name,
 	}
 
-	m.organizationalUnits[ouID] = ou
-	m.ouParents[ouID] = parentID
+	m.OrganizationalUnits[ouID] = ou
+	m.OuParents[ouID] = parentID
 
 	// Attach the default SCP to the new OU.
-	m.policyAttachments[ouID] = map[string]bool{
+	m.PolicyAttachments[ouID] = map[string]bool{
 		"p-FullAWSAccess": true,
 	}
 
@@ -375,7 +467,7 @@ func (m *MemoryStorage) ListOrganizationalUnitsForParent(_ context.Context, pare
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, "", &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
@@ -386,8 +478,8 @@ func (m *MemoryStorage) ListOrganizationalUnitsForParent(_ context.Context, pare
 
 	result := make([]*OrganizationalUnit, 0)
 
-	for ouID, ou := range m.organizationalUnits {
-		if m.ouParents[ouID] == parentID {
+	for ouID, ou := range m.OrganizationalUnits {
+		if m.OuParents[ouID] == parentID {
 			result = append(result, ou)
 
 			//nolint:gosec // len(result) is bounded by the number of OUs which is limited.
@@ -405,12 +497,12 @@ func (m *MemoryStorage) AttachPolicy(_ context.Context, policyID, targetID strin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
 	// Validate policy ID.
-	if _, exists := m.policies[policyID]; !exists {
+	if _, exists := m.Policies[policyID]; !exists {
 		return &Error{Code: errPolicyNotFoundException, Message: "Policy not found: " + policyID}
 	}
 
@@ -420,18 +512,18 @@ func (m *MemoryStorage) AttachPolicy(_ context.Context, policyID, targetID strin
 	}
 
 	// Check if already attached.
-	if attachments, exists := m.policyAttachments[targetID]; exists {
+	if attachments, exists := m.PolicyAttachments[targetID]; exists {
 		if attachments[policyID] {
 			return &Error{Code: errDuplicatePolicyAttachmentException, Message: "Policy is already attached to the target"}
 		}
 	}
 
 	// Attach the policy.
-	if m.policyAttachments[targetID] == nil {
-		m.policyAttachments[targetID] = make(map[string]bool)
+	if m.PolicyAttachments[targetID] == nil {
+		m.PolicyAttachments[targetID] = make(map[string]bool)
 	}
 
-	m.policyAttachments[targetID][policyID] = true
+	m.PolicyAttachments[targetID][policyID] = true
 
 	return nil
 }
@@ -441,12 +533,12 @@ func (m *MemoryStorage) DetachPolicy(_ context.Context, policyID, targetID strin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
 	// Validate policy ID.
-	if _, exists := m.policies[policyID]; !exists {
+	if _, exists := m.Policies[policyID]; !exists {
 		return &Error{Code: errPolicyNotFoundException, Message: "Policy not found: " + policyID}
 	}
 
@@ -456,13 +548,13 @@ func (m *MemoryStorage) DetachPolicy(_ context.Context, policyID, targetID strin
 	}
 
 	// Check if attached.
-	attachments, exists := m.policyAttachments[targetID]
+	attachments, exists := m.PolicyAttachments[targetID]
 	if !exists || !attachments[policyID] {
 		return &Error{Code: errPolicyNotAttachedException, Message: "Policy is not attached to the target"}
 	}
 
 	// Detach the policy.
-	delete(m.policyAttachments[targetID], policyID)
+	delete(m.PolicyAttachments[targetID], policyID)
 
 	return nil
 }
@@ -472,26 +564,26 @@ func (m *MemoryStorage) ListRoots(_ context.Context, _ int32, _ string) ([]*Root
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.organization == nil {
+	if m.Organization == nil {
 		return nil, "", &Error{Code: errAWSOrganizationsNotInUseException, Message: "Your account is not a member of an organization"}
 	}
 
-	if m.root == nil {
+	if m.Root == nil {
 		return []*Root{}, "", nil
 	}
 
-	return []*Root{m.root}, "", nil
+	return []*Root{m.Root}, "", nil
 }
 
 // isValidParentID checks if a parent ID is valid (root or OU).
 func (m *MemoryStorage) isValidParentID(parentID string) bool {
 	// Check if it's the root.
-	if m.root != nil && m.root.ID == parentID {
+	if m.Root != nil && m.Root.ID == parentID {
 		return true
 	}
 
 	// Check if it's an OU.
-	_, exists := m.organizationalUnits[parentID]
+	_, exists := m.OrganizationalUnits[parentID]
 
 	return exists
 }
@@ -499,17 +591,17 @@ func (m *MemoryStorage) isValidParentID(parentID string) bool {
 // isValidTargetID checks if a target ID is valid (root, OU, or account).
 func (m *MemoryStorage) isValidTargetID(targetID string) bool {
 	// Check if it's the root.
-	if m.root != nil && m.root.ID == targetID {
+	if m.Root != nil && m.Root.ID == targetID {
 		return true
 	}
 
 	// Check if it's an OU.
-	if _, exists := m.organizationalUnits[targetID]; exists {
+	if _, exists := m.OrganizationalUnits[targetID]; exists {
 		return true
 	}
 
 	// Check if it's an account.
-	_, exists := m.accounts[targetID]
+	_, exists := m.Accounts[targetID]
 
 	return exists
 }

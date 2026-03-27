@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -31,27 +34,101 @@ type Storage interface {
 	DispatchAction(action string) bool
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	repositories map[string]*repositoryData
+	mu           sync.RWMutex               `json:"-"`
+	Repositories map[string]*repositoryData `json:"repositories"`
 	region       string
 	accountID    string
+	dataDir      string
 }
 
 // repositoryData holds repository information and its images.
 type repositoryData struct {
-	repository *Repository
-	images     map[string]*Image // keyed by digest
+	Repository *Repository       `json:"repository"`
+	Images     map[string]*Image `json:"images"`
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		repositories: make(map[string]*repositoryData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Repositories: make(map[string]*repositoryData),
 		region:       "us-east-1",
 		accountID:    "000000000000",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ecr", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Repositories == nil {
+		s.Repositories = make(map[string]*repositoryData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "ecr", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateRepository creates a new repository.
@@ -59,7 +136,7 @@ func (s *MemoryStorage) CreateRepository(_ context.Context, req *CreateRepositor
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.repositories[req.RepositoryName]; exists {
+	if _, exists := s.Repositories[req.RepositoryName]; exists {
 		return nil, &ServiceError{Code: errRepositoryAlreadyExists, Message: "Repository already exists"}
 	}
 
@@ -80,9 +157,9 @@ func (s *MemoryStorage) CreateRepository(_ context.Context, req *CreateRepositor
 		EncryptionConfiguration:    req.EncryptionConfiguration,
 	}
 
-	s.repositories[req.RepositoryName] = &repositoryData{
-		repository: repo,
-		images:     make(map[string]*Image),
+	s.Repositories[req.RepositoryName] = &repositoryData{
+		Repository: repo,
+		Images:     make(map[string]*Image),
 	}
 
 	return repo, nil
@@ -93,18 +170,18 @@ func (s *MemoryStorage) DeleteRepository(_ context.Context, repositoryName strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rd, exists := s.repositories[repositoryName]
+	rd, exists := s.Repositories[repositoryName]
 	if !exists {
 		return nil, &ServiceError{Code: errRepositoryNotFound, Message: "Repository does not exist"}
 	}
 
-	if !force && len(rd.images) > 0 {
+	if !force && len(rd.Images) > 0 {
 		return nil, &ServiceError{Code: errInvalidParameter, Message: "Repository contains images"}
 	}
 
-	delete(s.repositories, repositoryName)
+	delete(s.Repositories, repositoryName)
 
-	return rd.repository, nil
+	return rd.Repository, nil
 }
 
 // DescribeRepositories describes repositories.
@@ -120,13 +197,13 @@ func (s *MemoryStorage) DescribeRepositories(_ context.Context, names []string, 
 
 	if len(names) > 0 {
 		for _, name := range names {
-			if rd, exists := s.repositories[name]; exists {
-				repos = append(repos, rd.repository)
+			if rd, exists := s.Repositories[name]; exists {
+				repos = append(repos, rd.Repository)
 			}
 		}
 	} else {
-		for _, rd := range s.repositories {
-			repos = append(repos, rd.repository)
+		for _, rd := range s.Repositories {
+			repos = append(repos, rd.Repository)
 		}
 	}
 
@@ -146,7 +223,7 @@ func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, max
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rd, exists := s.repositories[repositoryName]
+	rd, exists := s.Repositories[repositoryName]
 	if !exists {
 		return nil, "", &ServiceError{Code: errRepositoryNotFound, Message: "Repository does not exist"}
 	}
@@ -156,8 +233,8 @@ func (s *MemoryStorage) ListImages(_ context.Context, repositoryName string, max
 	}
 
 	// Collect all images into a slice for sorting
-	images := make([]*Image, 0, len(rd.images))
-	for _, img := range rd.images {
+	images := make([]*Image, 0, len(rd.Images))
+	for _, img := range rd.Images {
 		images = append(images, img)
 	}
 
@@ -206,7 +283,7 @@ func (s *MemoryStorage) PutImage(_ context.Context, repositoryName, imageManifes
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rd, exists := s.repositories[repositoryName]
+	rd, exists := s.Repositories[repositoryName]
 	if !exists {
 		return nil, &ServiceError{Code: errRepositoryNotFound, Message: "Repository does not exist"}
 	}
@@ -225,7 +302,7 @@ func (s *MemoryStorage) PutImage(_ context.Context, repositoryName, imageManifes
 		PushedAt: time.Now(),
 	}
 
-	rd.images[digest] = img
+	rd.Images[digest] = img
 
 	return img, nil
 }
@@ -235,7 +312,7 @@ func (s *MemoryStorage) BatchGetImage(_ context.Context, repositoryName string, 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rd, exists := s.repositories[repositoryName]
+	rd, exists := s.Repositories[repositoryName]
 	if !exists {
 		return nil, nil, &ServiceError{Code: errRepositoryNotFound, Message: "Repository does not exist"}
 	}
@@ -247,7 +324,7 @@ func (s *MemoryStorage) BatchGetImage(_ context.Context, repositoryName string, 
 	for _, id := range imageIDs {
 		found := false
 
-		for _, img := range rd.images {
+		for _, img := range rd.Images {
 			if (id.ImageDigest != "" && img.ImageDigest == id.ImageDigest) ||
 				(id.ImageTag != "" && img.ImageID.ImageTag == id.ImageTag) {
 				images = append(images, img)
@@ -274,7 +351,7 @@ func (s *MemoryStorage) BatchDeleteImage(_ context.Context, repositoryName strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rd, exists := s.repositories[repositoryName]
+	rd, exists := s.Repositories[repositoryName]
 	if !exists {
 		return nil, nil, &ServiceError{Code: errRepositoryNotFound, Message: "Repository does not exist"}
 	}
@@ -286,10 +363,10 @@ func (s *MemoryStorage) BatchDeleteImage(_ context.Context, repositoryName strin
 	for _, id := range imageIDs {
 		found := false
 
-		for digest, img := range rd.images {
+		for digest, img := range rd.Images {
 			if (id.ImageDigest != "" && img.ImageDigest == id.ImageDigest) ||
 				(id.ImageTag != "" && img.ImageID.ImageTag == id.ImageTag) {
-				delete(rd.images, digest)
+				delete(rd.Images, digest)
 
 				deleted = append(deleted, ImageIdentifier{
 					ImageDigest: img.ImageDigest,

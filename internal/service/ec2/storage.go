@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"sync"
@@ -14,6 +15,24 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/sivchari/kumo/internal/storage"
+)
+
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
 )
 
 const defaultAccountID = "000000000000"
@@ -100,33 +119,121 @@ type Reservation struct {
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	instances      map[string]*Instance
-	reservations   map[string]*Reservation
-	securityGroups map[string]*SecurityGroup
-	keyPairs       map[string]*KeyPair
-
-	// VPC resources
-	vpcs             map[string]*Vpc
-	subnets          map[string]*Subnet
-	internetGateways map[string]*InternetGateway
-	routeTables      map[string]*RouteTable
-	natGateways      map[string]*NatGateway
+	mu               sync.RWMutex                `json:"-"`
+	Instances        map[string]*Instance        `json:"instances"`
+	Reservations     map[string]*Reservation     `json:"reservations"`
+	SecurityGroups   map[string]*SecurityGroup   `json:"securityGroups"`
+	KeyPairs         map[string]*KeyPair         `json:"keyPairs"`
+	Vpcs             map[string]*Vpc             `json:"vpcs"`
+	Subnets          map[string]*Subnet          `json:"subnets"`
+	InternetGateways map[string]*InternetGateway `json:"internetGateways"`
+	RouteTables      map[string]*RouteTable      `json:"routeTables"`
+	NatGateways      map[string]*NatGateway      `json:"natGateways"`
+	dataDir          string
 }
 
 // NewMemoryStorage creates a new in-memory EC2 storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		instances:        make(map[string]*Instance),
-		reservations:     make(map[string]*Reservation),
-		securityGroups:   make(map[string]*SecurityGroup),
-		keyPairs:         make(map[string]*KeyPair),
-		vpcs:             make(map[string]*Vpc),
-		subnets:          make(map[string]*Subnet),
-		internetGateways: make(map[string]*InternetGateway),
-		routeTables:      make(map[string]*RouteTable),
-		natGateways:      make(map[string]*NatGateway),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Instances:        make(map[string]*Instance),
+		Reservations:     make(map[string]*Reservation),
+		SecurityGroups:   make(map[string]*SecurityGroup),
+		KeyPairs:         make(map[string]*KeyPair),
+		Vpcs:             make(map[string]*Vpc),
+		Subnets:          make(map[string]*Subnet),
+		InternetGateways: make(map[string]*InternetGateway),
+		RouteTables:      make(map[string]*RouteTable),
+		NatGateways:      make(map[string]*NatGateway),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ec2", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Instances == nil {
+		m.Instances = make(map[string]*Instance)
+	}
+
+	if m.Reservations == nil {
+		m.Reservations = make(map[string]*Reservation)
+	}
+
+	if m.SecurityGroups == nil {
+		m.SecurityGroups = make(map[string]*SecurityGroup)
+	}
+
+	if m.KeyPairs == nil {
+		m.KeyPairs = make(map[string]*KeyPair)
+	}
+
+	if m.Vpcs == nil {
+		m.Vpcs = make(map[string]*Vpc)
+	}
+
+	if m.Subnets == nil {
+		m.Subnets = make(map[string]*Subnet)
+	}
+
+	if m.InternetGateways == nil {
+		m.InternetGateways = make(map[string]*InternetGateway)
+	}
+
+	if m.RouteTables == nil {
+		m.RouteTables = make(map[string]*RouteTable)
+	}
+
+	if m.NatGateways == nil {
+		m.NatGateways = make(map[string]*NatGateway)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "ec2", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // RunInstances creates new EC2 instances.
@@ -155,10 +262,10 @@ func (m *MemoryStorage) RunInstances(_ context.Context, req *RunInstancesRequest
 			SecurityGroups:   m.resolveSecurityGroups(req.SecurityGroupIDs, req.SecurityGroups),
 		}
 		instances = append(instances, instance)
-		m.instances[instance.InstanceID] = instance
+		m.Instances[instance.InstanceID] = instance
 	}
 
-	m.reservations[reservationID] = &Reservation{
+	m.Reservations[reservationID] = &Reservation{
 		ReservationID: reservationID,
 		OwnerID:       defaultAccountID,
 		Instances:     instances,
@@ -175,7 +282,7 @@ func (m *MemoryStorage) TerminateInstances(_ context.Context, instanceIDs []stri
 	var changes []InstanceStateChange
 
 	for _, id := range instanceIDs {
-		instance, exists := m.instances[id]
+		instance, exists := m.Instances[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
@@ -202,8 +309,8 @@ func (m *MemoryStorage) DescribeInstances(_ context.Context, instanceIDs []strin
 	defer m.mu.RUnlock()
 
 	if len(instanceIDs) == 0 {
-		reservations := make([]*Reservation, 0, len(m.reservations))
-		for _, r := range m.reservations {
+		reservations := make([]*Reservation, 0, len(m.Reservations))
+		for _, r := range m.Reservations {
 			reservations = append(reservations, r)
 		}
 
@@ -213,7 +320,7 @@ func (m *MemoryStorage) DescribeInstances(_ context.Context, instanceIDs []strin
 	reservationMap := make(map[string]*Reservation)
 
 	for _, id := range instanceIDs {
-		instance, exists := m.instances[id]
+		instance, exists := m.Instances[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
@@ -221,7 +328,7 @@ func (m *MemoryStorage) DescribeInstances(_ context.Context, instanceIDs []strin
 			}
 		}
 
-		for resID, res := range m.reservations {
+		for resID, res := range m.Reservations {
 			for _, inst := range res.Instances {
 				if inst.InstanceID == id {
 					if _, ok := reservationMap[resID]; !ok {
@@ -254,7 +361,7 @@ func (m *MemoryStorage) StartInstances(_ context.Context, instanceIDs []string) 
 	var changes []InstanceStateChange
 
 	for _, id := range instanceIDs {
-		instance, exists := m.instances[id]
+		instance, exists := m.Instances[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
@@ -283,7 +390,7 @@ func (m *MemoryStorage) StopInstances(_ context.Context, instanceIDs []string) (
 	var changes []InstanceStateChange
 
 	for _, id := range instanceIDs {
-		instance, exists := m.instances[id]
+		instance, exists := m.Instances[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidInstanceID.NotFound",
@@ -309,7 +416,7 @@ func (m *MemoryStorage) CreateSecurityGroup(_ context.Context, req *CreateSecuri
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, sg := range m.securityGroups {
+	for _, sg := range m.SecurityGroups {
 		if sg.GroupName == req.GroupName {
 			return nil, &Error{
 				Code:    "InvalidGroup.Duplicate",
@@ -327,7 +434,7 @@ func (m *MemoryStorage) CreateSecurityGroup(_ context.Context, req *CreateSecuri
 		EgressRules:  []IPPermission{},
 	}
 
-	m.securityGroups[sg.GroupID] = sg
+	m.SecurityGroups[sg.GroupID] = sg
 
 	return sg, nil
 }
@@ -338,21 +445,21 @@ func (m *MemoryStorage) DeleteSecurityGroup(_ context.Context, groupID, groupNam
 	defer m.mu.Unlock()
 
 	if groupID != "" {
-		if _, exists := m.securityGroups[groupID]; !exists {
+		if _, exists := m.SecurityGroups[groupID]; !exists {
 			return &Error{
 				Code:    "InvalidGroup.NotFound",
 				Message: fmt.Sprintf("The security group '%s' does not exist", groupID),
 			}
 		}
 
-		delete(m.securityGroups, groupID)
+		delete(m.SecurityGroups, groupID)
 
 		return nil
 	}
 
-	for id, sg := range m.securityGroups {
+	for id, sg := range m.SecurityGroups {
 		if sg.GroupName == groupName {
-			delete(m.securityGroups, id)
+			delete(m.SecurityGroups, id)
 
 			return nil
 		}
@@ -387,7 +494,7 @@ func (m *MemoryStorage) AuthorizeSecurityGroupEgress(_ context.Context, groupID 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	sg, exists := m.securityGroups[groupID]
+	sg, exists := m.SecurityGroups[groupID]
 	if !exists {
 		return &Error{
 			Code:    "InvalidGroup.NotFound",
@@ -405,7 +512,7 @@ func (m *MemoryStorage) CreateKeyPair(_ context.Context, keyName, _ string) (*Ke
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, kp := range m.keyPairs {
+	for _, kp := range m.KeyPairs {
 		if kp.KeyName == keyName {
 			return nil, &Error{
 				Code:    "InvalidKeyPair.Duplicate",
@@ -445,7 +552,7 @@ func (m *MemoryStorage) CreateKeyPair(_ context.Context, keyName, _ string) (*Ke
 		CreateTime:     time.Now(),
 	}
 
-	m.keyPairs[kp.KeyPairID] = kp
+	m.KeyPairs[kp.KeyPairID] = kp
 
 	return kp, nil
 }
@@ -456,21 +563,21 @@ func (m *MemoryStorage) DeleteKeyPair(_ context.Context, keyName, keyPairID stri
 	defer m.mu.Unlock()
 
 	if keyPairID != "" {
-		if _, exists := m.keyPairs[keyPairID]; !exists {
+		if _, exists := m.KeyPairs[keyPairID]; !exists {
 			return &Error{
 				Code:    "InvalidKeyPair.NotFound",
 				Message: fmt.Sprintf("The key pair '%s' does not exist", keyPairID),
 			}
 		}
 
-		delete(m.keyPairs, keyPairID)
+		delete(m.KeyPairs, keyPairID)
 
 		return nil
 	}
 
-	for id, kp := range m.keyPairs {
+	for id, kp := range m.KeyPairs {
 		if kp.KeyName == keyName {
-			delete(m.keyPairs, id)
+			delete(m.KeyPairs, id)
 
 			return nil
 		}
@@ -501,9 +608,9 @@ func (m *MemoryStorage) DescribeKeyPairs(_ context.Context, keyNames, keyPairIDs
 
 // listAllKeyPairs returns all key pairs without KeyMaterial.
 func (m *MemoryStorage) listAllKeyPairs() []*KeyPair {
-	keyPairs := make([]*KeyPair, 0, len(m.keyPairs))
+	keyPairs := make([]*KeyPair, 0, len(m.KeyPairs))
 
-	for _, kp := range m.keyPairs {
+	for _, kp := range m.KeyPairs {
 		keyPairs = append(keyPairs, copyKeyPairInfo(kp))
 	}
 
@@ -524,7 +631,7 @@ func (m *MemoryStorage) collectKeyPairs(keyNames, keyPairIDs []string) (map[stri
 	}
 
 	for _, id := range keyPairIDs {
-		kp, exists := m.keyPairs[id]
+		kp, exists := m.KeyPairs[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidKeyPair.NotFound",
@@ -540,7 +647,7 @@ func (m *MemoryStorage) collectKeyPairs(keyNames, keyPairIDs []string) (map[stri
 
 // findKeyPairByName finds a key pair by name.
 func (m *MemoryStorage) findKeyPairByName(name string) (*KeyPair, error) {
-	for _, kp := range m.keyPairs {
+	for _, kp := range m.KeyPairs {
 		if kp.KeyName == name {
 			return kp, nil
 		}
@@ -576,10 +683,10 @@ func copyKeyPairInfo(kp *KeyPair) *KeyPair {
 // findSecurityGroup finds a security group by ID or name.
 func (m *MemoryStorage) findSecurityGroup(groupID, groupName string) *SecurityGroup {
 	if groupID != "" {
-		return m.securityGroups[groupID]
+		return m.SecurityGroups[groupID]
 	}
 
-	for _, sg := range m.securityGroups {
+	for _, sg := range m.SecurityGroups {
 		if sg.GroupName == groupName {
 			return sg
 		}
@@ -593,7 +700,7 @@ func (m *MemoryStorage) resolveSecurityGroups(groupIDs, groupNames []string) []G
 	var result []GroupIdentifier
 
 	for _, id := range groupIDs {
-		if sg, exists := m.securityGroups[id]; exists {
+		if sg, exists := m.SecurityGroups[id]; exists {
 			result = append(result, GroupIdentifier{
 				GroupID:   sg.GroupID,
 				GroupName: sg.GroupName,
@@ -602,7 +709,7 @@ func (m *MemoryStorage) resolveSecurityGroups(groupIDs, groupNames []string) []G
 	}
 
 	for _, name := range groupNames {
-		for _, sg := range m.securityGroups {
+		for _, sg := range m.SecurityGroups {
 			if sg.GroupName == name {
 				result = append(result, GroupIdentifier{
 					GroupID:   sg.GroupID,
@@ -660,7 +767,7 @@ func (m *MemoryStorage) CreateVpc(_ context.Context, req *CreateVpcRequest) (*Vp
 		vpc.InstanceTenancy = "default"
 	}
 
-	m.vpcs[vpc.VpcID] = vpc
+	m.Vpcs[vpc.VpcID] = vpc
 
 	return vpc, nil
 }
@@ -670,7 +777,7 @@ func (m *MemoryStorage) DeleteVpc(_ context.Context, vpcID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.vpcs[vpcID]; !exists {
+	if _, exists := m.Vpcs[vpcID]; !exists {
 		return &Error{
 			Code:    "InvalidVpcID.NotFound",
 			Message: fmt.Sprintf("The vpc ID '%s' does not exist", vpcID),
@@ -678,7 +785,7 @@ func (m *MemoryStorage) DeleteVpc(_ context.Context, vpcID string) error {
 	}
 
 	// Check for dependencies
-	for _, subnet := range m.subnets {
+	for _, subnet := range m.Subnets {
 		if subnet.VpcID == vpcID {
 			return &Error{
 				Code:    "DependencyViolation",
@@ -687,7 +794,7 @@ func (m *MemoryStorage) DeleteVpc(_ context.Context, vpcID string) error {
 		}
 	}
 
-	for _, igw := range m.internetGateways {
+	for _, igw := range m.InternetGateways {
 		for _, attachment := range igw.Attachments {
 			if attachment.VpcID == vpcID {
 				return &Error{
@@ -698,7 +805,7 @@ func (m *MemoryStorage) DeleteVpc(_ context.Context, vpcID string) error {
 		}
 	}
 
-	delete(m.vpcs, vpcID)
+	delete(m.Vpcs, vpcID)
 
 	return nil
 }
@@ -709,8 +816,8 @@ func (m *MemoryStorage) DescribeVpcs(_ context.Context, vpcIDs []string) ([]*Vpc
 	defer m.mu.RUnlock()
 
 	if len(vpcIDs) == 0 {
-		vpcs := make([]*Vpc, 0, len(m.vpcs))
-		for _, vpc := range m.vpcs {
+		vpcs := make([]*Vpc, 0, len(m.Vpcs))
+		for _, vpc := range m.Vpcs {
 			vpcs = append(vpcs, vpc)
 		}
 
@@ -720,7 +827,7 @@ func (m *MemoryStorage) DescribeVpcs(_ context.Context, vpcIDs []string) ([]*Vpc
 	vpcs := make([]*Vpc, 0, len(vpcIDs))
 
 	for _, id := range vpcIDs {
-		vpc, exists := m.vpcs[id]
+		vpc, exists := m.Vpcs[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidVpcID.NotFound",
@@ -739,7 +846,7 @@ func (m *MemoryStorage) CreateSubnet(_ context.Context, req *CreateSubnetRequest
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.vpcs[req.VpcID]; !exists {
+	if _, exists := m.Vpcs[req.VpcID]; !exists {
 		return nil, &Error{
 			Code:    "InvalidVpcID.NotFound",
 			Message: fmt.Sprintf("The vpc ID '%s' does not exist", req.VpcID),
@@ -761,7 +868,7 @@ func (m *MemoryStorage) CreateSubnet(_ context.Context, req *CreateSubnetRequest
 		subnet.AvailabilityZone = "us-east-1a"
 	}
 
-	m.subnets[subnet.SubnetID] = subnet
+	m.Subnets[subnet.SubnetID] = subnet
 
 	return subnet, nil
 }
@@ -771,14 +878,14 @@ func (m *MemoryStorage) DeleteSubnet(_ context.Context, subnetID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.subnets[subnetID]; !exists {
+	if _, exists := m.Subnets[subnetID]; !exists {
 		return &Error{
 			Code:    "InvalidSubnetID.NotFound",
 			Message: fmt.Sprintf("The subnet ID '%s' does not exist", subnetID),
 		}
 	}
 
-	delete(m.subnets, subnetID)
+	delete(m.Subnets, subnetID)
 
 	return nil
 }
@@ -791,7 +898,7 @@ func (m *MemoryStorage) DescribeSubnets(_ context.Context, subnetIDs []string, f
 	var subnets []*Subnet
 
 	if len(subnetIDs) == 0 {
-		for _, subnet := range m.subnets {
+		for _, subnet := range m.Subnets {
 			if m.matchSubnetFilters(subnet, filters) {
 				subnets = append(subnets, subnet)
 			}
@@ -801,7 +908,7 @@ func (m *MemoryStorage) DescribeSubnets(_ context.Context, subnetIDs []string, f
 	}
 
 	for _, id := range subnetIDs {
-		subnet, exists := m.subnets[id]
+		subnet, exists := m.Subnets[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidSubnetID.NotFound",
@@ -850,7 +957,7 @@ func (m *MemoryStorage) CreateInternetGateway(_ context.Context, _ *CreateIntern
 		Tags:              []Tag{},
 	}
 
-	m.internetGateways[igw.InternetGatewayID] = igw
+	m.InternetGateways[igw.InternetGatewayID] = igw
 
 	return igw, nil
 }
@@ -860,7 +967,7 @@ func (m *MemoryStorage) AttachInternetGateway(_ context.Context, igwID, vpcID st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	igw, exists := m.internetGateways[igwID]
+	igw, exists := m.InternetGateways[igwID]
 	if !exists {
 		return &Error{
 			Code:    "InvalidInternetGatewayID.NotFound",
@@ -868,7 +975,7 @@ func (m *MemoryStorage) AttachInternetGateway(_ context.Context, igwID, vpcID st
 		}
 	}
 
-	if _, exists := m.vpcs[vpcID]; !exists {
+	if _, exists := m.Vpcs[vpcID]; !exists {
 		return &Error{
 			Code:    "InvalidVpcID.NotFound",
 			Message: fmt.Sprintf("The vpc ID '%s' does not exist", vpcID),
@@ -899,8 +1006,8 @@ func (m *MemoryStorage) DescribeInternetGateways(_ context.Context, igwIDs []str
 	defer m.mu.RUnlock()
 
 	if len(igwIDs) == 0 {
-		igws := make([]*InternetGateway, 0, len(m.internetGateways))
-		for _, igw := range m.internetGateways {
+		igws := make([]*InternetGateway, 0, len(m.InternetGateways))
+		for _, igw := range m.InternetGateways {
 			igws = append(igws, igw)
 		}
 
@@ -910,7 +1017,7 @@ func (m *MemoryStorage) DescribeInternetGateways(_ context.Context, igwIDs []str
 	igws := make([]*InternetGateway, 0, len(igwIDs))
 
 	for _, id := range igwIDs {
-		igw, exists := m.internetGateways[id]
+		igw, exists := m.InternetGateways[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidInternetGatewayID.NotFound",
@@ -929,7 +1036,7 @@ func (m *MemoryStorage) CreateRouteTable(_ context.Context, req *CreateRouteTabl
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.vpcs[req.VpcID]; !exists {
+	if _, exists := m.Vpcs[req.VpcID]; !exists {
 		return nil, &Error{
 			Code:    "InvalidVpcID.NotFound",
 			Message: fmt.Sprintf("The vpc ID '%s' does not exist", req.VpcID),
@@ -950,7 +1057,7 @@ func (m *MemoryStorage) CreateRouteTable(_ context.Context, req *CreateRouteTabl
 		Tags:         []Tag{},
 	}
 
-	m.routeTables[rt.RouteTableID] = rt
+	m.RouteTables[rt.RouteTableID] = rt
 
 	return rt, nil
 }
@@ -960,7 +1067,7 @@ func (m *MemoryStorage) CreateRoute(_ context.Context, req *CreateRouteRequest) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	rt, exists := m.routeTables[req.RouteTableID]
+	rt, exists := m.RouteTables[req.RouteTableID]
 	if !exists {
 		return &Error{
 			Code:    "InvalidRouteTableID.NotFound",
@@ -995,7 +1102,7 @@ func (m *MemoryStorage) AssociateRouteTable(_ context.Context, req *AssociateRou
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	rt, exists := m.routeTables[req.RouteTableID]
+	rt, exists := m.RouteTables[req.RouteTableID]
 	if !exists {
 		return "", &Error{
 			Code:    "InvalidRouteTableID.NotFound",
@@ -1003,7 +1110,7 @@ func (m *MemoryStorage) AssociateRouteTable(_ context.Context, req *AssociateRou
 		}
 	}
 
-	if _, exists := m.subnets[req.SubnetID]; !exists {
+	if _, exists := m.Subnets[req.SubnetID]; !exists {
 		return "", &Error{
 			Code:    "InvalidSubnetID.NotFound",
 			Message: fmt.Sprintf("The subnet ID '%s' does not exist", req.SubnetID),
@@ -1027,8 +1134,8 @@ func (m *MemoryStorage) DescribeRouteTables(_ context.Context, rtbIDs []string) 
 	defer m.mu.RUnlock()
 
 	if len(rtbIDs) == 0 {
-		rts := make([]*RouteTable, 0, len(m.routeTables))
-		for _, rt := range m.routeTables {
+		rts := make([]*RouteTable, 0, len(m.RouteTables))
+		for _, rt := range m.RouteTables {
 			rts = append(rts, rt)
 		}
 
@@ -1038,7 +1145,7 @@ func (m *MemoryStorage) DescribeRouteTables(_ context.Context, rtbIDs []string) 
 	rts := make([]*RouteTable, 0, len(rtbIDs))
 
 	for _, id := range rtbIDs {
-		rt, exists := m.routeTables[id]
+		rt, exists := m.RouteTables[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "InvalidRouteTableId.NotFound",
@@ -1057,7 +1164,7 @@ func (m *MemoryStorage) CreateNatGateway(_ context.Context, req *CreateNatGatewa
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	subnet, exists := m.subnets[req.SubnetID]
+	subnet, exists := m.Subnets[req.SubnetID]
 	if !exists {
 		return nil, &Error{
 			Code:    "InvalidSubnetID.NotFound",
@@ -1080,7 +1187,7 @@ func (m *MemoryStorage) CreateNatGateway(_ context.Context, req *CreateNatGatewa
 		natgw.AllocationID = req.AllocationID
 	}
 
-	m.natGateways[natgw.NatGatewayID] = natgw
+	m.NatGateways[natgw.NatGatewayID] = natgw
 
 	return natgw, nil
 }
@@ -1091,8 +1198,8 @@ func (m *MemoryStorage) DescribeNatGateways(_ context.Context, natgwIDs []string
 	defer m.mu.RUnlock()
 
 	if len(natgwIDs) == 0 {
-		natgws := make([]*NatGateway, 0, len(m.natGateways))
-		for _, natgw := range m.natGateways {
+		natgws := make([]*NatGateway, 0, len(m.NatGateways))
+		for _, natgw := range m.NatGateways {
 			natgws = append(natgws, natgw)
 		}
 
@@ -1102,7 +1209,7 @@ func (m *MemoryStorage) DescribeNatGateways(_ context.Context, natgwIDs []string
 	natgws := make([]*NatGateway, 0, len(natgwIDs))
 
 	for _, id := range natgwIDs {
-		natgw, exists := m.natGateways[id]
+		natgw, exists := m.NatGateways[id]
 		if !exists {
 			return nil, &Error{
 				Code:    "NatGatewayNotFound",

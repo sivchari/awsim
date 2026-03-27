@@ -2,12 +2,15 @@ package mq
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the MQ storage interface.
@@ -21,23 +24,101 @@ type Storage interface {
 	GetConfiguration(ctx context.Context, configID string) (*Configuration, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	brokers        map[string]*Broker
-	configurations map[string]*Configuration
+	mu             sync.RWMutex              `json:"-"`
+	Brokers        map[string]*Broker        `json:"brokers"`
+	Configurations map[string]*Configuration `json:"configurations"`
 	region         string
 	accountID      string
+	dataDir        string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		brokers:        make(map[string]*Broker),
-		configurations: make(map[string]*Configuration),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Brokers:        make(map[string]*Broker),
+		Configurations: make(map[string]*Configuration),
 		region:         "us-east-1",
 		accountID:      "123456789012",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "mq", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Brokers == nil {
+		s.Brokers = make(map[string]*Broker)
+	}
+
+	if s.Configurations == nil {
+		s.Configurations = make(map[string]*Configuration)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "mq", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateBroker creates a new broker.
@@ -46,7 +127,7 @@ func (s *MemoryStorage) CreateBroker(_ context.Context, req *CreateBrokerRequest
 	defer s.mu.Unlock()
 
 	// Check for duplicate broker name
-	for _, b := range s.brokers {
+	for _, b := range s.Brokers {
 		if b.BrokerName == req.BrokerName {
 			return nil, &Error{
 				Type:    ErrConflict,
@@ -84,7 +165,7 @@ func (s *MemoryStorage) CreateBroker(_ context.Context, req *CreateBrokerRequest
 		Configuration:        req.Configuration,
 	}
 
-	s.brokers[brokerID] = broker
+	s.Brokers[brokerID] = broker
 
 	return broker, nil
 }
@@ -94,14 +175,14 @@ func (s *MemoryStorage) DeleteBroker(_ context.Context, brokerID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.brokers[brokerID]; !exists {
+	if _, exists := s.Brokers[brokerID]; !exists {
 		return &Error{
 			Type:    ErrNotFound,
 			Message: fmt.Sprintf("Broker %s not found", brokerID),
 		}
 	}
 
-	delete(s.brokers, brokerID)
+	delete(s.Brokers, brokerID)
 
 	return nil
 }
@@ -111,7 +192,7 @@ func (s *MemoryStorage) DescribeBroker(_ context.Context, brokerID string) (*Bro
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	broker, exists := s.brokers[brokerID]
+	broker, exists := s.Brokers[brokerID]
 	if !exists {
 		return nil, &Error{
 			Type:    ErrNotFound,
@@ -132,8 +213,8 @@ func (s *MemoryStorage) ListBrokers(_ context.Context, maxResults int, nextToken
 	}
 
 	// Collect all brokers
-	brokers := make([]*Broker, 0, len(s.brokers))
-	for _, b := range s.brokers {
+	brokers := make([]*Broker, 0, len(s.Brokers))
+	for _, b := range s.Brokers {
 		brokers = append(brokers, b)
 	}
 
@@ -172,7 +253,7 @@ func (s *MemoryStorage) UpdateBroker(_ context.Context, brokerID string, req *Up
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	broker, exists := s.brokers[brokerID]
+	broker, exists := s.Brokers[brokerID]
 	if !exists {
 		return nil, &Error{
 			Type:    ErrNotFound,
@@ -205,7 +286,7 @@ func (s *MemoryStorage) CreateConfiguration(_ context.Context, req *CreateConfig
 	defer s.mu.Unlock()
 
 	// Check for duplicate configuration name
-	for _, c := range s.configurations {
+	for _, c := range s.Configurations {
 		if c.Name == req.Name {
 			return nil, &Error{
 				Type:    ErrConflict,
@@ -236,7 +317,7 @@ func (s *MemoryStorage) CreateConfiguration(_ context.Context, req *CreateConfig
 		Revisions:      []*ConfigurationRevision{revision},
 	}
 
-	s.configurations[configID] = config
+	s.Configurations[configID] = config
 
 	return config, nil
 }
@@ -246,7 +327,7 @@ func (s *MemoryStorage) GetConfiguration(_ context.Context, configID string) (*C
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	config, exists := s.configurations[configID]
+	config, exists := s.Configurations[configID]
 	if !exists {
 		return nil, &Error{
 			Type:    ErrNotFound,

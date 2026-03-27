@@ -1,11 +1,14 @@
 package codegurureviewer
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 func epochNow() float64 {
@@ -30,21 +33,103 @@ type Storage interface {
 	ListRecommendationFeedback(codeReviewArn string) []RecommendationFeedback
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	associations map[string]*RepositoryAssociation
-	codeReviews  map[string]*CodeReview
-	feedback     map[string]map[string]*RecommendationFeedback // codeReviewArn -> recommendationID -> feedback
+	mu           sync.RWMutex                                  `json:"-"`
+	Associations map[string]*RepositoryAssociation             `json:"associations"`
+	CodeReviews  map[string]*CodeReview                        `json:"codeReviews"`
+	Feedback     map[string]map[string]*RecommendationFeedback `json:"feedback"` // codeReviewArn -> recommendationID -> feedback
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		associations: make(map[string]*RepositoryAssociation),
-		codeReviews:  make(map[string]*CodeReview),
-		feedback:     make(map[string]map[string]*RecommendationFeedback),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Associations: make(map[string]*RepositoryAssociation),
+		CodeReviews:  make(map[string]*CodeReview),
+		Feedback:     make(map[string]map[string]*RecommendationFeedback),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "codeguru-reviewer", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Associations == nil {
+		m.Associations = make(map[string]*RepositoryAssociation)
+	}
+
+	if m.CodeReviews == nil {
+		m.CodeReviews = make(map[string]*CodeReview)
+	}
+
+	if m.Feedback == nil {
+		m.Feedback = make(map[string]map[string]*RecommendationFeedback)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "codeguru-reviewer", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // AssociateRepository creates a new repository association.
@@ -71,7 +156,7 @@ func (m *MemoryStorage) AssociateRepository(input *AssociateRepositoryInput) *Re
 		Tags:                 input.Tags,
 	}
 
-	m.associations[arn] = assoc
+	m.Associations[arn] = assoc
 
 	return assoc
 }
@@ -105,7 +190,7 @@ func (m *MemoryStorage) DescribeRepositoryAssociation(arn string) (*RepositoryAs
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	assoc, ok := m.associations[arn]
+	assoc, ok := m.Associations[arn]
 	if !ok {
 		return nil, fmt.Errorf("NotFoundException: repository association %s not found", arn)
 	}
@@ -118,7 +203,7 @@ func (m *MemoryStorage) DisassociateRepository(arn string) (*RepositoryAssociati
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	assoc, ok := m.associations[arn]
+	assoc, ok := m.Associations[arn]
 	if !ok {
 		return nil, fmt.Errorf("NotFoundException: repository association %s not found", arn)
 	}
@@ -126,7 +211,7 @@ func (m *MemoryStorage) DisassociateRepository(arn string) (*RepositoryAssociati
 	assoc.State = "Disassociated"
 	assoc.LastUpdatedTimeStamp = epochNow()
 
-	delete(m.associations, arn)
+	delete(m.Associations, arn)
 
 	return assoc, nil
 }
@@ -136,8 +221,8 @@ func (m *MemoryStorage) ListRepositoryAssociations() []RepositoryAssociationSumm
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]RepositoryAssociationSummary, 0, len(m.associations))
-	for _, assoc := range m.associations {
+	result := make([]RepositoryAssociationSummary, 0, len(m.Associations))
+	for _, assoc := range m.Associations {
 		result = append(result, RepositoryAssociationSummary{
 			AssociationArn:       assoc.AssociationArn,
 			AssociationID:        assoc.AssociationID,
@@ -159,7 +244,7 @@ func (m *MemoryStorage) CreateCodeReview(input *CreateCodeReviewInput) (*CodeRev
 	defer m.mu.Unlock()
 
 	// Find the association.
-	assoc, ok := m.associations[input.RepositoryAssociationArn]
+	assoc, ok := m.Associations[input.RepositoryAssociationArn]
 	if !ok {
 		return nil, fmt.Errorf("NotFoundException: repository association %s not found", input.RepositoryAssociationArn)
 	}
@@ -181,7 +266,7 @@ func (m *MemoryStorage) CreateCodeReview(input *CreateCodeReviewInput) (*CodeRev
 		Type:                 "RepositoryAnalysis",
 	}
 
-	m.codeReviews[arn] = review
+	m.CodeReviews[arn] = review
 
 	return review, nil
 }
@@ -191,7 +276,7 @@ func (m *MemoryStorage) DescribeCodeReview(arn string) (*CodeReview, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	review, ok := m.codeReviews[arn]
+	review, ok := m.CodeReviews[arn]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: code review %s not found", arn)
 	}
@@ -204,8 +289,8 @@ func (m *MemoryStorage) ListCodeReviews() []CodeReview {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]CodeReview, 0, len(m.codeReviews))
-	for _, review := range m.codeReviews {
+	result := make([]CodeReview, 0, len(m.CodeReviews))
+	for _, review := range m.CodeReviews {
 		result = append(result, *review)
 	}
 
@@ -222,14 +307,14 @@ func (m *MemoryStorage) PutRecommendationFeedback(input *PutRecommendationFeedba
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.codeReviews[input.CodeReviewArn]; !ok {
+	if _, ok := m.CodeReviews[input.CodeReviewArn]; !ok {
 		return fmt.Errorf("ResourceNotFoundException: code review %s not found", input.CodeReviewArn)
 	}
 
 	now := epochNow()
 
-	if m.feedback[input.CodeReviewArn] == nil {
-		m.feedback[input.CodeReviewArn] = make(map[string]*RecommendationFeedback)
+	if m.Feedback[input.CodeReviewArn] == nil {
+		m.Feedback[input.CodeReviewArn] = make(map[string]*RecommendationFeedback)
 	}
 
 	fb := &RecommendationFeedback{
@@ -241,7 +326,7 @@ func (m *MemoryStorage) PutRecommendationFeedback(input *PutRecommendationFeedba
 		UserID:               "test-user",
 	}
 
-	m.feedback[input.CodeReviewArn][input.RecommendationID] = fb
+	m.Feedback[input.CodeReviewArn][input.RecommendationID] = fb
 
 	return nil
 }
@@ -251,7 +336,7 @@ func (m *MemoryStorage) DescribeRecommendationFeedback(codeReviewArn, recommenda
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	fbMap, ok := m.feedback[codeReviewArn]
+	fbMap, ok := m.Feedback[codeReviewArn]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: feedback not found")
 	}
@@ -269,7 +354,7 @@ func (m *MemoryStorage) ListRecommendationFeedback(codeReviewArn string) []Recom
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	fbMap := m.feedback[codeReviewArn]
+	fbMap := m.Feedback[codeReviewArn]
 	result := make([]RecommendationFeedback, 0, len(fbMap))
 
 	for _, fb := range fbMap {

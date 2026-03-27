@@ -2,9 +2,12 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -38,26 +41,51 @@ type Storage interface {
 	ListScheduleGroups(ctx context.Context, limit int32) ([]*ScheduleGroup, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu             sync.RWMutex
-	schedules      map[string]*Schedule      // key: groupName/scheduleName
-	scheduleGroups map[string]*ScheduleGroup // key: groupName
+	mu             sync.RWMutex              `json:"-"`
+	Schedules      map[string]*Schedule      `json:"schedules"`      // key: groupName/scheduleName
+	ScheduleGroups map[string]*ScheduleGroup `json:"scheduleGroups"` // key: groupName
 	region         string
 	accountID      string
+	dataDir        string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
 	ms := &MemoryStorage{
-		schedules:      make(map[string]*Schedule),
-		scheduleGroups: make(map[string]*ScheduleGroup),
+		Schedules:      make(map[string]*Schedule),
+		ScheduleGroups: make(map[string]*ScheduleGroup),
 		region:         defaultRegion,
 		accountID:      defaultAccountID,
 	}
 
+	for _, o := range opts {
+		o(ms)
+	}
+
+	if ms.dataDir != "" {
+		_ = storage.Load(ms.dataDir, "scheduler", ms)
+	}
+
 	// Create default schedule group.
-	ms.scheduleGroups[defaultGroupName] = &ScheduleGroup{
+	ms.ScheduleGroups[defaultGroupName] = &ScheduleGroup{
 		Name:         defaultGroupName,
 		ARN:          generateScheduleGroupARN(defaultRegion, defaultAccountID, defaultGroupName),
 		State:        ScheduleGroupStateActive,
@@ -65,6 +93,58 @@ func NewMemoryStorage() *MemoryStorage {
 	}
 
 	return ms
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Schedules == nil {
+		m.Schedules = make(map[string]*Schedule)
+	}
+
+	if m.ScheduleGroups == nil {
+		m.ScheduleGroups = make(map[string]*ScheduleGroup)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "scheduler", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateSchedule creates a new schedule.
@@ -75,12 +155,12 @@ func (m *MemoryStorage) CreateSchedule(_ context.Context, name string, req *Crea
 	groupName := defaultString(req.GroupName, defaultGroupName)
 	key := scheduleKey(groupName, name)
 
-	if _, exists := m.schedules[key]; exists {
+	if _, exists := m.Schedules[key]; exists {
 		return nil, &Error{Code: errConflictException, Message: "Schedule already exists: " + name}
 	}
 
 	// Check if group exists.
-	if _, exists := m.scheduleGroups[groupName]; !exists {
+	if _, exists := m.ScheduleGroups[groupName]; !exists {
 		return nil, &Error{Code: errResourceNotFound, Message: "ScheduleGroup not found: " + groupName}
 	}
 
@@ -117,7 +197,7 @@ func (m *MemoryStorage) CreateSchedule(_ context.Context, name string, req *Crea
 		}
 	}
 
-	m.schedules[key] = schedule
+	m.Schedules[key] = schedule
 
 	return schedule, nil
 }
@@ -130,7 +210,7 @@ func (m *MemoryStorage) GetSchedule(_ context.Context, name, groupName string) (
 	groupName = defaultString(groupName, defaultGroupName)
 	key := scheduleKey(groupName, name)
 
-	schedule, exists := m.schedules[key]
+	schedule, exists := m.Schedules[key]
 	if !exists {
 		return nil, &Error{Code: errResourceNotFound, Message: "Schedule not found: " + name}
 	}
@@ -146,7 +226,7 @@ func (m *MemoryStorage) UpdateSchedule(_ context.Context, name string, req *Upda
 	groupName := defaultString(req.GroupName, defaultGroupName)
 	key := scheduleKey(groupName, name)
 
-	schedule, exists := m.schedules[key]
+	schedule, exists := m.Schedules[key]
 	if !exists {
 		return nil, &Error{Code: errResourceNotFound, Message: "Schedule not found: " + name}
 	}
@@ -191,11 +271,11 @@ func (m *MemoryStorage) DeleteSchedule(_ context.Context, name, groupName string
 	groupName = defaultString(groupName, defaultGroupName)
 	key := scheduleKey(groupName, name)
 
-	if _, exists := m.schedules[key]; !exists {
+	if _, exists := m.Schedules[key]; !exists {
 		return &Error{Code: errResourceNotFound, Message: "Schedule not found: " + name}
 	}
 
-	delete(m.schedules, key)
+	delete(m.Schedules, key)
 
 	return nil
 }
@@ -205,9 +285,9 @@ func (m *MemoryStorage) ListSchedules(_ context.Context, groupName string, limit
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*Schedule, 0, len(m.schedules))
+	result := make([]*Schedule, 0, len(m.Schedules))
 
-	for _, schedule := range m.schedules {
+	for _, schedule := range m.Schedules {
 		if groupName != "" && schedule.GroupName != groupName {
 			continue
 		}
@@ -227,7 +307,7 @@ func (m *MemoryStorage) CreateScheduleGroup(_ context.Context, name string, _ *C
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.scheduleGroups[name]; exists {
+	if _, exists := m.ScheduleGroups[name]; exists {
 		return nil, &Error{Code: errConflictException, Message: "ScheduleGroup already exists: " + name}
 	}
 
@@ -241,7 +321,7 @@ func (m *MemoryStorage) CreateScheduleGroup(_ context.Context, name string, _ *C
 		CreationDate: now,
 	}
 
-	m.scheduleGroups[name] = group
+	m.ScheduleGroups[name] = group
 
 	return group, nil
 }
@@ -251,7 +331,7 @@ func (m *MemoryStorage) GetScheduleGroup(_ context.Context, name string) (*Sched
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	group, exists := m.scheduleGroups[name]
+	group, exists := m.ScheduleGroups[name]
 	if !exists {
 		return nil, &Error{Code: errResourceNotFound, Message: "ScheduleGroup not found: " + name}
 	}
@@ -268,18 +348,18 @@ func (m *MemoryStorage) DeleteScheduleGroup(_ context.Context, name string) erro
 		return &Error{Code: errValidationException, Message: "Cannot delete default schedule group"}
 	}
 
-	if _, exists := m.scheduleGroups[name]; !exists {
+	if _, exists := m.ScheduleGroups[name]; !exists {
 		return &Error{Code: errResourceNotFound, Message: "ScheduleGroup not found: " + name}
 	}
 
 	// Check if any schedules use this group.
-	for _, schedule := range m.schedules {
+	for _, schedule := range m.Schedules {
 		if schedule.GroupName == name {
 			return &Error{Code: errConflictException, Message: "ScheduleGroup has schedules: " + name}
 		}
 	}
 
-	delete(m.scheduleGroups, name)
+	delete(m.ScheduleGroups, name)
 
 	return nil
 }
@@ -289,9 +369,9 @@ func (m *MemoryStorage) ListScheduleGroups(_ context.Context, limit int32) ([]*S
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*ScheduleGroup, 0, len(m.scheduleGroups))
+	result := make([]*ScheduleGroup, 0, len(m.ScheduleGroups))
 
-	for _, group := range m.scheduleGroups {
+	for _, group := range m.ScheduleGroups {
 		result = append(result, group)
 
 		if limit > 0 && len(result) >= int(limit) {

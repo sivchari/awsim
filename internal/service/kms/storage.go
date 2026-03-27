@@ -5,12 +5,15 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -69,21 +72,99 @@ type Storage interface {
 	GetAlias(ctx context.Context, aliasName string) (*Alias, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu      sync.RWMutex
-	keys    map[string]*Key   // keyID -> Key
-	aliases map[string]*Alias // aliasName -> Alias
+	mu      sync.RWMutex      `json:"-"`
+	Keys    map[string]*Key   `json:"keys"`    // keyID -> Key
+	Aliases map[string]*Alias `json:"aliases"` // aliasName -> Alias
 	region  string
+	dataDir string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		keys:    make(map[string]*Key),
-		aliases: make(map[string]*Alias),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Keys:    make(map[string]*Key),
+		Aliases: make(map[string]*Alias),
 		region:  defaultRegion,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "kms", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type MemStorageAlias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *MemStorageAlias }{MemStorageAlias: (*MemStorageAlias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type MemStorageAlias MemoryStorage
+
+	aux := &struct{ *MemStorageAlias }{MemStorageAlias: (*MemStorageAlias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Keys == nil {
+		s.Keys = make(map[string]*Key)
+	}
+
+	if s.Aliases == nil {
+		s.Aliases = make(map[string]*Alias)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "kms", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateKey creates a new KMS key.
@@ -136,7 +217,7 @@ func (s *MemoryStorage) CreateKey(_ context.Context, req *CreateKeyRequest) (*Ke
 		KeyMaterial:  keyMaterial,
 	}
 
-	s.keys[keyID] = key
+	s.Keys[keyID] = key
 
 	return key, nil
 }
@@ -153,7 +234,7 @@ func (s *MemoryStorage) GetKey(_ context.Context, keyID string) (*Key, error) {
 func (s *MemoryStorage) getKeyLocked(keyID string) (*Key, error) {
 	// Check if it's an alias.
 	if len(keyID) > 6 && keyID[:6] == "alias/" {
-		alias, ok := s.aliases[keyID]
+		alias, ok := s.Aliases[keyID]
 		if !ok {
 			return nil, &ServiceError{Code: errNotFound, Message: "Alias " + keyID + " is not found."}
 		}
@@ -164,7 +245,7 @@ func (s *MemoryStorage) getKeyLocked(keyID string) (*Key, error) {
 	// Check if it's an ARN.
 	if len(keyID) > 8 && keyID[:8] == "arn:aws:" {
 		// Extract key ID from ARN.
-		for _, key := range s.keys {
+		for _, key := range s.Keys {
 			if key.Arn == keyID {
 				return key, nil
 			}
@@ -174,7 +255,7 @@ func (s *MemoryStorage) getKeyLocked(keyID string) (*Key, error) {
 	}
 
 	// Look up by key ID.
-	key, ok := s.keys[keyID]
+	key, ok := s.Keys[keyID]
 	if !ok {
 		return nil, &ServiceError{Code: errNotFound, Message: "Key " + keyID + " is not found."}
 	}
@@ -191,10 +272,10 @@ func (s *MemoryStorage) ListKeys(_ context.Context, limit int32, _ string) ([]*K
 		limit = 100
 	}
 
-	keys := make([]*Key, 0, len(s.keys))
+	keys := make([]*Key, 0, len(s.Keys))
 	maxKeys := int(limit)
 
-	for _, key := range s.keys {
+	for _, key := range s.Keys {
 		keys = append(keys, key)
 
 		if len(keys) >= maxKeys {
@@ -462,7 +543,7 @@ func (s *MemoryStorage) CreateAlias(_ context.Context, aliasName, targetKeyID st
 	}
 
 	// Check if alias already exists.
-	if _, ok := s.aliases[aliasName]; ok {
+	if _, ok := s.Aliases[aliasName]; ok {
 		return &ServiceError{Code: errAlreadyExists, Message: "Alias " + aliasName + " already exists."}
 	}
 
@@ -475,7 +556,7 @@ func (s *MemoryStorage) CreateAlias(_ context.Context, aliasName, targetKeyID st
 	aliasArn := fmt.Sprintf("arn:aws:kms:%s:%s:%s", s.region, defaultAccountID, aliasName)
 	now := time.Now()
 
-	s.aliases[aliasName] = &Alias{
+	s.Aliases[aliasName] = &Alias{
 		AliasName:       aliasName,
 		AliasArn:        aliasArn,
 		TargetKeyID:     key.KeyID,
@@ -491,11 +572,11 @@ func (s *MemoryStorage) DeleteAlias(_ context.Context, aliasName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.aliases[aliasName]; !ok {
+	if _, ok := s.Aliases[aliasName]; !ok {
 		return &ServiceError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
 	}
 
-	delete(s.aliases, aliasName)
+	delete(s.Aliases, aliasName)
 
 	return nil
 }
@@ -512,7 +593,7 @@ func (s *MemoryStorage) ListAliases(_ context.Context, keyID string, limit int32
 	aliases := make([]*Alias, 0)
 	maxAliases := int(limit)
 
-	for _, alias := range s.aliases {
+	for _, alias := range s.Aliases {
 		if keyID != "" && alias.TargetKeyID != keyID {
 			// If keyID is specified, filter by it.
 			// Also need to resolve keyID if it's an alias or ARN.
@@ -541,7 +622,7 @@ func (s *MemoryStorage) GetAlias(_ context.Context, aliasName string) (*Alias, e
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	alias, ok := s.aliases[aliasName]
+	alias, ok := s.Aliases[aliasName]
 	if !ok {
 		return nil, &ServiceError{Code: errNotFound, Message: "Alias " + aliasName + " is not found."}
 	}

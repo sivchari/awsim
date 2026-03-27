@@ -2,11 +2,14 @@ package ssm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the SSM Parameter Store storage interface.
@@ -20,21 +23,95 @@ type Storage interface {
 	DescribeParameters(ctx context.Context, maxResults int, nextToken string) ([]*Parameter, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu         sync.RWMutex
-	parameters map[string]*Parameter
+	mu         sync.RWMutex          `json:"-"`
+	Parameters map[string]*Parameter `json:"parameters"`
 	region     string
 	accountID  string
+	dataDir    string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		parameters: make(map[string]*Parameter),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Parameters: make(map[string]*Parameter),
 		region:     "us-east-1",
 		accountID:  "000000000000",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ssm", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Parameters == nil {
+		s.Parameters = make(map[string]*Parameter)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "ssm", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // PutParameter creates or updates a parameter.
@@ -42,7 +119,7 @@ func (s *MemoryStorage) PutParameter(_ context.Context, req *PutParameterRequest
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	existing, exists := s.parameters[req.Name]
+	existing, exists := s.Parameters[req.Name]
 
 	// Check if parameter exists and overwrite is not set
 	if exists && !req.Overwrite {
@@ -89,7 +166,7 @@ func (s *MemoryStorage) PutParameter(_ context.Context, req *PutParameterRequest
 		Description:      req.Description,
 	}
 
-	s.parameters[req.Name] = param
+	s.Parameters[req.Name] = param
 
 	return param, nil
 }
@@ -99,7 +176,7 @@ func (s *MemoryStorage) GetParameter(_ context.Context, name string) (*Parameter
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	param, exists := s.parameters[name]
+	param, exists := s.Parameters[name]
 	if !exists {
 		return nil, &ParameterError{
 			Type:    ErrParameterNotFound,
@@ -120,7 +197,7 @@ func (s *MemoryStorage) GetParameters(_ context.Context, names []string) ([]*Par
 	var invalidParams []string
 
 	for _, name := range names {
-		param, exists := s.parameters[name]
+		param, exists := s.Parameters[name]
 		if exists {
 			params = append(params, param)
 		} else {
@@ -152,7 +229,7 @@ func (s *MemoryStorage) GetParametersByPath(_ context.Context, path string, recu
 	// Collect matching parameters
 	var matches []*Parameter
 
-	for name, param := range s.parameters {
+	for name, param := range s.Parameters {
 		if matchesPath(name, path, recursive) {
 			matches = append(matches, param)
 		}
@@ -212,14 +289,14 @@ func (s *MemoryStorage) DeleteParameter(_ context.Context, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.parameters[name]; !exists {
+	if _, exists := s.Parameters[name]; !exists {
 		return &ParameterError{
 			Type:    ErrParameterNotFound,
 			Message: fmt.Sprintf("Parameter %s not found.", name),
 		}
 	}
 
-	delete(s.parameters, name)
+	delete(s.Parameters, name)
 
 	return nil
 }
@@ -234,8 +311,8 @@ func (s *MemoryStorage) DeleteParameters(_ context.Context, names []string) ([]s
 	var invalid []string
 
 	for _, name := range names {
-		if _, exists := s.parameters[name]; exists {
-			delete(s.parameters, name)
+		if _, exists := s.Parameters[name]; exists {
+			delete(s.Parameters, name)
 
 			deleted = append(deleted, name)
 		} else {
@@ -256,8 +333,8 @@ func (s *MemoryStorage) DescribeParameters(_ context.Context, maxResults int, ne
 	}
 
 	// Collect all parameters
-	params := make([]*Parameter, 0, len(s.parameters))
-	for _, p := range s.parameters {
+	params := make([]*Parameter, 0, len(s.Parameters))
+	for _, p := range s.Parameters {
 		params = append(params, p)
 	}
 

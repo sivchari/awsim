@@ -1,11 +1,23 @@
 package rds
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	storage := NewMemoryStorage()
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	storage := NewMemoryStorage(opts...)
 	service.Register(New(storage))
 }
 
@@ -58,3 +70,14 @@ func (s *Service) Actions() []string {
 
 // QueryProtocol is a marker method that indicates RDS uses AWS Query protocol.
 func (s *Service) QueryProtocol() {}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

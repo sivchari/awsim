@@ -3,12 +3,15 @@ package appsync
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"sync"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -29,25 +32,99 @@ type Storage interface {
 	StartSchemaCreation(ctx context.Context, apiID string, definition []byte) (*SchemaCreationStatus, error)
 }
 
-// apiData holds all data associated with a GraphQL API.
-type apiData struct {
-	api         *GraphqlAPI
-	dataSources map[string]*DataSource // key: name
-	resolvers   map[string]*Resolver   // key: typeName:fieldName
-	schema      *SchemaCreationStatus
+// APIData holds all data associated with a GraphQL API.
+type APIData struct {
+	API         *GraphqlAPI            `json:"api"`
+	DataSources map[string]*DataSource `json:"dataSources"` // key: name
+	Resolvers   map[string]*Resolver   `json:"resolvers"`   // key: typeName:fieldName
+	Schema      *SchemaCreationStatus  `json:"schema"`
 }
+
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
 
 // MemoryStorage implements Storage with in-memory data structures.
 type MemoryStorage struct {
-	mu   sync.RWMutex
-	apis map[string]*apiData // key: apiID
+	mu      sync.RWMutex        `json:"-"`
+	APIs    map[string]*APIData `json:"apis"` // key: apiID
+	dataDir string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		apis: make(map[string]*apiData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		APIs: make(map[string]*APIData),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "appsync", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.APIs == nil {
+		s.APIs = make(map[string]*APIData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "appsync", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateGraphqlAPI creates a new GraphQL API.
@@ -98,10 +175,10 @@ func (s *MemoryStorage) CreateGraphqlAPI(_ context.Context, input *CreateGraphql
 		EnhancedMetricsConfig:             input.EnhancedMetricsConfig,
 	}
 
-	s.apis[apiID] = &apiData{
-		api:         api,
-		dataSources: make(map[string]*DataSource),
-		resolvers:   make(map[string]*Resolver),
+	s.APIs[apiID] = &APIData{
+		API:         api,
+		DataSources: make(map[string]*DataSource),
+		Resolvers:   make(map[string]*Resolver),
 	}
 
 	return api, nil
@@ -112,14 +189,14 @@ func (s *MemoryStorage) DeleteGraphqlAPI(_ context.Context, apiID string) error 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.apis[apiID]; !exists {
+	if _, exists := s.APIs[apiID]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("GraphQL API %s not found", apiID),
 		}
 	}
 
-	delete(s.apis, apiID)
+	delete(s.APIs, apiID)
 
 	return nil
 }
@@ -129,7 +206,7 @@ func (s *MemoryStorage) GetGraphqlAPI(_ context.Context, apiID string) (*Graphql
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.apis[apiID]
+	data, exists := s.APIs[apiID]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -137,7 +214,7 @@ func (s *MemoryStorage) GetGraphqlAPI(_ context.Context, apiID string) (*Graphql
 		}
 	}
 
-	return data.api, nil
+	return data.API, nil
 }
 
 // defaultMaxResults is the default number of results to return.
@@ -149,20 +226,20 @@ func (s *MemoryStorage) ListGraphqlAPIs(_ context.Context, input *ListGraphqlAPI
 	defer s.mu.RUnlock()
 
 	// Collect all matching APIs.
-	allAPIs := make([]GraphqlAPI, 0, len(s.apis))
+	allAPIs := make([]GraphqlAPI, 0, len(s.APIs))
 
-	for _, data := range s.apis {
+	for _, data := range s.APIs {
 		// Filter by API type if specified.
-		if input.APIType != "" && data.api.APIType != input.APIType {
+		if input.APIType != "" && data.API.APIType != input.APIType {
 			continue
 		}
 
 		// Filter by owner if specified.
-		if input.Owner != "" && data.api.Owner != input.Owner {
+		if input.Owner != "" && data.API.Owner != input.Owner {
 			continue
 		}
 
-		allAPIs = append(allAPIs, *data.api)
+		allAPIs = append(allAPIs, *data.API)
 	}
 
 	// Sort by API ID for consistent pagination.
@@ -210,7 +287,7 @@ func (s *MemoryStorage) CreateDataSource(_ context.Context, input *CreateDataSou
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.apis[input.APIID]
+	data, exists := s.APIs[input.APIID]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -232,7 +309,7 @@ func (s *MemoryStorage) CreateDataSource(_ context.Context, input *CreateDataSou
 		}
 	}
 
-	if _, exists := data.dataSources[input.Name]; exists {
+	if _, exists := data.DataSources[input.Name]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Data source %s already exists", input.Name),
@@ -258,7 +335,7 @@ func (s *MemoryStorage) CreateDataSource(_ context.Context, input *CreateDataSou
 		MetricsConfig:            input.MetricsConfig,
 	}
 
-	data.dataSources[input.Name] = dataSource
+	data.DataSources[input.Name] = dataSource
 
 	return dataSource, nil
 }
@@ -268,7 +345,7 @@ func (s *MemoryStorage) CreateResolver(_ context.Context, input *CreateResolverI
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.apis[input.APIID]
+	data, exists := s.APIs[input.APIID]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -292,7 +369,7 @@ func (s *MemoryStorage) CreateResolver(_ context.Context, input *CreateResolverI
 
 	resolverKey := fmt.Sprintf("%s:%s", input.TypeName, input.FieldName)
 
-	if _, exists := data.resolvers[resolverKey]; exists {
+	if _, exists := data.Resolvers[resolverKey]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Resolver for %s.%s already exists", input.TypeName, input.FieldName),
@@ -319,7 +396,7 @@ func (s *MemoryStorage) CreateResolver(_ context.Context, input *CreateResolverI
 		MetricsConfig:           input.MetricsConfig,
 	}
 
-	data.resolvers[resolverKey] = resolver
+	data.Resolvers[resolverKey] = resolver
 
 	return resolver, nil
 }
@@ -329,7 +406,7 @@ func (s *MemoryStorage) StartSchemaCreation(_ context.Context, apiID string, _ [
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.apis[apiID]
+	data, exists := s.APIs[apiID]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -344,7 +421,7 @@ func (s *MemoryStorage) StartSchemaCreation(_ context.Context, apiID string, _ [
 		Details: "Schema created successfully",
 	}
 
-	data.schema = status
+	data.Schema = status
 
 	return status, nil
 }

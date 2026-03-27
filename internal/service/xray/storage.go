@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -26,25 +28,107 @@ type Storage interface {
 	DeleteGroup(ctx context.Context, groupName, groupARN string) error
 }
 
-// MemoryStorage implements Storage with in-memory data structures.
-type MemoryStorage struct {
-	mu       sync.RWMutex
-	traces   map[string]*Trace   // key: traceID
-	segments map[string]*Segment // key: segmentID
-	groups   map[string]*Group   // key: groupName
-}
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
 
-// NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		traces:   make(map[string]*Trace),
-		segments: make(map[string]*Segment),
-		groups:   make(map[string]*Group),
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
 	}
 }
 
-// segmentDocument represents the structure of a segment document.
-type segmentDocument struct {
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
+// MemoryStorage implements Storage with in-memory data structures.
+type MemoryStorage struct {
+	mu       sync.RWMutex        `json:"-"`
+	Traces   map[string]*Trace   `json:"traces"`   // key: traceID
+	Segments map[string]*Segment `json:"segments"` // key: segmentID
+	Groups   map[string]*Group   `json:"groups"`   // key: groupName
+	dataDir  string
+}
+
+// NewMemoryStorage creates a new in-memory storage.
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Traces:   make(map[string]*Trace),
+		Segments: make(map[string]*Segment),
+		Groups:   make(map[string]*Group),
+	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "xray", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Traces == nil {
+		s.Traces = make(map[string]*Trace)
+	}
+
+	if s.Segments == nil {
+		s.Segments = make(map[string]*Segment)
+	}
+
+	if s.Groups == nil {
+		s.Groups = make(map[string]*Group)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "xray", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
+}
+
+// SegmentDocument represents the structure of a segment document.
+type SegmentDocument struct {
 	ID         string  `json:"id"`
 	TraceID    string  `json:"trace_id"`
 	Name       string  `json:"name"`
@@ -80,7 +164,7 @@ func (s *MemoryStorage) PutTraceSegments(_ context.Context, documents []string) 
 	var unprocessed []UnprocessedTraceSegment
 
 	for _, doc := range documents {
-		var segDoc segmentDocument
+		var segDoc SegmentDocument
 		if err := json.Unmarshal([]byte(doc), &segDoc); err != nil {
 			unprocessed = append(unprocessed, UnprocessedTraceSegment{
 				ID:        "",
@@ -104,16 +188,16 @@ func (s *MemoryStorage) PutTraceSegments(_ context.Context, documents []string) 
 			Document: doc,
 		}
 
-		s.segments[segDoc.ID] = segment
+		s.Segments[segDoc.ID] = segment
 
 		// Create or update trace.
-		trace, exists := s.traces[segDoc.TraceID]
+		trace, exists := s.Traces[segDoc.TraceID]
 		if !exists {
 			trace = &Trace{
 				ID:       segDoc.TraceID,
 				Segments: []*Segment{},
 			}
-			s.traces[segDoc.TraceID] = trace
+			s.Traces[segDoc.TraceID] = trace
 		}
 
 		trace.Segments = append(trace.Segments, segment)
@@ -135,9 +219,9 @@ func (s *MemoryStorage) GetTraceSummaries(_ context.Context, _, _ time.Time) ([]
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	summaries := make([]TraceSummary, 0, len(s.traces))
+	summaries := make([]TraceSummary, 0, len(s.Traces))
 
-	for _, trace := range s.traces {
+	for _, trace := range s.Traces {
 		summary := TraceSummary{
 			ID:       trace.ID,
 			Duration: trace.Duration,
@@ -145,7 +229,7 @@ func (s *MemoryStorage) GetTraceSummaries(_ context.Context, _, _ time.Time) ([]
 
 		// Parse first segment to get additional info.
 		if len(trace.Segments) > 0 {
-			var segDoc segmentDocument
+			var segDoc SegmentDocument
 			if err := json.Unmarshal([]byte(trace.Segments[0].Document), &segDoc); err == nil {
 				summary.HasFault = segDoc.Fault
 				summary.HasError = segDoc.Error
@@ -176,7 +260,7 @@ func (s *MemoryStorage) BatchGetTraces(_ context.Context, traceIDs []string) ([]
 	var unprocessed []string
 
 	for _, id := range traceIDs {
-		if trace, exists := s.traces[id]; exists {
+		if trace, exists := s.Traces[id]; exists {
 			traces = append(traces, trace)
 		} else {
 			unprocessed = append(unprocessed, id)
@@ -194,9 +278,9 @@ func (s *MemoryStorage) GetServiceGraph(_ context.Context, _, _ time.Time, _ str
 	// Build service graph from traces.
 	serviceMap := make(map[string]*ServiceNode)
 
-	for _, trace := range s.traces {
+	for _, trace := range s.Traces {
 		for _, segment := range trace.Segments {
-			var segDoc segmentDocument
+			var segDoc SegmentDocument
 			if err := json.Unmarshal([]byte(segment.Document), &segDoc); err != nil {
 				continue
 			}
@@ -249,7 +333,7 @@ func (s *MemoryStorage) CreateGroup(_ context.Context, input *CreateGroupInput) 
 		}
 	}
 
-	if _, exists := s.groups[input.GroupName]; exists {
+	if _, exists := s.Groups[input.GroupName]; exists {
 		return nil, &Error{
 			Code:    errInvalidRequest,
 			Message: fmt.Sprintf("Group %s already exists", input.GroupName),
@@ -266,7 +350,7 @@ func (s *MemoryStorage) CreateGroup(_ context.Context, input *CreateGroupInput) 
 		InsightsConfiguration: input.InsightsConfiguration,
 	}
 
-	s.groups[input.GroupName] = group
+	s.Groups[input.GroupName] = group
 
 	return group, nil
 }
@@ -282,7 +366,7 @@ func (s *MemoryStorage) DeleteGroup(_ context.Context, groupName, groupARN strin
 	if groupName != "" {
 		targetName = groupName
 	} else if groupARN != "" {
-		for name, group := range s.groups {
+		for name, group := range s.Groups {
 			if group.GroupARN == groupARN {
 				targetName = name
 
@@ -298,14 +382,14 @@ func (s *MemoryStorage) DeleteGroup(_ context.Context, groupName, groupARN strin
 		}
 	}
 
-	if _, exists := s.groups[targetName]; !exists {
+	if _, exists := s.Groups[targetName]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Group %s not found", targetName),
 		}
 	}
 
-	delete(s.groups, targetName)
+	delete(s.Groups, targetName)
 
 	return nil
 }

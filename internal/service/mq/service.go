@@ -1,13 +1,24 @@
 package mq
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 
 	"github.com/sivchari/kumo/internal/service"
 )
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage()))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
 }
 
 // Service implements the Amazon MQ service.
@@ -71,4 +82,15 @@ func (s *Service) handleUpdateBroker(w http.ResponseWriter, r *http.Request) {
 // handleCreateConfiguration handles POST /v1/configurations.
 func (s *Service) handleCreateConfiguration(w http.ResponseWriter, r *http.Request) {
 	s.CreateConfiguration(w, r)
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

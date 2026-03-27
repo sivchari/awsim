@@ -8,7 +8,7 @@
   <a href="https://github.com/sivchari/kumo/actions/workflows/integration-test.yaml"><img src="https://github.com/sivchari/kumo/actions/workflows/integration-test.yaml/badge.svg" alt="Integration Tests"></a>
 </p>
 
-<p align="center">A lightweight AWS service emulator written in Go.<br>Designed for CI/CD environments where authentication-free local AWS testing is needed.</p>
+<p align="center">A lightweight AWS service emulator written in Go.<br>Works as both a CI/CD testing tool and a local development server with optional data persistence.</p>
 
 ## Features
 
@@ -17,6 +17,7 @@
 - **Docker support** - Run as a container
 - **Lightweight** - Fast startup, minimal resource usage
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
+- **Optional data persistence** - Survive restarts with `KUMO_DATA_DIR`
 
 ## Supported Services (71 services)
 
@@ -145,10 +146,19 @@
 
 ## Quick Start
 
-### Docker (Recommended)
+### Docker
 
 ```bash
 docker run -p 4566:4566 ghcr.io/sivchari/kumo:latest
+```
+
+With data persistence:
+
+```bash
+docker run -p 4566:4566 \
+  -e KUMO_DATA_DIR=/data \
+  -v kumo-data:/data \
+  ghcr.io/sivchari/kumo:latest
 ```
 
 ### Binary
@@ -159,6 +169,9 @@ make build
 
 # Run
 ./bin/kumo
+
+# Run with data persistence
+KUMO_DATA_DIR=./data ./bin/kumo
 ```
 
 ### Docker Compose
@@ -169,6 +182,23 @@ services:
     image: ghcr.io/sivchari/kumo:latest
     ports:
       - "4566:4566"
+```
+
+With data persistence:
+
+```yaml
+services:
+  kumo:
+    image: ghcr.io/sivchari/kumo:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - KUMO_DATA_DIR=/data
+    volumes:
+      - kumo-data:/data
+
+volumes:
+  kumo-data:
 ```
 
 ## Usage Examples
@@ -357,6 +387,34 @@ Environment variables:
 | `KUMO_HOST` | `0.0.0.0` | Server bind address |
 | `KUMO_PORT` | `4566` | Server port |
 | `KUMO_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
+| `KUMO_DATA_DIR` | (unset) | Directory for persistent storage. When unset, data is in-memory only. |
+
+## Data Persistence
+
+By default kumo runs as a pure in-memory emulator -- all data is lost when the process stops. This is ideal for CI/CD pipelines where each test run starts from a clean state.
+
+For local development, set `KUMO_DATA_DIR` to enable persistent storage:
+
+```bash
+KUMO_DATA_DIR=./data ./bin/kumo
+```
+
+When enabled:
+
+- On startup, each service loads its previous state from `$KUMO_DATA_DIR/{service}.json`.
+- On graceful shutdown (SIGTERM/SIGINT), each service saves its current state.
+- The data directory is created automatically if it does not exist.
+- Writes are atomic (tmp file + rename) to prevent corruption on crash.
+- Ephemeral state (SQS in-flight messages, S3 multipart uploads) is not persisted.
+
+```
+$KUMO_DATA_DIR/
+  s3.json
+  sqs.json
+  dynamodb.json
+  iam.json
+  ...
+```
 
 ## Development
 

@@ -2,11 +2,14 @@ package cloudfront
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the CloudFront storage interface.
@@ -21,19 +24,97 @@ type Storage interface {
 	ListInvalidations(ctx context.Context, distributionID, marker string, maxItems int) ([]*Invalidation, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu            sync.RWMutex
-	distributions map[string]*Distribution
-	invalidations map[string]map[string]*Invalidation // distributionID -> invalidationID -> Invalidation
+	mu            sync.RWMutex                        `json:"-"`
+	Distributions map[string]*Distribution            `json:"distributions"`
+	Invalidations map[string]map[string]*Invalidation `json:"invalidations"` // distributionID -> invalidationID -> Invalidation
+	dataDir       string
 }
 
 // NewMemoryStorage creates a new memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		distributions: make(map[string]*Distribution),
-		invalidations: make(map[string]map[string]*Invalidation),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Distributions: make(map[string]*Distribution),
+		Invalidations: make(map[string]map[string]*Invalidation),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "cloudfront", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Distributions == nil {
+		s.Distributions = make(map[string]*Distribution)
+	}
+
+	if s.Invalidations == nil {
+		s.Invalidations = make(map[string]map[string]*Invalidation)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "cloudfront", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // Error represents a CloudFront error.
@@ -52,7 +133,7 @@ func (s *MemoryStorage) CreateDistribution(_ context.Context, config *CreateDist
 	defer s.mu.Unlock()
 
 	// Check for duplicate caller reference.
-	for _, d := range s.distributions {
+	for _, d := range s.Distributions {
 		if d.DistributionConfig != nil && d.DistributionConfig.CallerReference == config.CallerReference {
 			return nil, &Error{
 				Code:    errDistributionAlreadyExists,
@@ -90,7 +171,7 @@ func (s *MemoryStorage) CreateDistribution(_ context.Context, config *CreateDist
 		ActiveTrustedKeyGroups: &ActiveTrustedKeyGroups{Enabled: false, Quantity: 0},
 	}
 
-	s.distributions[id] = dist
+	s.Distributions[id] = dist
 
 	return dist, nil
 }
@@ -100,7 +181,7 @@ func (s *MemoryStorage) GetDistribution(_ context.Context, id string) (*Distribu
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	dist, exists := s.distributions[id]
+	dist, exists := s.Distributions[id]
 	if !exists {
 		return nil, &Error{
 			Code:    errDistributionNotFound,
@@ -120,8 +201,8 @@ func (s *MemoryStorage) ListDistributions(_ context.Context, marker string, maxI
 		maxItems = 100
 	}
 
-	dists := make([]*Distribution, 0, len(s.distributions))
-	for _, d := range s.distributions {
+	dists := make([]*Distribution, 0, len(s.Distributions))
+	for _, d := range s.Distributions {
 		dists = append(dists, d)
 	}
 
@@ -160,7 +241,7 @@ func (s *MemoryStorage) UpdateDistribution(_ context.Context, id string, config 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	dist, exists := s.distributions[id]
+	dist, exists := s.Distributions[id]
 	if !exists {
 		return nil, &Error{
 			Code:    errDistributionNotFound,
@@ -203,7 +284,7 @@ func (s *MemoryStorage) DeleteDistribution(_ context.Context, id, etag string) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	dist, exists := s.distributions[id]
+	dist, exists := s.Distributions[id]
 	if !exists {
 		return &Error{
 			Code:    errDistributionNotFound,
@@ -219,8 +300,8 @@ func (s *MemoryStorage) DeleteDistribution(_ context.Context, id, etag string) e
 		}
 	}
 
-	delete(s.distributions, id)
-	delete(s.invalidations, id)
+	delete(s.Distributions, id)
+	delete(s.Invalidations, id)
 
 	return nil
 }
@@ -231,7 +312,7 @@ func (s *MemoryStorage) CreateInvalidation(_ context.Context, distributionID str
 	defer s.mu.Unlock()
 
 	// Check if distribution exists.
-	if _, exists := s.distributions[distributionID]; !exists {
+	if _, exists := s.Distributions[distributionID]; !exists {
 		return nil, &Error{
 			Code:    errDistributionNotFound,
 			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
@@ -253,11 +334,11 @@ func (s *MemoryStorage) CreateInvalidation(_ context.Context, distributionID str
 	}
 
 	// Store invalidation.
-	if s.invalidations[distributionID] == nil {
-		s.invalidations[distributionID] = make(map[string]*Invalidation)
+	if s.Invalidations[distributionID] == nil {
+		s.Invalidations[distributionID] = make(map[string]*Invalidation)
 	}
 
-	s.invalidations[distributionID][id] = inv
+	s.Invalidations[distributionID][id] = inv
 
 	return inv, nil
 }
@@ -268,14 +349,14 @@ func (s *MemoryStorage) GetInvalidation(_ context.Context, distributionID, inval
 	defer s.mu.RUnlock()
 
 	// Check if distribution exists.
-	if _, exists := s.distributions[distributionID]; !exists {
+	if _, exists := s.Distributions[distributionID]; !exists {
 		return nil, &Error{
 			Code:    errDistributionNotFound,
 			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
 		}
 	}
 
-	invMap, exists := s.invalidations[distributionID]
+	invMap, exists := s.Invalidations[distributionID]
 	if !exists {
 		return nil, &Error{
 			Code:    errNoSuchInvalidation,
@@ -300,7 +381,7 @@ func (s *MemoryStorage) ListInvalidations(_ context.Context, distributionID, mar
 	defer s.mu.RUnlock()
 
 	// Check if distribution exists.
-	if _, exists := s.distributions[distributionID]; !exists {
+	if _, exists := s.Distributions[distributionID]; !exists {
 		return nil, "", &Error{
 			Code:    errDistributionNotFound,
 			Message: fmt.Sprintf("The distribution with id %s does not exist", distributionID),
@@ -311,7 +392,7 @@ func (s *MemoryStorage) ListInvalidations(_ context.Context, distributionID, mar
 		maxItems = 100
 	}
 
-	invMap := s.invalidations[distributionID]
+	invMap := s.Invalidations[distributionID]
 	if invMap == nil {
 		return []*Invalidation{}, "", nil
 	}

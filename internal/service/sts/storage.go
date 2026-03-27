@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -26,6 +29,22 @@ type Storage interface {
 	GetSessionToken(ctx context.Context, input *GetSessionTokenInput) (*Credentials, error)
 	GetFederationToken(ctx context.Context, input *GetFederationTokenInput) (*FederationTokenResult, error)
 }
+
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
 
 // AssumeRoleResult represents the result of an AssumeRole operation.
 type AssumeRoleResult struct {
@@ -49,11 +68,47 @@ type FederationTokenResult struct {
 }
 
 // MemoryStorage implements Storage with in-memory data.
-type MemoryStorage struct{}
+type MemoryStorage struct {
+	dataDir string
+}
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{}
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "sts", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+// STS is stateless, so we return an empty JSON object.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	return []byte("{}"), nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+// STS is stateless, so there is nothing to restore.
+func (m *MemoryStorage) UnmarshalJSON(_ []byte) error {
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "sts", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // AssumeRole generates temporary credentials for an assumed role.

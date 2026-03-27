@@ -2,11 +2,14 @@ package codeconnections
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes for CodeConnections.
@@ -43,25 +46,107 @@ type Storage interface {
 	UntagResource(ctx context.Context, resourceArn string, tagKeys []string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	connections     map[string]*Connection
-	hosts           map[string]*Host
-	repositoryLinks map[string]*RepositoryLink
+	mu              sync.RWMutex               `json:"-"`
+	Connections     map[string]*Connection     `json:"connections"`
+	Hosts           map[string]*Host           `json:"hosts"`
+	RepositoryLinks map[string]*RepositoryLink `json:"repositoryLinks"`
 	accountID       string
 	region          string
+	dataDir         string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		connections:     make(map[string]*Connection),
-		hosts:           make(map[string]*Host),
-		repositoryLinks: make(map[string]*RepositoryLink),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Connections:     make(map[string]*Connection),
+		Hosts:           make(map[string]*Host),
+		RepositoryLinks: make(map[string]*RepositoryLink),
 		accountID:       "000000000000",
 		region:          "us-east-1",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "codeconnections", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Connections == nil {
+		s.Connections = make(map[string]*Connection)
+	}
+
+	if s.Hosts == nil {
+		s.Hosts = make(map[string]*Host)
+	}
+
+	if s.RepositoryLinks == nil {
+		s.RepositoryLinks = make(map[string]*RepositoryLink)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "codeconnections", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateConnection creates a new connection.
@@ -88,7 +173,7 @@ func (s *MemoryStorage) CreateConnection(_ context.Context, name, providerType, 
 		Tags:             tagMap,
 	}
 
-	s.connections[connectionArn] = conn
+	s.Connections[connectionArn] = conn
 
 	return conn, nil
 }
@@ -98,7 +183,7 @@ func (s *MemoryStorage) GetConnection(_ context.Context, connectionArn string) (
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	conn, ok := s.connections[connectionArn]
+	conn, ok := s.Connections[connectionArn]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -114,14 +199,14 @@ func (s *MemoryStorage) DeleteConnection(_ context.Context, connectionArn string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.connections[connectionArn]; !ok {
+	if _, ok := s.Connections[connectionArn]; !ok {
 		return &ServiceError{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Connection %s not found.", connectionArn),
 		}
 	}
 
-	delete(s.connections, connectionArn)
+	delete(s.Connections, connectionArn)
 
 	return nil
 }
@@ -137,7 +222,7 @@ func (s *MemoryStorage) ListConnections(_ context.Context, providerTypeFilter, h
 
 	connections := make([]*Connection, 0)
 
-	for _, conn := range s.connections {
+	for _, conn := range s.Connections {
 		if providerTypeFilter != "" && string(conn.ProviderType) != providerTypeFilter {
 			continue
 		}
@@ -180,7 +265,7 @@ func (s *MemoryStorage) CreateHost(_ context.Context, name, providerType, provid
 		Tags:             tagMap,
 	}
 
-	s.hosts[hostArn] = host
+	s.Hosts[hostArn] = host
 
 	return host, nil
 }
@@ -190,7 +275,7 @@ func (s *MemoryStorage) GetHost(_ context.Context, hostArn string) (*Host, error
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	host, ok := s.hosts[hostArn]
+	host, ok := s.Hosts[hostArn]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -206,7 +291,7 @@ func (s *MemoryStorage) DeleteHost(_ context.Context, hostArn string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.hosts[hostArn]; !ok {
+	if _, ok := s.Hosts[hostArn]; !ok {
 		return &ServiceError{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Host %s not found.", hostArn),
@@ -214,7 +299,7 @@ func (s *MemoryStorage) DeleteHost(_ context.Context, hostArn string) error {
 	}
 
 	// Check if any connection uses this host
-	for _, conn := range s.connections {
+	for _, conn := range s.Connections {
 		if conn.HostArn == hostArn {
 			return &ServiceError{
 				Code:    errConflictException,
@@ -223,7 +308,7 @@ func (s *MemoryStorage) DeleteHost(_ context.Context, hostArn string) error {
 		}
 	}
 
-	delete(s.hosts, hostArn)
+	delete(s.Hosts, hostArn)
 
 	return nil
 }
@@ -239,7 +324,7 @@ func (s *MemoryStorage) ListHosts(_ context.Context, _ string, maxResults int32)
 
 	hosts := make([]*Host, 0)
 
-	for _, host := range s.hosts {
+	for _, host := range s.Hosts {
 		hosts = append(hosts, host)
 
 		if len(hosts) >= int(maxResults) {
@@ -255,7 +340,7 @@ func (s *MemoryStorage) UpdateHost(_ context.Context, hostArn, providerEndpoint 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	host, ok := s.hosts[hostArn]
+	host, ok := s.Hosts[hostArn]
 	if !ok {
 		return &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -280,7 +365,7 @@ func (s *MemoryStorage) CreateRepositoryLink(_ context.Context, connectionArn, o
 	defer s.mu.Unlock()
 
 	// Verify connection exists
-	conn, ok := s.connections[connectionArn]
+	conn, ok := s.Connections[connectionArn]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -308,7 +393,7 @@ func (s *MemoryStorage) CreateRepositoryLink(_ context.Context, connectionArn, o
 		Tags:              tagMap,
 	}
 
-	s.repositoryLinks[repositoryLinkID] = repoLink
+	s.RepositoryLinks[repositoryLinkID] = repoLink
 
 	return repoLink, nil
 }
@@ -318,7 +403,7 @@ func (s *MemoryStorage) GetRepositoryLink(_ context.Context, repositoryLinkID st
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	repoLink, ok := s.repositoryLinks[repositoryLinkID]
+	repoLink, ok := s.RepositoryLinks[repositoryLinkID]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -334,14 +419,14 @@ func (s *MemoryStorage) DeleteRepositoryLink(_ context.Context, repositoryLinkID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.repositoryLinks[repositoryLinkID]; !ok {
+	if _, ok := s.RepositoryLinks[repositoryLinkID]; !ok {
 		return &ServiceError{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("RepositoryLink %s not found.", repositoryLinkID),
 		}
 	}
 
-	delete(s.repositoryLinks, repositoryLinkID)
+	delete(s.RepositoryLinks, repositoryLinkID)
 
 	return nil
 }
@@ -357,7 +442,7 @@ func (s *MemoryStorage) ListRepositoryLinks(_ context.Context, _ string, maxResu
 
 	links := make([]*RepositoryLink, 0)
 
-	for _, link := range s.repositoryLinks {
+	for _, link := range s.RepositoryLinks {
 		links = append(links, link)
 
 		if len(links) >= int(maxResults) {
@@ -373,7 +458,7 @@ func (s *MemoryStorage) UpdateRepositoryLink(_ context.Context, repositoryLinkID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	repoLink, ok := s.repositoryLinks[repositoryLinkID]
+	repoLink, ok := s.RepositoryLinks[repositoryLinkID]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errResourceNotFoundException,
@@ -383,7 +468,7 @@ func (s *MemoryStorage) UpdateRepositoryLink(_ context.Context, repositoryLinkID
 
 	if connectionArn != "" {
 		// Verify new connection exists
-		conn, ok := s.connections[connectionArn]
+		conn, ok := s.Connections[connectionArn]
 		if !ok {
 			return nil, &ServiceError{
 				Code:    errResourceNotFoundException,
@@ -410,13 +495,13 @@ func (s *MemoryStorage) ListTagsForResource(_ context.Context, resourceArn strin
 	var tagMap map[string]string
 
 	// Check connections
-	if conn, ok := s.connections[resourceArn]; ok {
+	if conn, ok := s.Connections[resourceArn]; ok {
 		tagMap = conn.Tags
-	} else if host, ok := s.hosts[resourceArn]; ok {
+	} else if host, ok := s.Hosts[resourceArn]; ok {
 		tagMap = host.Tags
 	} else {
 		// Check repository links by ARN
-		for _, link := range s.repositoryLinks {
+		for _, link := range s.RepositoryLinks {
 			if link.RepositoryLinkArn == resourceArn {
 				tagMap = link.Tags
 
@@ -448,13 +533,13 @@ func (s *MemoryStorage) TagResource(_ context.Context, resourceArn string, tags 
 	var tagMap map[string]string
 
 	// Check connections
-	if conn, ok := s.connections[resourceArn]; ok {
+	if conn, ok := s.Connections[resourceArn]; ok {
 		tagMap = conn.Tags
-	} else if host, ok := s.hosts[resourceArn]; ok {
+	} else if host, ok := s.Hosts[resourceArn]; ok {
 		tagMap = host.Tags
 	} else {
 		// Check repository links by ARN
-		for _, link := range s.repositoryLinks {
+		for _, link := range s.RepositoryLinks {
 			if link.RepositoryLinkArn == resourceArn {
 				tagMap = link.Tags
 
@@ -485,13 +570,13 @@ func (s *MemoryStorage) UntagResource(_ context.Context, resourceArn string, tag
 	var tagMap map[string]string
 
 	// Check connections
-	if conn, ok := s.connections[resourceArn]; ok {
+	if conn, ok := s.Connections[resourceArn]; ok {
 		tagMap = conn.Tags
-	} else if host, ok := s.hosts[resourceArn]; ok {
+	} else if host, ok := s.Hosts[resourceArn]; ok {
 		tagMap = host.Tags
 	} else {
 		// Check repository links by ARN
-		for _, link := range s.repositoryLinks {
+		for _, link := range s.RepositoryLinks {
 			if link.RepositoryLinkArn == resourceArn {
 				tagMap = link.Tags
 

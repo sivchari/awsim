@@ -2,12 +2,15 @@ package forecast
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for Forecast storage operations.
@@ -38,27 +41,113 @@ type Storage interface {
 	DeleteForecast(ctx context.Context, forecastArn string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage using in-memory storage.
 type MemoryStorage struct {
-	mu            sync.RWMutex
-	datasets      map[string]*Dataset
-	datasetGroups map[string]*DatasetGroup
-	predictors    map[string]*Predictor
-	forecasts     map[string]*Forecast
+	mu            sync.RWMutex             `json:"-"`
+	Datasets      map[string]*Dataset      `json:"datasets"`
+	DatasetGroups map[string]*DatasetGroup `json:"datasetGroups"`
+	Predictors    map[string]*Predictor    `json:"predictors"`
+	Forecasts     map[string]*Forecast     `json:"forecasts"`
 	accountID     string
 	region        string
+	dataDir       string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		datasets:      make(map[string]*Dataset),
-		datasetGroups: make(map[string]*DatasetGroup),
-		predictors:    make(map[string]*Predictor),
-		forecasts:     make(map[string]*Forecast),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Datasets:      make(map[string]*Dataset),
+		DatasetGroups: make(map[string]*DatasetGroup),
+		Predictors:    make(map[string]*Predictor),
+		Forecasts:     make(map[string]*Forecast),
 		accountID:     "123456789012",
 		region:        "us-east-1",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "forecast", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Datasets == nil {
+		m.Datasets = make(map[string]*Dataset)
+	}
+
+	if m.DatasetGroups == nil {
+		m.DatasetGroups = make(map[string]*DatasetGroup)
+	}
+
+	if m.Predictors == nil {
+		m.Predictors = make(map[string]*Predictor)
+	}
+
+	if m.Forecasts == nil {
+		m.Forecasts = make(map[string]*Forecast)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "forecast", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // Dataset operations.
@@ -69,7 +158,7 @@ func (m *MemoryStorage) CreateDataset(_ context.Context, req *CreateDatasetInput
 	defer m.mu.Unlock()
 
 	// Check for duplicate name.
-	for _, ds := range m.datasets {
+	for _, ds := range m.Datasets {
 		if ds.DatasetName == req.DatasetName {
 			return "", &Error{
 				Code:    errResourceAlreadyExistsException,
@@ -110,7 +199,7 @@ func (m *MemoryStorage) CreateDataset(_ context.Context, req *CreateDatasetInput
 		EncryptionConfig:     req.EncryptionConfig,
 	}
 
-	m.datasets[datasetArn] = dataset
+	m.Datasets[datasetArn] = dataset
 
 	return datasetArn, nil
 }
@@ -120,7 +209,7 @@ func (m *MemoryStorage) DescribeDataset(_ context.Context, datasetArn string) (*
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	dataset, exists := m.datasets[datasetArn]
+	dataset, exists := m.Datasets[datasetArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -141,9 +230,9 @@ func (m *MemoryStorage) ListDatasets(_ context.Context, maxResults *int32, _ str
 		limit = *maxResults
 	}
 
-	summaries := make([]*DatasetSummary, 0, len(m.datasets))
+	summaries := make([]*DatasetSummary, 0, len(m.Datasets))
 
-	for _, ds := range m.datasets {
+	for _, ds := range m.Datasets {
 		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
@@ -166,7 +255,7 @@ func (m *MemoryStorage) DeleteDataset(_ context.Context, datasetArn string) erro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.datasets[datasetArn]; !exists {
+	if _, exists := m.Datasets[datasetArn]; !exists {
 		return &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Dataset %s not found", datasetArn),
@@ -174,7 +263,7 @@ func (m *MemoryStorage) DeleteDataset(_ context.Context, datasetArn string) erro
 	}
 
 	// Check if dataset is in use by any dataset group.
-	for _, dg := range m.datasetGroups {
+	for _, dg := range m.DatasetGroups {
 		if slices.Contains(dg.DatasetArns, datasetArn) {
 			return &Error{
 				Code:    errResourceInUseException,
@@ -183,7 +272,7 @@ func (m *MemoryStorage) DeleteDataset(_ context.Context, datasetArn string) erro
 		}
 	}
 
-	delete(m.datasets, datasetArn)
+	delete(m.Datasets, datasetArn)
 
 	return nil
 }
@@ -196,7 +285,7 @@ func (m *MemoryStorage) CreateDatasetGroup(_ context.Context, req *CreateDataset
 	defer m.mu.Unlock()
 
 	// Check for duplicate name.
-	for _, dg := range m.datasetGroups {
+	for _, dg := range m.DatasetGroups {
 		if dg.DatasetGroupName == req.DatasetGroupName {
 			return "", &Error{
 				Code:    errResourceAlreadyExistsException,
@@ -215,7 +304,7 @@ func (m *MemoryStorage) CreateDatasetGroup(_ context.Context, req *CreateDataset
 
 	// Validate dataset ARNs exist and have matching domain.
 	for _, dsArn := range req.DatasetArns {
-		ds, exists := m.datasets[dsArn]
+		ds, exists := m.Datasets[dsArn]
 		if !exists {
 			return "", &Error{
 				Code:    errResourceNotFoundException,
@@ -244,7 +333,7 @@ func (m *MemoryStorage) CreateDatasetGroup(_ context.Context, req *CreateDataset
 		LastModificationTime: ToAWSTimestamp(now),
 	}
 
-	m.datasetGroups[datasetGroupArn] = datasetGroup
+	m.DatasetGroups[datasetGroupArn] = datasetGroup
 
 	return datasetGroupArn, nil
 }
@@ -254,7 +343,7 @@ func (m *MemoryStorage) DescribeDatasetGroup(_ context.Context, datasetGroupArn 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	datasetGroup, exists := m.datasetGroups[datasetGroupArn]
+	datasetGroup, exists := m.DatasetGroups[datasetGroupArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -275,9 +364,9 @@ func (m *MemoryStorage) ListDatasetGroups(_ context.Context, maxResults *int32, 
 		limit = *maxResults
 	}
 
-	summaries := make([]*DatasetGroupSummary, 0, len(m.datasetGroups))
+	summaries := make([]*DatasetGroupSummary, 0, len(m.DatasetGroups))
 
-	for _, dg := range m.datasetGroups {
+	for _, dg := range m.DatasetGroups {
 		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
@@ -298,7 +387,7 @@ func (m *MemoryStorage) DeleteDatasetGroup(_ context.Context, datasetGroupArn st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.datasetGroups[datasetGroupArn]; !exists {
+	if _, exists := m.DatasetGroups[datasetGroupArn]; !exists {
 		return &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Dataset group %s not found", datasetGroupArn),
@@ -306,7 +395,7 @@ func (m *MemoryStorage) DeleteDatasetGroup(_ context.Context, datasetGroupArn st
 	}
 
 	// Check if dataset group is in use by any predictor.
-	for _, p := range m.predictors {
+	for _, p := range m.Predictors {
 		if p.InputDataConfig != nil && p.InputDataConfig.DatasetGroupArn == datasetGroupArn {
 			return &Error{
 				Code:    errResourceInUseException,
@@ -315,7 +404,7 @@ func (m *MemoryStorage) DeleteDatasetGroup(_ context.Context, datasetGroupArn st
 		}
 	}
 
-	delete(m.datasetGroups, datasetGroupArn)
+	delete(m.DatasetGroups, datasetGroupArn)
 
 	return nil
 }
@@ -325,7 +414,7 @@ func (m *MemoryStorage) UpdateDatasetGroup(_ context.Context, datasetGroupArn st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	dg, exists := m.datasetGroups[datasetGroupArn]
+	dg, exists := m.DatasetGroups[datasetGroupArn]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFoundException,
@@ -335,7 +424,7 @@ func (m *MemoryStorage) UpdateDatasetGroup(_ context.Context, datasetGroupArn st
 
 	// Validate dataset ARNs exist and have matching domain.
 	for _, dsArn := range datasetArns {
-		ds, dsExists := m.datasets[dsArn]
+		ds, dsExists := m.Datasets[dsArn]
 		if !dsExists {
 			return &Error{
 				Code:    errResourceNotFoundException,
@@ -367,7 +456,7 @@ func (m *MemoryStorage) CreatePredictor(_ context.Context, req *CreatePredictorI
 	defer m.mu.Unlock()
 
 	// Check for duplicate name.
-	for _, p := range m.predictors {
+	for _, p := range m.Predictors {
 		if p.PredictorName == req.PredictorName {
 			return "", &Error{
 				Code:    errResourceAlreadyExistsException,
@@ -384,7 +473,7 @@ func (m *MemoryStorage) CreatePredictor(_ context.Context, req *CreatePredictorI
 		}
 	}
 
-	dg, exists := m.datasetGroups[req.InputDataConfig.DatasetGroupArn]
+	dg, exists := m.DatasetGroups[req.InputDataConfig.DatasetGroupArn]
 	if !exists {
 		return "", &Error{
 			Code:    errResourceNotFoundException,
@@ -424,7 +513,7 @@ func (m *MemoryStorage) CreatePredictor(_ context.Context, req *CreatePredictorI
 		LastModificationTime: ToAWSTimestamp(now),
 	}
 
-	m.predictors[predictorArn] = predictor
+	m.Predictors[predictorArn] = predictor
 
 	return predictorArn, nil
 }
@@ -434,7 +523,7 @@ func (m *MemoryStorage) DescribePredictor(_ context.Context, predictorArn string
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	predictor, exists := m.predictors[predictorArn]
+	predictor, exists := m.Predictors[predictorArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -455,9 +544,9 @@ func (m *MemoryStorage) ListPredictors(_ context.Context, maxResults *int32, _ s
 		limit = *maxResults
 	}
 
-	summaries := make([]*PredictorSummary, 0, len(m.predictors))
+	summaries := make([]*PredictorSummary, 0, len(m.Predictors))
 
-	for _, p := range m.predictors {
+	for _, p := range m.Predictors {
 		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
@@ -491,7 +580,7 @@ func (m *MemoryStorage) DeletePredictor(_ context.Context, predictorArn string) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.predictors[predictorArn]; !exists {
+	if _, exists := m.Predictors[predictorArn]; !exists {
 		return &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Predictor %s not found", predictorArn),
@@ -499,7 +588,7 @@ func (m *MemoryStorage) DeletePredictor(_ context.Context, predictorArn string) 
 	}
 
 	// Check if predictor is in use by any forecast.
-	for _, f := range m.forecasts {
+	for _, f := range m.Forecasts {
 		if f.PredictorArn == predictorArn {
 			return &Error{
 				Code:    errResourceInUseException,
@@ -508,7 +597,7 @@ func (m *MemoryStorage) DeletePredictor(_ context.Context, predictorArn string) 
 		}
 	}
 
-	delete(m.predictors, predictorArn)
+	delete(m.Predictors, predictorArn)
 
 	return nil
 }
@@ -521,7 +610,7 @@ func (m *MemoryStorage) CreateForecast(_ context.Context, req *CreateForecastInp
 	defer m.mu.Unlock()
 
 	// Check for duplicate name.
-	for _, f := range m.forecasts {
+	for _, f := range m.Forecasts {
 		if f.ForecastName == req.ForecastName {
 			return "", &Error{
 				Code:    errResourceAlreadyExistsException,
@@ -531,7 +620,7 @@ func (m *MemoryStorage) CreateForecast(_ context.Context, req *CreateForecastInp
 	}
 
 	// Validate predictor exists.
-	predictor, exists := m.predictors[req.PredictorArn]
+	predictor, exists := m.Predictors[req.PredictorArn]
 	if !exists {
 		return "", &Error{
 			Code:    errResourceNotFoundException,
@@ -564,7 +653,7 @@ func (m *MemoryStorage) CreateForecast(_ context.Context, req *CreateForecastInp
 		LastModificationTime: ToAWSTimestamp(now),
 	}
 
-	m.forecasts[forecastArn] = forecast
+	m.Forecasts[forecastArn] = forecast
 
 	return forecastArn, nil
 }
@@ -574,7 +663,7 @@ func (m *MemoryStorage) DescribeForecast(_ context.Context, forecastArn string) 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	forecast, exists := m.forecasts[forecastArn]
+	forecast, exists := m.Forecasts[forecastArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -595,9 +684,9 @@ func (m *MemoryStorage) ListForecasts(_ context.Context, maxResults *int32, _ st
 		limit = *maxResults
 	}
 
-	summaries := make([]*ForecastSummary, 0, len(m.forecasts))
+	summaries := make([]*ForecastSummary, 0, len(m.Forecasts))
 
-	for _, f := range m.forecasts {
+	for _, f := range m.Forecasts {
 		if int32(len(summaries)) >= limit { //nolint:gosec // G115: len(summaries) is bounded by limit which is int32
 			break
 		}
@@ -627,14 +716,14 @@ func (m *MemoryStorage) DeleteForecast(_ context.Context, forecastArn string) er
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.forecasts[forecastArn]; !exists {
+	if _, exists := m.Forecasts[forecastArn]; !exists {
 		return &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Forecast %s not found", forecastArn),
 		}
 	}
 
-	delete(m.forecasts, forecastArn)
+	delete(m.Forecasts, forecastArn)
 
 	return nil
 }

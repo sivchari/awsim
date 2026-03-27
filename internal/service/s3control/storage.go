@@ -2,8 +2,11 @@ package s3control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage is the interface for S3 Control storage operations.
@@ -20,19 +23,97 @@ type Storage interface {
 	ListAccessPoints(ctx context.Context, accountID, bucket string, maxResults int, nextToken string) ([]*AccessPoint, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for S3 Control.
 type MemoryStorage struct {
-	mu                 sync.RWMutex
-	publicAccessBlocks map[string]*PublicAccessBlockConfiguration // key: accountID
-	accessPoints       map[string]map[string]*AccessPoint         // key: accountID -> name -> AccessPoint
+	mu                 sync.RWMutex                               `json:"-"`
+	PublicAccessBlocks map[string]*PublicAccessBlockConfiguration `json:"publicAccessBlocks"` // key: accountID
+	AccessPoints       map[string]map[string]*AccessPoint         `json:"accessPoints"`       // key: accountID -> name -> AccessPoint
+	dataDir            string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		publicAccessBlocks: make(map[string]*PublicAccessBlockConfiguration),
-		accessPoints:       make(map[string]map[string]*AccessPoint),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		PublicAccessBlocks: make(map[string]*PublicAccessBlockConfiguration),
+		AccessPoints:       make(map[string]map[string]*AccessPoint),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "s3control", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.PublicAccessBlocks == nil {
+		s.PublicAccessBlocks = make(map[string]*PublicAccessBlockConfiguration)
+	}
+
+	if s.AccessPoints == nil {
+		s.AccessPoints = make(map[string]map[string]*AccessPoint)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "s3control", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // GetPublicAccessBlock retrieves the public access block configuration for an account.
@@ -40,7 +121,7 @@ func (s *MemoryStorage) GetPublicAccessBlock(_ context.Context, accountID string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	config, exists := s.publicAccessBlocks[accountID]
+	config, exists := s.PublicAccessBlocks[accountID]
 	if !exists {
 		return nil, &Error{
 			Code:    ErrNoSuchPublicAccessBlockConfiguration,
@@ -56,7 +137,7 @@ func (s *MemoryStorage) PutPublicAccessBlock(_ context.Context, accountID string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.publicAccessBlocks[accountID] = config
+	s.PublicAccessBlocks[accountID] = config
 
 	return nil
 }
@@ -66,7 +147,7 @@ func (s *MemoryStorage) DeletePublicAccessBlock(_ context.Context, accountID str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.publicAccessBlocks, accountID)
+	delete(s.PublicAccessBlocks, accountID)
 
 	return nil
 }
@@ -76,11 +157,11 @@ func (s *MemoryStorage) CreateAccessPoint(_ context.Context, accountID string, a
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.accessPoints[accountID]; !exists {
-		s.accessPoints[accountID] = make(map[string]*AccessPoint)
+	if _, exists := s.AccessPoints[accountID]; !exists {
+		s.AccessPoints[accountID] = make(map[string]*AccessPoint)
 	}
 
-	if _, exists := s.accessPoints[accountID][ap.Name]; exists {
+	if _, exists := s.AccessPoints[accountID][ap.Name]; exists {
 		return nil, &Error{
 			Code:    ErrAccessPointAlreadyOwnedByYou,
 			Message: fmt.Sprintf("Access point %s already exists", ap.Name),
@@ -102,7 +183,7 @@ func (s *MemoryStorage) CreateAccessPoint(_ context.Context, accountID string, a
 		"https": fmt.Sprintf("https://%s-%s.s3-accesspoint.us-east-1.amazonaws.com", ap.Name, accountID),
 	}
 
-	s.accessPoints[accountID][ap.Name] = ap
+	s.AccessPoints[accountID][ap.Name] = ap
 
 	return ap, nil
 }
@@ -112,7 +193,7 @@ func (s *MemoryStorage) GetAccessPoint(_ context.Context, accountID, name string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	accountAPs, exists := s.accessPoints[accountID]
+	accountAPs, exists := s.AccessPoints[accountID]
 	if !exists {
 		return nil, &Error{
 			Code:    ErrNoSuchAccessPoint,
@@ -136,7 +217,7 @@ func (s *MemoryStorage) DeleteAccessPoint(_ context.Context, accountID, name str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	accountAPs, exists := s.accessPoints[accountID]
+	accountAPs, exists := s.AccessPoints[accountID]
 	if !exists {
 		return &Error{
 			Code:    ErrNoSuchAccessPoint,
@@ -165,7 +246,7 @@ func (s *MemoryStorage) ListAccessPoints(_ context.Context, accountID, bucket st
 		maxResults = 1000
 	}
 
-	accountAPs, exists := s.accessPoints[accountID]
+	accountAPs, exists := s.AccessPoints[accountID]
 	if !exists {
 		return []*AccessPoint{}, "", nil
 	}

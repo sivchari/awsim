@@ -3,12 +3,15 @@ package ebs
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -38,25 +41,103 @@ type Storage interface {
 	ListChangedBlocks(ctx context.Context, firstSnapshotID, secondSnapshotID string) (*ListChangedBlocksResponse, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // blockData stores the raw data and checksum for a single snapshot block.
 type blockData struct {
-	data     []byte
-	checksum string
+	Data     []byte `json:"data"`
+	Checksum string `json:"checksum"`
 }
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	snapshots map[string]*Snapshot
-	blocks    map[string]map[int32]*blockData
+	mu        sync.RWMutex                    `json:"-"`
+	Snapshots map[string]*Snapshot            `json:"snapshots"`
+	Blocks    map[string]map[int32]*blockData `json:"blocks"`
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		snapshots: make(map[string]*Snapshot),
-		blocks:    make(map[string]map[int32]*blockData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Snapshots: make(map[string]*Snapshot),
+		Blocks:    make(map[string]map[int32]*blockData),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "ebs", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Snapshots == nil {
+		m.Snapshots = make(map[string]*Snapshot)
+	}
+
+	if m.Blocks == nil {
+		m.Blocks = make(map[string]map[int32]*blockData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "ebs", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // StartSnapshot starts a new snapshot.
@@ -78,7 +159,7 @@ func (m *MemoryStorage) StartSnapshot(_ context.Context, req *StartSnapshotReque
 		VolumeSize:       req.VolumeSize,
 	}
 
-	m.snapshots[snapshotID] = snapshot
+	m.Snapshots[snapshotID] = snapshot
 
 	return snapshot, nil
 }
@@ -88,7 +169,7 @@ func (m *MemoryStorage) CompleteSnapshot(_ context.Context, snapshotID string) (
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	snapshot, exists := m.snapshots[snapshotID]
+	snapshot, exists := m.Snapshots[snapshotID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -106,7 +187,7 @@ func (m *MemoryStorage) ListSnapshotBlocks(_ context.Context, snapshotID string)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	snapshot, exists := m.snapshots[snapshotID]
+	snapshot, exists := m.Snapshots[snapshotID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -114,7 +195,7 @@ func (m *MemoryStorage) ListSnapshotBlocks(_ context.Context, snapshotID string)
 		}
 	}
 
-	snapshotBlocks := m.blocks[snapshotID]
+	snapshotBlocks := m.Blocks[snapshotID]
 
 	indices := make([]int, 0, len(snapshotBlocks))
 
@@ -146,7 +227,7 @@ func (m *MemoryStorage) PutSnapshotBlock(_ context.Context, snapshotID string, b
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	snapshot, exists := m.snapshots[snapshotID]
+	snapshot, exists := m.Snapshots[snapshotID]
 	if !exists {
 		return &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -161,13 +242,13 @@ func (m *MemoryStorage) PutSnapshotBlock(_ context.Context, snapshotID string, b
 		}
 	}
 
-	if m.blocks[snapshotID] == nil {
-		m.blocks[snapshotID] = make(map[int32]*blockData)
+	if m.Blocks[snapshotID] == nil {
+		m.Blocks[snapshotID] = make(map[int32]*blockData)
 	}
 
-	m.blocks[snapshotID][blockIndex] = &blockData{
-		data:     data,
-		checksum: checksum,
+	m.Blocks[snapshotID][blockIndex] = &blockData{
+		Data:     data,
+		Checksum: checksum,
 	}
 
 	return nil
@@ -178,7 +259,7 @@ func (m *MemoryStorage) GetSnapshotBlock(_ context.Context, snapshotID string, b
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	_, exists := m.snapshots[snapshotID]
+	_, exists := m.Snapshots[snapshotID]
 	if !exists {
 		return nil, "", &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -186,7 +267,7 @@ func (m *MemoryStorage) GetSnapshotBlock(_ context.Context, snapshotID string, b
 		}
 	}
 
-	snapshotBlocks, ok := m.blocks[snapshotID]
+	snapshotBlocks, ok := m.Blocks[snapshotID]
 	if !ok {
 		return nil, "", &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -202,7 +283,7 @@ func (m *MemoryStorage) GetSnapshotBlock(_ context.Context, snapshotID string, b
 		}
 	}
 
-	return block.data, block.checksum, nil
+	return block.Data, block.Checksum, nil
 }
 
 // collectSortedIndices merges block indices from two block maps and returns them sorted.
@@ -262,7 +343,7 @@ func (m *MemoryStorage) ListChangedBlocks(_ context.Context, firstSnapshotID, se
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	secondSnapshot, exists := m.snapshots[secondSnapshotID]
+	secondSnapshot, exists := m.Snapshots[secondSnapshotID]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errSnapshotNotFound,
@@ -273,17 +354,17 @@ func (m *MemoryStorage) ListChangedBlocks(_ context.Context, firstSnapshotID, se
 	var firstBlocks map[int32]*blockData
 
 	if firstSnapshotID != "" {
-		if _, ok := m.snapshots[firstSnapshotID]; !ok {
+		if _, ok := m.Snapshots[firstSnapshotID]; !ok {
 			return nil, &ServiceError{
 				Code:    errSnapshotNotFound,
 				Message: fmt.Sprintf("Snapshot %s does not exist.", firstSnapshotID),
 			}
 		}
 
-		firstBlocks = m.blocks[firstSnapshotID]
+		firstBlocks = m.Blocks[firstSnapshotID]
 	}
 
-	secondBlocks := m.blocks[secondSnapshotID]
+	secondBlocks := m.Blocks[secondSnapshotID]
 	indices := collectSortedIndices(firstBlocks, secondBlocks)
 	changedBlocks := buildChangedBlocks(indices, firstBlocks, secondBlocks)
 

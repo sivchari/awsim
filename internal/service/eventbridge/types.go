@@ -24,35 +24,35 @@ const (
 
 // EventBus represents an event bus.
 type EventBus struct {
-	Name         string
-	Arn          string
-	Description  string
-	ManagedBy    string
-	CreationTime time.Time
-	LastModified time.Time
+	Name         string    `json:"name"`
+	Arn          string    `json:"arn"`
+	Description  string    `json:"description,omitempty"`
+	ManagedBy    string    `json:"managedBy,omitempty"`
+	CreationTime time.Time `json:"creationTime"`
+	LastModified time.Time `json:"lastModified"`
 }
 
 // Rule represents an EventBridge rule.
 type Rule struct {
-	Name               string
-	Arn                string
-	EventBusName       string
-	EventPattern       string
-	ScheduleExpression string
-	State              RuleState
-	Description        string
-	RoleArn            string
-	CreationTime       time.Time
-	LastModified       time.Time
+	Name               string    `json:"name"`
+	Arn                string    `json:"arn"`
+	EventBusName       string    `json:"eventBusName"`
+	EventPattern       string    `json:"eventPattern,omitempty"`
+	ScheduleExpression string    `json:"scheduleExpression,omitempty"`
+	State              RuleState `json:"state"`
+	Description        string    `json:"description,omitempty"`
+	RoleArn            string    `json:"roleArn,omitempty"`
+	CreationTime       time.Time `json:"creationTime"`
+	LastModified       time.Time `json:"lastModified"`
 }
 
 // Target represents a rule target.
 type Target struct {
-	ID        string
-	Arn       string
-	RoleArn   string
-	Input     string
-	InputPath string
+	ID        string `json:"id"`
+	Arn       string `json:"arn"`
+	RoleArn   string `json:"roleArn,omitempty"`
+	Input     string `json:"input,omitempty"`
+	InputPath string `json:"inputPath,omitempty"`
 }
 
 // PutEventsRequestEntry represents an entry in PutEvents request.

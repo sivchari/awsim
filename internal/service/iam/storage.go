@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -53,25 +56,111 @@ type Storage interface {
 	ListAccessKeys(ctx context.Context, userName string, maxItems int) ([]AccessKeyMetadata, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu         sync.RWMutex
-	users      map[string]*User
-	roles      map[string]*Role
-	policies   map[string]*Policy               // key is ARN
-	accessKeys map[string]map[string]*AccessKey // userName -> accessKeyID -> AccessKey
+	mu         sync.RWMutex                     `json:"-"`
+	Users      map[string]*User                 `json:"users"`
+	Roles      map[string]*Role                 `json:"roles"`
+	Policies   map[string]*Policy               `json:"policies"`   // key is ARN
+	AccessKeys map[string]map[string]*AccessKey `json:"accessKeys"` // userName -> accessKeyID -> AccessKey
 	accountID  string
+	dataDir    string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		users:      make(map[string]*User),
-		roles:      make(map[string]*Role),
-		policies:   make(map[string]*Policy),
-		accessKeys: make(map[string]map[string]*AccessKey),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Users:      make(map[string]*User),
+		Roles:      make(map[string]*Role),
+		Policies:   make(map[string]*Policy),
+		AccessKeys: make(map[string]map[string]*AccessKey),
 		accountID:  "123456789012",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "iam", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Users == nil {
+		s.Users = make(map[string]*User)
+	}
+
+	if s.Roles == nil {
+		s.Roles = make(map[string]*Role)
+	}
+
+	if s.Policies == nil {
+		s.Policies = make(map[string]*Policy)
+	}
+
+	if s.AccessKeys == nil {
+		s.AccessKeys = make(map[string]map[string]*AccessKey)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "iam", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateUser creates a new IAM user.
@@ -79,7 +168,7 @@ func (s *MemoryStorage) CreateUser(_ context.Context, req *CreateUserRequest) (*
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.users[req.UserName]; exists {
+	if _, exists := s.Users[req.UserName]; exists {
 		return nil, &Error{
 			Code:    errEntityAlreadyExists,
 			Message: fmt.Sprintf("User with name %s already exists.", req.UserName),
@@ -101,8 +190,8 @@ func (s *MemoryStorage) CreateUser(_ context.Context, req *CreateUserRequest) (*
 		AttachedPolicies: []AttachedPolicy{},
 	}
 
-	s.users[req.UserName] = user
-	s.accessKeys[req.UserName] = make(map[string]*AccessKey)
+	s.Users[req.UserName] = user
+	s.AccessKeys[req.UserName] = make(map[string]*AccessKey)
 
 	return user, nil
 }
@@ -112,7 +201,7 @@ func (s *MemoryStorage) DeleteUser(_ context.Context, userName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	user, exists := s.users[userName]
+	user, exists := s.Users[userName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -127,15 +216,15 @@ func (s *MemoryStorage) DeleteUser(_ context.Context, userName string) error {
 		}
 	}
 
-	if keys, ok := s.accessKeys[userName]; ok && len(keys) > 0 {
+	if keys, ok := s.AccessKeys[userName]; ok && len(keys) > 0 {
 		return &Error{
 			Code:    errDeleteConflict,
 			Message: "Cannot delete entity, must delete access keys first.",
 		}
 	}
 
-	delete(s.users, userName)
-	delete(s.accessKeys, userName)
+	delete(s.Users, userName)
+	delete(s.AccessKeys, userName)
 
 	return nil
 }
@@ -145,7 +234,7 @@ func (s *MemoryStorage) GetUser(_ context.Context, userName string) (*User, erro
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	user, exists := s.users[userName]
+	user, exists := s.Users[userName]
 	if !exists {
 		return nil, &Error{
 			Code:    errNoSuchEntity,
@@ -171,7 +260,7 @@ func (s *MemoryStorage) ListUsers(_ context.Context, pathPrefix string, maxItems
 
 	users := make([]User, 0)
 
-	for _, user := range s.users {
+	for _, user := range s.Users {
 		if strings.HasPrefix(user.Path, pathPrefix) {
 			users = append(users, *user)
 			if len(users) >= maxItems {
@@ -188,7 +277,7 @@ func (s *MemoryStorage) CreateRole(_ context.Context, req *CreateRoleRequest) (*
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.roles[req.RoleName]; exists {
+	if _, exists := s.Roles[req.RoleName]; exists {
 		return nil, &Error{
 			Code:    errEntityAlreadyExists,
 			Message: fmt.Sprintf("Role with name %s already exists.", req.RoleName),
@@ -218,7 +307,7 @@ func (s *MemoryStorage) CreateRole(_ context.Context, req *CreateRoleRequest) (*
 		AttachedPolicies:         []AttachedPolicy{},
 	}
 
-	s.roles[req.RoleName] = role
+	s.Roles[req.RoleName] = role
 
 	return role, nil
 }
@@ -228,7 +317,7 @@ func (s *MemoryStorage) DeleteRole(_ context.Context, roleName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	role, exists := s.roles[roleName]
+	role, exists := s.Roles[roleName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -243,7 +332,7 @@ func (s *MemoryStorage) DeleteRole(_ context.Context, roleName string) error {
 		}
 	}
 
-	delete(s.roles, roleName)
+	delete(s.Roles, roleName)
 
 	return nil
 }
@@ -253,7 +342,7 @@ func (s *MemoryStorage) GetRole(_ context.Context, roleName string) (*Role, erro
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	role, exists := s.roles[roleName]
+	role, exists := s.Roles[roleName]
 	if !exists {
 		return nil, &Error{
 			Code:    errNoSuchEntity,
@@ -279,7 +368,7 @@ func (s *MemoryStorage) ListRoles(_ context.Context, pathPrefix string, maxItems
 
 	roles := make([]Role, 0)
 
-	for _, role := range s.roles {
+	for _, role := range s.Roles {
 		if strings.HasPrefix(role.Path, pathPrefix) {
 			roles = append(roles, *role)
 			if len(roles) >= maxItems {
@@ -303,7 +392,7 @@ func (s *MemoryStorage) CreatePolicy(_ context.Context, req *CreatePolicyRequest
 
 	arn := fmt.Sprintf("arn:aws:iam::%s:policy%s%s", s.accountID, path, req.PolicyName)
 
-	if _, exists := s.policies[arn]; exists {
+	if _, exists := s.Policies[arn]; exists {
 		return nil, &Error{
 			Code:    errEntityAlreadyExists,
 			Message: fmt.Sprintf("A policy called %s already exists. Duplicate names are not allowed.", req.PolicyName),
@@ -327,7 +416,7 @@ func (s *MemoryStorage) CreatePolicy(_ context.Context, req *CreatePolicyRequest
 		PolicyDocument:   req.PolicyDocument,
 	}
 
-	s.policies[arn] = policy
+	s.Policies[arn] = policy
 
 	return policy, nil
 }
@@ -337,7 +426,7 @@ func (s *MemoryStorage) DeletePolicy(_ context.Context, policyArn string) error 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -352,7 +441,7 @@ func (s *MemoryStorage) DeletePolicy(_ context.Context, policyArn string) error 
 		}
 	}
 
-	delete(s.policies, policyArn)
+	delete(s.Policies, policyArn)
 
 	return nil
 }
@@ -362,7 +451,7 @@ func (s *MemoryStorage) GetPolicy(_ context.Context, policyArn string) (*Policy,
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNoSuchEntity,
@@ -388,7 +477,7 @@ func (s *MemoryStorage) ListPolicies(_ context.Context, pathPrefix string, maxIt
 
 	policies := make([]Policy, 0)
 
-	for _, policy := range s.policies {
+	for _, policy := range s.Policies {
 		if !strings.HasPrefix(policy.Path, pathPrefix) {
 			continue
 		}
@@ -412,7 +501,7 @@ func (s *MemoryStorage) AttachUserPolicy(_ context.Context, userName, policyArn 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	user, exists := s.users[userName]
+	user, exists := s.Users[userName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -420,7 +509,7 @@ func (s *MemoryStorage) AttachUserPolicy(_ context.Context, userName, policyArn 
 		}
 	}
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -448,7 +537,7 @@ func (s *MemoryStorage) DetachUserPolicy(_ context.Context, userName, policyArn 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	user, exists := s.users[userName]
+	user, exists := s.Users[userName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -456,7 +545,7 @@ func (s *MemoryStorage) DetachUserPolicy(_ context.Context, userName, policyArn 
 		}
 	}
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -492,7 +581,7 @@ func (s *MemoryStorage) AttachRolePolicy(_ context.Context, roleName, policyArn 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	role, exists := s.roles[roleName]
+	role, exists := s.Roles[roleName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -500,7 +589,7 @@ func (s *MemoryStorage) AttachRolePolicy(_ context.Context, roleName, policyArn 
 		}
 	}
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -528,7 +617,7 @@ func (s *MemoryStorage) DetachRolePolicy(_ context.Context, roleName, policyArn 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	role, exists := s.roles[roleName]
+	role, exists := s.Roles[roleName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -536,7 +625,7 @@ func (s *MemoryStorage) DetachRolePolicy(_ context.Context, roleName, policyArn 
 		}
 	}
 
-	policy, exists := s.policies[policyArn]
+	policy, exists := s.Policies[policyArn]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -572,14 +661,14 @@ func (s *MemoryStorage) CreateAccessKey(_ context.Context, userName string) (*Ac
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.users[userName]; !exists {
+	if _, exists := s.Users[userName]; !exists {
 		return nil, &Error{
 			Code:    errNoSuchEntity,
 			Message: fmt.Sprintf("The user with name %s cannot be found.", userName),
 		}
 	}
 
-	keys := s.accessKeys[userName]
+	keys := s.AccessKeys[userName]
 	if len(keys) >= 2 {
 		return nil, &Error{
 			Code:    errLimitExceeded,
@@ -595,7 +684,7 @@ func (s *MemoryStorage) CreateAccessKey(_ context.Context, userName string) (*Ac
 		CreateDate:      time.Now().UTC(),
 	}
 
-	s.accessKeys[userName][accessKey.AccessKeyID] = accessKey
+	s.AccessKeys[userName][accessKey.AccessKeyID] = accessKey
 
 	return accessKey, nil
 }
@@ -605,14 +694,14 @@ func (s *MemoryStorage) DeleteAccessKey(_ context.Context, userName, accessKeyID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.users[userName]; !exists {
+	if _, exists := s.Users[userName]; !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
 			Message: fmt.Sprintf("The user with name %s cannot be found.", userName),
 		}
 	}
 
-	keys, exists := s.accessKeys[userName]
+	keys, exists := s.AccessKeys[userName]
 	if !exists {
 		return &Error{
 			Code:    errNoSuchEntity,
@@ -627,7 +716,7 @@ func (s *MemoryStorage) DeleteAccessKey(_ context.Context, userName, accessKeyID
 		}
 	}
 
-	delete(s.accessKeys[userName], accessKeyID)
+	delete(s.AccessKeys[userName], accessKeyID)
 
 	return nil
 }
@@ -637,7 +726,7 @@ func (s *MemoryStorage) ListAccessKeys(_ context.Context, userName string, maxIt
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, exists := s.users[userName]; !exists {
+	if _, exists := s.Users[userName]; !exists {
 		return nil, &Error{
 			Code:    errNoSuchEntity,
 			Message: fmt.Sprintf("The user with name %s cannot be found.", userName),
@@ -650,7 +739,7 @@ func (s *MemoryStorage) ListAccessKeys(_ context.Context, userName string, maxIt
 
 	keys := make([]AccessKeyMetadata, 0)
 
-	for _, key := range s.accessKeys[userName] {
+	for _, key := range s.AccessKeys[userName] {
 		keys = append(keys, AccessKeyMetadata{
 			AccessKeyID: key.AccessKeyID,
 			Status:      key.Status,

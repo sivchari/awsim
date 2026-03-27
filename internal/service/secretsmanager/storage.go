@@ -2,6 +2,7 @@ package secretsmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -31,19 +34,93 @@ type Storage interface {
 	UpdateSecret(ctx context.Context, req *UpdateSecretRequest) (*Secret, *SecretVersion, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu      sync.RWMutex
-	secrets map[string]*Secret // keyed by name
+	mu      sync.RWMutex       `json:"-"`
+	Secrets map[string]*Secret `json:"secrets"` // keyed by name
 	baseURL string
+	dataDir string
 }
 
 // NewMemoryStorage creates a new in-memory Secrets Manager storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		secrets: make(map[string]*Secret),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Secrets: make(map[string]*Secret),
 		baseURL: baseURL,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "secretsmanager", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Secrets == nil {
+		m.Secrets = make(map[string]*Secret)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "secretsmanager", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateSecret creates a new secret.
@@ -51,7 +128,7 @@ func (m *MemoryStorage) CreateSecret(_ context.Context, req *CreateSecretRequest
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.secrets[req.Name]; exists {
+	if _, exists := m.Secrets[req.Name]; exists {
 		return nil, &SecretError{
 			Code:    "ResourceExistsException",
 			Message: fmt.Sprintf("The operation failed because the secret %s already exists.", req.Name),
@@ -88,7 +165,7 @@ func (m *MemoryStorage) CreateSecret(_ context.Context, req *CreateSecretRequest
 		secret.VersionIDs[versionID] = version
 	}
 
-	m.secrets[req.Name] = secret
+	m.Secrets[req.Name] = secret
 
 	return secret, nil
 }
@@ -230,7 +307,7 @@ func (m *MemoryStorage) DeleteSecret(_ context.Context, secretID string, recover
 
 	if forceDelete {
 		// Immediately delete.
-		delete(m.secrets, secret.Name)
+		delete(m.Secrets, secret.Name)
 		secret.DeletedDate = &now
 
 		return secret, nil
@@ -258,9 +335,9 @@ func (m *MemoryStorage) ListSecrets(_ context.Context, maxResults int, nextToken
 	}
 
 	// Collect all secrets.
-	allSecrets := make([]*Secret, 0, len(m.secrets))
+	allSecrets := make([]*Secret, 0, len(m.Secrets))
 
-	for _, secret := range m.secrets {
+	for _, secret := range m.Secrets {
 		// Skip deleted secrets unless requested.
 		if secret.DeletedDate != nil && !includePlannedDeletion {
 			continue
@@ -400,12 +477,12 @@ func (m *MemoryStorage) rotateVersionStages(secret *Secret) {
 // findSecret finds a secret by name or ARN.
 func (m *MemoryStorage) findSecret(secretID string) *Secret {
 	// Try by name first.
-	if secret, exists := m.secrets[secretID]; exists {
+	if secret, exists := m.Secrets[secretID]; exists {
 		return secret
 	}
 
 	// Try by ARN.
-	for _, secret := range m.secrets {
+	for _, secret := range m.Secrets {
 		if secret.ARN == secretID {
 			return secret
 		}

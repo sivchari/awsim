@@ -2,11 +2,14 @@ package elasticbeanstalk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -40,19 +43,97 @@ type Storage interface {
 	TerminateEnvironment(ctx context.Context, envName string) (*EnvironmentDescription, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	applications map[string]*ApplicationDescription
-	environments map[string]*EnvironmentDescription
+	mu           sync.RWMutex                       `json:"-"`
+	Applications map[string]*ApplicationDescription `json:"applications"`
+	Environments map[string]*EnvironmentDescription `json:"environments"`
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		applications: make(map[string]*ApplicationDescription),
-		environments: make(map[string]*EnvironmentDescription),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Applications: make(map[string]*ApplicationDescription),
+		Environments: make(map[string]*EnvironmentDescription),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "elasticbeanstalk", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Applications == nil {
+		m.Applications = make(map[string]*ApplicationDescription)
+	}
+
+	if m.Environments == nil {
+		m.Environments = make(map[string]*EnvironmentDescription)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "elasticbeanstalk", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateApplication creates a new application.
@@ -60,7 +141,7 @@ func (m *MemoryStorage) CreateApplication(_ context.Context, req *CreateApplicat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.applications[req.ApplicationName]; exists {
+	if _, exists := m.Applications[req.ApplicationName]; exists {
 		return nil, &ServiceError{
 			Code:    errAppExists,
 			Message: fmt.Sprintf("Application %s already exists.", req.ApplicationName),
@@ -76,7 +157,7 @@ func (m *MemoryStorage) CreateApplication(_ context.Context, req *CreateApplicat
 		ApplicationArn:  fmt.Sprintf("arn:aws:elasticbeanstalk:%s:%s:application/%s", defaultRegion, defaultAccountID, req.ApplicationName),
 	}
 
-	m.applications[req.ApplicationName] = app
+	m.Applications[req.ApplicationName] = app
 
 	return app, nil
 }
@@ -90,7 +171,7 @@ func (m *MemoryStorage) DescribeApplications(_ context.Context, names []string) 
 		apps := make([]ApplicationDescription, 0, len(names))
 
 		for _, name := range names {
-			if app, exists := m.applications[name]; exists {
+			if app, exists := m.Applications[name]; exists {
 				apps = append(apps, *app)
 			}
 		}
@@ -98,8 +179,8 @@ func (m *MemoryStorage) DescribeApplications(_ context.Context, names []string) 
 		return apps, nil
 	}
 
-	apps := make([]ApplicationDescription, 0, len(m.applications))
-	for _, app := range m.applications {
+	apps := make([]ApplicationDescription, 0, len(m.Applications))
+	for _, app := range m.Applications {
 		apps = append(apps, *app)
 	}
 
@@ -111,7 +192,7 @@ func (m *MemoryStorage) UpdateApplication(_ context.Context, req *UpdateApplicat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	app, exists := m.applications[req.ApplicationName]
+	app, exists := m.Applications[req.ApplicationName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errAppNotFound,
@@ -133,14 +214,14 @@ func (m *MemoryStorage) DeleteApplication(_ context.Context, name string) error 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.applications[name]; !exists {
+	if _, exists := m.Applications[name]; !exists {
 		return &ServiceError{
 			Code:    errAppNotFound,
 			Message: fmt.Sprintf("No Application named '%s' found.", name),
 		}
 	}
 
-	delete(m.applications, name)
+	delete(m.Applications, name)
 
 	return nil
 }
@@ -150,7 +231,7 @@ func (m *MemoryStorage) CreateEnvironment(_ context.Context, req *CreateEnvironm
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.environments[req.EnvironmentName]; exists {
+	if _, exists := m.Environments[req.EnvironmentName]; exists {
 		return nil, &ServiceError{
 			Code:    errEnvNotFound,
 			Message: fmt.Sprintf("Environment %s already exists.", req.EnvironmentName),
@@ -172,7 +253,7 @@ func (m *MemoryStorage) CreateEnvironment(_ context.Context, req *CreateEnvironm
 		EnvironmentArn:    fmt.Sprintf("arn:aws:elasticbeanstalk:%s:%s:environment/%s/%s", defaultRegion, defaultAccountID, req.ApplicationName, req.EnvironmentName),
 	}
 
-	m.environments[req.EnvironmentName] = env
+	m.Environments[req.EnvironmentName] = env
 
 	return env, nil
 }
@@ -186,7 +267,7 @@ func (m *MemoryStorage) DescribeEnvironments(_ context.Context, appName string, 
 		envs := make([]EnvironmentDescription, 0, len(envNames))
 
 		for _, name := range envNames {
-			if env, exists := m.environments[name]; exists {
+			if env, exists := m.Environments[name]; exists {
 				if appName == "" || env.ApplicationName == appName {
 					envs = append(envs, *env)
 				}
@@ -196,9 +277,9 @@ func (m *MemoryStorage) DescribeEnvironments(_ context.Context, appName string, 
 		return envs, nil
 	}
 
-	envs := make([]EnvironmentDescription, 0, len(m.environments))
+	envs := make([]EnvironmentDescription, 0, len(m.Environments))
 
-	for _, env := range m.environments {
+	for _, env := range m.Environments {
 		if appName == "" || env.ApplicationName == appName {
 			envs = append(envs, *env)
 		}
@@ -212,7 +293,7 @@ func (m *MemoryStorage) TerminateEnvironment(_ context.Context, envName string) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	env, exists := m.environments[envName]
+	env, exists := m.Environments[envName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errEnvNotFound,
@@ -222,7 +303,7 @@ func (m *MemoryStorage) TerminateEnvironment(_ context.Context, envName string) 
 
 	env.Status = "Terminated"
 
-	delete(m.environments, envName)
+	delete(m.Environments, envName)
 
 	return env, nil
 }

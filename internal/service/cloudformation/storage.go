@@ -3,11 +3,14 @@ package cloudformation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for CloudFormation storage operations.
@@ -22,17 +25,91 @@ type Storage interface {
 	ValidateTemplate(ctx context.Context, templateBody string) (*TemplateValidationResult, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu     sync.RWMutex
-	stacks map[string]*Stack // key: stackName
+	mu      sync.RWMutex      `json:"-"`
+	Stacks  map[string]*Stack `json:"stacks"` // key: stackName
+	dataDir string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		stacks: make(map[string]*Stack),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Stacks: make(map[string]*Stack),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "cloudformation", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Stacks == nil {
+		m.Stacks = make(map[string]*Stack)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "cloudformation", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateStack creates a new stack.
@@ -44,7 +121,7 @@ func (m *MemoryStorage) CreateStack(_ context.Context, req *CreateStackRequest) 
 		return nil, &Error{Code: "ValidationError", Message: "StackName is required"}
 	}
 
-	if _, exists := m.stacks[req.StackName]; exists {
+	if _, exists := m.Stacks[req.StackName]; exists {
 		return nil, &Error{Code: "AlreadyExistsException", Message: "Stack already exists"}
 	}
 
@@ -69,7 +146,7 @@ func (m *MemoryStorage) CreateStack(_ context.Context, req *CreateStackRequest) 
 		Resources:       resources,
 	}
 
-	m.stacks[req.StackName] = stack
+	m.Stacks[req.StackName] = stack
 
 	return stack, nil
 }
@@ -79,7 +156,7 @@ func (m *MemoryStorage) DeleteStack(_ context.Context, stackName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	stack, exists := m.stacks[stackName]
+	stack, exists := m.Stacks[stackName]
 	if !exists {
 		return &Error{Code: "StackNotFoundException", Message: "Stack not found"}
 	}
@@ -89,7 +166,7 @@ func (m *MemoryStorage) DeleteStack(_ context.Context, stackName string) error {
 	stack.DeletionTime = time.Now()
 
 	// Keep the stack for ListStacks but prevent DescribeStacks from returning it.
-	delete(m.stacks, stackName)
+	delete(m.Stacks, stackName)
 
 	return nil
 }
@@ -100,7 +177,7 @@ func (m *MemoryStorage) DescribeStacks(_ context.Context, stackName string) ([]*
 	defer m.mu.RUnlock()
 
 	if stackName != "" {
-		stack, exists := m.stacks[stackName]
+		stack, exists := m.Stacks[stackName]
 		if !exists {
 			return nil, &Error{Code: "StackNotFoundException", Message: "Stack not found"}
 		}
@@ -109,8 +186,8 @@ func (m *MemoryStorage) DescribeStacks(_ context.Context, stackName string) ([]*
 	}
 
 	// Return all stacks.
-	result := make([]*Stack, 0, len(m.stacks))
-	for _, stack := range m.stacks {
+	result := make([]*Stack, 0, len(m.Stacks))
+	for _, stack := range m.Stacks {
 		result = append(result, stack)
 	}
 
@@ -122,9 +199,9 @@ func (m *MemoryStorage) ListStacks(_ context.Context, statusFilter []string) ([]
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*Stack, 0, len(m.stacks))
+	result := make([]*Stack, 0, len(m.Stacks))
 
-	for _, stack := range m.stacks {
+	for _, stack := range m.Stacks {
 		if len(statusFilter) > 0 {
 			if !containsStatus(statusFilter, stack.StackStatus) {
 				continue
@@ -142,7 +219,7 @@ func (m *MemoryStorage) UpdateStack(_ context.Context, req *UpdateStackRequest) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	stack, exists := m.stacks[req.StackName]
+	stack, exists := m.Stacks[req.StackName]
 	if !exists {
 		return nil, &Error{Code: "StackNotFoundException", Message: "Stack not found"}
 	}
@@ -171,7 +248,7 @@ func (m *MemoryStorage) DescribeStackResources(_ context.Context, stackName, log
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	stack, exists := m.stacks[stackName]
+	stack, exists := m.Stacks[stackName]
 	if !exists {
 		return nil, &Error{Code: "StackNotFoundException", Message: "Stack not found"}
 	}
@@ -199,7 +276,7 @@ func (m *MemoryStorage) GetTemplate(_ context.Context, stackName string) (string
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	stack, exists := m.stacks[stackName]
+	stack, exists := m.Stacks[stackName]
 	if !exists {
 		return "", &Error{Code: "StackNotFoundException", Message: "Stack not found"}
 	}

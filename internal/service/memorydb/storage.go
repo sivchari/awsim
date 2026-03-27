@@ -2,8 +2,11 @@ package memorydb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -48,21 +51,103 @@ type Storage interface {
 	DeleteACL(ctx context.Context, aclName string) (*ACL, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu       sync.RWMutex
-	clusters map[string]*Cluster
-	users    map[string]*User
-	acls     map[string]*ACL
+	mu       sync.RWMutex        `json:"-"`
+	Clusters map[string]*Cluster `json:"clusters"`
+	Users    map[string]*User    `json:"users"`
+	Acls     map[string]*ACL     `json:"acls"`
+	dataDir  string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		clusters: make(map[string]*Cluster),
-		users:    make(map[string]*User),
-		acls:     make(map[string]*ACL),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Clusters: make(map[string]*Cluster),
+		Users:    make(map[string]*User),
+		Acls:     make(map[string]*ACL),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "memorydb", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Clusters == nil {
+		m.Clusters = make(map[string]*Cluster)
+	}
+
+	if m.Users == nil {
+		m.Users = make(map[string]*User)
+	}
+
+	if m.Acls == nil {
+		m.Acls = make(map[string]*ACL)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "memorydb", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // buildClusterBase creates a Cluster with core fields from a CreateClusterRequest.
@@ -150,7 +235,7 @@ func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.clusters[req.ClusterName]; exists {
+	if _, exists := m.Clusters[req.ClusterName]; exists {
 		return nil, &ServiceError{
 			Code:    errClusterExists,
 			Message: fmt.Sprintf("Cluster %s already exists", req.ClusterName),
@@ -158,7 +243,7 @@ func (m *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	}
 
 	cluster := buildCluster(req)
-	m.clusters[req.ClusterName] = cluster
+	m.Clusters[req.ClusterName] = cluster
 
 	return cluster, nil
 }
@@ -169,7 +254,7 @@ func (m *MemoryStorage) DescribeClusters(_ context.Context, clusterName string) 
 	defer m.mu.RUnlock()
 
 	if clusterName != "" {
-		cluster, exists := m.clusters[clusterName]
+		cluster, exists := m.Clusters[clusterName]
 		if !exists {
 			return nil, &ServiceError{
 				Code:    errClusterNotFound,
@@ -180,8 +265,8 @@ func (m *MemoryStorage) DescribeClusters(_ context.Context, clusterName string) 
 		return []Cluster{*cluster}, nil
 	}
 
-	clusters := make([]Cluster, 0, len(m.clusters))
-	for _, c := range m.clusters {
+	clusters := make([]Cluster, 0, len(m.Clusters))
+	for _, c := range m.Clusters {
 		clusters = append(clusters, *c)
 	}
 
@@ -193,7 +278,7 @@ func (m *MemoryStorage) UpdateCluster(_ context.Context, req *UpdateClusterReque
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.clusters[req.ClusterName]
+	cluster, exists := m.Clusters[req.ClusterName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errClusterNotFound,
@@ -257,7 +342,7 @@ func (m *MemoryStorage) DeleteCluster(_ context.Context, clusterName string) (*C
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.clusters[clusterName]
+	cluster, exists := m.Clusters[clusterName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errClusterNotFound,
@@ -267,7 +352,7 @@ func (m *MemoryStorage) DeleteCluster(_ context.Context, clusterName string) (*C
 
 	cluster.Status = statusDeleting
 
-	delete(m.clusters, clusterName)
+	delete(m.Clusters, clusterName)
 
 	return cluster, nil
 }
@@ -277,7 +362,7 @@ func (m *MemoryStorage) CreateUser(_ context.Context, req *CreateUserRequest) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.users[req.UserName]; exists {
+	if _, exists := m.Users[req.UserName]; exists {
 		return nil, &ServiceError{
 			Code:    errUserExists,
 			Message: fmt.Sprintf("User %s already exists", req.UserName),
@@ -307,7 +392,7 @@ func (m *MemoryStorage) CreateUser(_ context.Context, req *CreateUserRequest) (*
 		ACLNames: []string{},
 	}
 
-	m.users[req.UserName] = user
+	m.Users[req.UserName] = user
 
 	return user, nil
 }
@@ -318,7 +403,7 @@ func (m *MemoryStorage) DescribeUsers(_ context.Context, userName string) ([]Use
 	defer m.mu.RUnlock()
 
 	if userName != "" {
-		user, exists := m.users[userName]
+		user, exists := m.Users[userName]
 		if !exists {
 			return nil, &ServiceError{
 				Code:    errUserNotFound,
@@ -329,8 +414,8 @@ func (m *MemoryStorage) DescribeUsers(_ context.Context, userName string) ([]Use
 		return []User{*user}, nil
 	}
 
-	users := make([]User, 0, len(m.users))
-	for _, u := range m.users {
+	users := make([]User, 0, len(m.Users))
+	for _, u := range m.Users {
 		users = append(users, *u)
 	}
 
@@ -342,7 +427,7 @@ func (m *MemoryStorage) DeleteUser(_ context.Context, userName string) (*User, e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	user, exists := m.users[userName]
+	user, exists := m.Users[userName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errUserNotFound,
@@ -352,7 +437,7 @@ func (m *MemoryStorage) DeleteUser(_ context.Context, userName string) (*User, e
 
 	user.Status = statusDeleting
 
-	delete(m.users, userName)
+	delete(m.Users, userName)
 
 	return user, nil
 }
@@ -362,7 +447,7 @@ func (m *MemoryStorage) CreateACL(_ context.Context, req *CreateACLRequest) (*AC
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.acls[req.ACLName]; exists {
+	if _, exists := m.Acls[req.ACLName]; exists {
 		return nil, &ServiceError{
 			Code:    errACLExists,
 			Message: fmt.Sprintf("ACL %s already exists", req.ACLName),
@@ -383,7 +468,7 @@ func (m *MemoryStorage) CreateACL(_ context.Context, req *CreateACLRequest) (*AC
 		UserNames:            userNames,
 	}
 
-	m.acls[req.ACLName] = acl
+	m.Acls[req.ACLName] = acl
 
 	return acl, nil
 }
@@ -394,7 +479,7 @@ func (m *MemoryStorage) DescribeACLs(_ context.Context, aclName string) ([]ACL, 
 	defer m.mu.RUnlock()
 
 	if aclName != "" {
-		acl, exists := m.acls[aclName]
+		acl, exists := m.Acls[aclName]
 		if !exists {
 			return nil, &ServiceError{
 				Code:    errACLNotFound,
@@ -405,8 +490,8 @@ func (m *MemoryStorage) DescribeACLs(_ context.Context, aclName string) ([]ACL, 
 		return []ACL{*acl}, nil
 	}
 
-	acls := make([]ACL, 0, len(m.acls))
-	for _, a := range m.acls {
+	acls := make([]ACL, 0, len(m.Acls))
+	for _, a := range m.Acls {
 		acls = append(acls, *a)
 	}
 
@@ -418,7 +503,7 @@ func (m *MemoryStorage) DeleteACL(_ context.Context, aclName string) (*ACL, erro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	acl, exists := m.acls[aclName]
+	acl, exists := m.Acls[aclName]
 	if !exists {
 		return nil, &ServiceError{
 			Code:    errACLNotFound,
@@ -428,7 +513,7 @@ func (m *MemoryStorage) DeleteACL(_ context.Context, aclName string) (*ACL, erro
 
 	acl.Status = statusDeleting
 
-	delete(m.acls, aclName)
+	delete(m.Acls, aclName)
 
 	return acl, nil
 }

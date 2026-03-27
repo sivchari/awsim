@@ -2,12 +2,15 @@ package securitylake
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -45,27 +48,113 @@ type Storage interface {
 	ListTagsForResource(ctx context.Context, resourceARN string) ([]*Tag, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for Security Lake.
 type MemoryStorage struct {
-	mu          sync.RWMutex
-	dataLakes   map[string]*DataLake
-	subscribers map[string]*Subscriber
-	logSources  map[string]*LogSource
-	tags        map[string][]*Tag
+	mu          sync.RWMutex           `json:"-"`
+	DataLakes   map[string]*DataLake   `json:"dataLakes"`
+	Subscribers map[string]*Subscriber `json:"subscribers"`
+	LogSources  map[string]*LogSource  `json:"logSources"`
+	Tags        map[string][]*Tag      `json:"tags"`
 	accountID   string
 	region      string
+	dataDir     string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		dataLakes:   make(map[string]*DataLake),
-		subscribers: make(map[string]*Subscriber),
-		logSources:  make(map[string]*LogSource),
-		tags:        make(map[string][]*Tag),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		DataLakes:   make(map[string]*DataLake),
+		Subscribers: make(map[string]*Subscriber),
+		LogSources:  make(map[string]*LogSource),
+		Tags:        make(map[string][]*Tag),
 		accountID:   "123456789012",
 		region:      "us-east-1",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "securitylake", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.DataLakes == nil {
+		s.DataLakes = make(map[string]*DataLake)
+	}
+
+	if s.Subscribers == nil {
+		s.Subscribers = make(map[string]*Subscriber)
+	}
+
+	if s.LogSources == nil {
+		s.LogSources = make(map[string]*LogSource)
+	}
+
+	if s.Tags == nil {
+		s.Tags = make(map[string][]*Tag)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "securitylake", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateDataLake creates new data lakes.
@@ -82,7 +171,7 @@ func (s *MemoryStorage) CreateDataLake(_ context.Context, req *CreateDataLakeReq
 		}
 
 		// Check if data lake already exists for this region
-		if _, exists := s.dataLakes[region]; exists {
+		if _, exists := s.DataLakes[region]; exists {
 			return nil, &Error{
 				Code:    errConflict,
 				Message: fmt.Sprintf("Data lake already exists in region %s", region),
@@ -102,10 +191,10 @@ func (s *MemoryStorage) CreateDataLake(_ context.Context, req *CreateDataLakeReq
 			S3BucketARN:              fmt.Sprintf("arn:aws:s3:::%s", bucketName),
 		}
 
-		s.dataLakes[region] = dataLake
+		s.DataLakes[region] = dataLake
 
 		if len(req.Tags) > 0 {
-			s.tags[arn] = req.Tags
+			s.Tags[arn] = req.Tags
 		}
 
 		dataLakes = append(dataLakes, dataLake)
@@ -120,7 +209,7 @@ func (s *MemoryStorage) DeleteDataLake(_ context.Context, regions []string) erro
 	defer s.mu.Unlock()
 
 	for _, region := range regions {
-		dataLake, exists := s.dataLakes[region]
+		dataLake, exists := s.DataLakes[region]
 		if !exists {
 			return &Error{
 				Code:    errResourceNotFound,
@@ -128,8 +217,8 @@ func (s *MemoryStorage) DeleteDataLake(_ context.Context, regions []string) erro
 			}
 		}
 
-		delete(s.tags, dataLake.ARN)
-		delete(s.dataLakes, region)
+		delete(s.Tags, dataLake.ARN)
+		delete(s.DataLakes, region)
 	}
 
 	return nil
@@ -143,12 +232,12 @@ func (s *MemoryStorage) ListDataLakes(_ context.Context, regions []string) ([]*D
 	dataLakes := make([]*DataLake, 0)
 
 	if len(regions) == 0 {
-		for _, dataLake := range s.dataLakes {
+		for _, dataLake := range s.DataLakes {
 			dataLakes = append(dataLakes, dataLake)
 		}
 	} else {
 		for _, region := range regions {
-			if dataLake, exists := s.dataLakes[region]; exists {
+			if dataLake, exists := s.DataLakes[region]; exists {
 				dataLakes = append(dataLakes, dataLake)
 			}
 		}
@@ -170,7 +259,7 @@ func (s *MemoryStorage) UpdateDataLake(_ context.Context, req *UpdateDataLakeReq
 			region = s.region
 		}
 
-		dataLake, exists := s.dataLakes[region]
+		dataLake, exists := s.DataLakes[region]
 		if !exists {
 			return nil, &Error{
 				Code:    errResourceNotFound,
@@ -202,7 +291,7 @@ func (s *MemoryStorage) CreateSubscriber(_ context.Context, req *CreateSubscribe
 	defer s.mu.Unlock()
 
 	// Check for duplicate subscriber name
-	for _, sub := range s.subscribers {
+	for _, sub := range s.Subscribers {
 		if sub.SubscriberName == req.SubscriberName {
 			return nil, &Error{
 				Code:    errConflict,
@@ -228,10 +317,10 @@ func (s *MemoryStorage) CreateSubscriber(_ context.Context, req *CreateSubscribe
 		UpdatedAt:             now,
 	}
 
-	s.subscribers[subscriberID] = subscriber
+	s.Subscribers[subscriberID] = subscriber
 
 	if len(req.Tags) > 0 {
-		s.tags[arn] = req.Tags
+		s.Tags[arn] = req.Tags
 	}
 
 	return subscriber, nil
@@ -242,7 +331,7 @@ func (s *MemoryStorage) GetSubscriber(_ context.Context, subscriberID string) (*
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	subscriber, exists := s.subscribers[subscriberID]
+	subscriber, exists := s.Subscribers[subscriberID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -258,7 +347,7 @@ func (s *MemoryStorage) DeleteSubscriber(_ context.Context, subscriberID string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	subscriber, exists := s.subscribers[subscriberID]
+	subscriber, exists := s.Subscribers[subscriberID]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -266,8 +355,8 @@ func (s *MemoryStorage) DeleteSubscriber(_ context.Context, subscriberID string)
 		}
 	}
 
-	delete(s.tags, subscriber.SubscriberARN)
-	delete(s.subscribers, subscriberID)
+	delete(s.Tags, subscriber.SubscriberARN)
+	delete(s.Subscribers, subscriberID)
 
 	return nil
 }
@@ -277,7 +366,7 @@ func (s *MemoryStorage) UpdateSubscriber(_ context.Context, req *UpdateSubscribe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	subscriber, exists := s.subscribers[req.SubscriberID]
+	subscriber, exists := s.Subscribers[req.SubscriberID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -315,9 +404,9 @@ func (s *MemoryStorage) ListSubscribers(_ context.Context, maxResults int, _ str
 		maxResults = 10
 	}
 
-	subscribers := make([]*Subscriber, 0, len(s.subscribers))
+	subscribers := make([]*Subscriber, 0, len(s.Subscribers))
 
-	for _, subscriber := range s.subscribers {
+	for _, subscriber := range s.Subscribers {
 		subscribers = append(subscribers, subscriber)
 
 		if len(subscribers) >= maxResults {
@@ -352,7 +441,7 @@ func (s *MemoryStorage) CreateAwsLogSource(_ context.Context, req *CreateAwsLogS
 				},
 			}
 
-			s.logSources[key] = logSource
+			s.LogSources[key] = logSource
 		}
 	}
 
@@ -370,7 +459,7 @@ func (s *MemoryStorage) DeleteAwsLogSource(_ context.Context, req *DeleteAwsLogS
 		for _, region := range source.Regions {
 			key := fmt.Sprintf("%s-%s-%s", source.SourceName, region, s.accountID)
 
-			delete(s.logSources, key)
+			delete(s.LogSources, key)
 		}
 	}
 
@@ -387,9 +476,9 @@ func (s *MemoryStorage) ListLogSources(_ context.Context, req *ListLogSourcesReq
 		maxResults = 10
 	}
 
-	sources := make([]*LogSource, 0, len(s.logSources))
+	sources := make([]*LogSource, 0, len(s.LogSources))
 
-	for _, source := range s.logSources {
+	for _, source := range s.LogSources {
 		// Filter by regions if specified
 		if len(req.Regions) > 0 && !slices.Contains(req.Regions, source.Region) {
 			continue
@@ -415,7 +504,7 @@ func (s *MemoryStorage) TagResource(_ context.Context, resourceARN string, tags 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	existingTags := s.tags[resourceARN]
+	existingTags := s.Tags[resourceARN]
 	tagMap := make(map[string]string)
 
 	for _, tag := range existingTags {
@@ -432,7 +521,7 @@ func (s *MemoryStorage) TagResource(_ context.Context, resourceARN string, tags 
 		newTags = append(newTags, &Tag{Key: k, Value: v})
 	}
 
-	s.tags[resourceARN] = newTags
+	s.Tags[resourceARN] = newTags
 
 	return nil
 }
@@ -442,7 +531,7 @@ func (s *MemoryStorage) UntagResource(_ context.Context, resourceARN string, tag
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	existingTags := s.tags[resourceARN]
+	existingTags := s.Tags[resourceARN]
 	keySet := make(map[string]bool)
 
 	for _, key := range tagKeys {
@@ -457,7 +546,7 @@ func (s *MemoryStorage) UntagResource(_ context.Context, resourceARN string, tag
 		}
 	}
 
-	s.tags[resourceARN] = newTags
+	s.Tags[resourceARN] = newTags
 
 	return nil
 }
@@ -467,7 +556,7 @@ func (s *MemoryStorage) ListTagsForResource(_ context.Context, resourceARN strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tags := s.tags[resourceARN]
+	tags := s.Tags[resourceARN]
 	if tags == nil {
 		tags = make([]*Tag, 0)
 	}

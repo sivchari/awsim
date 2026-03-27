@@ -1,13 +1,27 @@
 package ds
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 
 	"github.com/sivchari/kumo/internal/service"
 )
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	svc := NewService()
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	svc := &Service{
+		storage: NewMemoryStorage(opts...),
+	}
+
 	service.Register(svc)
 }
 
@@ -64,3 +78,14 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 
 // JSONProtocol is a marker method for JSON protocol services.
 func (s *Service) JSONProtocol() {}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

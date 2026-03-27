@@ -2,12 +2,15 @@ package cloudwatch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // defaultAccountID is the default AWS account ID used in the emulator.
@@ -24,36 +27,148 @@ type Storage interface {
 	DescribeAlarms(ctx context.Context, req *DescribeAlarmsRequest) (*DescribeAlarmsResult, error)
 }
 
-// metricKey uniquely identifies a metric.
-type metricKey struct {
-	namespace  string
-	metricName string
-	dimensions string // sorted dimension string for consistency
+// MetricKey uniquely identifies a metric.
+type MetricKey struct {
+	Namespace  string `json:"namespace"`
+	MetricName string `json:"metricName"`
+	Dimensions string `json:"dimensions"` // sorted dimension string for consistency
 }
 
-// storedMetric holds metric data in memory.
-type storedMetric struct {
-	namespace  string
-	metricName string
-	dimensions []Dimension
-	datapoints []MetricDatapoint
+// StoredMetric holds metric data in memory.
+type StoredMetric struct {
+	Namespace  string            `json:"namespace"`
+	MetricName string            `json:"metricName"`
+	Dimensions []Dimension       `json:"dimensions"`
+	Datapoints []MetricDatapoint `json:"datapoints"`
 }
+
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu      sync.RWMutex
-	metrics map[metricKey]*storedMetric
-	alarms  map[string]*Alarm
+	mu      sync.RWMutex                `json:"-"`
+	Metrics map[MetricKey]*StoredMetric `json:"metrics"`
+	Alarms  map[string]*Alarm           `json:"alarms"`
 	baseURL string
+	dataDir string
 }
 
 // NewMemoryStorage creates a new in-memory CloudWatch storage.
-func NewMemoryStorage(baseURL string) *MemoryStorage {
-	return &MemoryStorage{
-		metrics: make(map[metricKey]*storedMetric),
-		alarms:  make(map[string]*Alarm),
+func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Metrics: make(map[MetricKey]*StoredMetric),
+		Alarms:  make(map[string]*Alarm),
 		baseURL: baseURL,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "monitoring", s)
+	}
+
+	return s
+}
+
+// metricKeyToString converts a MetricKey to a string for JSON map keys.
+func metricKeyToString(k MetricKey) string {
+	return k.Namespace + "|" + k.MetricName + "|" + k.Dimensions
+}
+
+// stringToMetricKey converts a string back to a MetricKey.
+func stringToMetricKey(s string) MetricKey {
+	parts := strings.SplitN(s, "|", 3)
+	if len(parts) != 3 {
+		return MetricKey{}
+	}
+
+	return MetricKey{
+		Namespace:  parts[0],
+		MetricName: parts[1],
+		Dimensions: parts[2],
+	}
+}
+
+// marshalableStorage is a JSON-serializable representation of MemoryStorage.
+type marshalableStorage struct {
+	Metrics map[string]*StoredMetric `json:"metrics"`
+	Alarms  map[string]*Alarm        `json:"alarms"`
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	m := &marshalableStorage{
+		Metrics: make(map[string]*StoredMetric, len(s.Metrics)),
+		Alarms:  s.Alarms,
+	}
+
+	for k, v := range s.Metrics {
+		m.Metrics[metricKeyToString(k)] = v
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var m marshalableStorage
+
+	if err := json.Unmarshal(data, &m); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	s.Metrics = make(map[MetricKey]*StoredMetric, len(m.Metrics))
+
+	for k, v := range m.Metrics {
+		s.Metrics[stringToMetricKey(k)] = v
+	}
+
+	s.Alarms = m.Alarms
+
+	if s.Alarms == nil {
+		s.Alarms = make(map[string]*Alarm)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "monitoring", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // PutMetricData stores metric data.
@@ -65,15 +180,15 @@ func (s *MemoryStorage) PutMetricData(_ context.Context, namespace string, metri
 		datum := &metricData[i]
 		key := s.makeMetricKey(namespace, datum.MetricName, datum.Dimensions)
 
-		metric, exists := s.metrics[key]
+		metric, exists := s.Metrics[key]
 		if !exists {
-			metric = &storedMetric{
-				namespace:  namespace,
-				metricName: datum.MetricName,
-				dimensions: datum.Dimensions,
-				datapoints: make([]MetricDatapoint, 0),
+			metric = &StoredMetric{
+				Namespace:  namespace,
+				MetricName: datum.MetricName,
+				Dimensions: datum.Dimensions,
+				Datapoints: make([]MetricDatapoint, 0),
 			}
-			s.metrics[key] = metric
+			s.Metrics[key] = metric
 		}
 
 		timestamp := datum.Timestamp
@@ -88,23 +203,23 @@ func (s *MemoryStorage) PutMetricData(_ context.Context, namespace string, metri
 }
 
 // appendDatapoints adds datapoints to the metric based on the datum type.
-func (s *MemoryStorage) appendDatapoints(metric *storedMetric, datum *MetricDatum, timestamp string) {
+func (s *MemoryStorage) appendDatapoints(metric *StoredMetric, datum *MetricDatum, timestamp string) {
 	switch {
 	case datum.Value != nil:
-		metric.datapoints = append(metric.datapoints, MetricDatapoint{
+		metric.Datapoints = append(metric.Datapoints, MetricDatapoint{
 			Timestamp: timestamp,
 			Value:     *datum.Value,
 			Unit:      datum.Unit,
 		})
 	case datum.StatisticValues != nil:
-		metric.datapoints = append(metric.datapoints, MetricDatapoint{
+		metric.Datapoints = append(metric.Datapoints, MetricDatapoint{
 			Timestamp: timestamp,
 			Value:     datum.StatisticValues.Sum / datum.StatisticValues.SampleCount,
 			Unit:      datum.Unit,
 		})
 	case len(datum.Values) > 0:
 		for _, v := range datum.Values {
-			metric.datapoints = append(metric.datapoints, MetricDatapoint{
+			metric.Datapoints = append(metric.Datapoints, MetricDatapoint{
 				Timestamp: timestamp,
 				Value:     v,
 				Unit:      datum.Unit,
@@ -131,7 +246,7 @@ func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataReque
 			query.MetricStat.Metric.Dimensions,
 		)
 
-		metric, exists := s.metrics[key]
+		metric, exists := s.Metrics[key]
 		if !exists {
 			results = append(results, MetricDataResult{
 				ID:         query.ID,
@@ -146,7 +261,7 @@ func (s *MemoryStorage) GetMetricData(_ context.Context, req *GetMetricDataReque
 		timestamps := make([]string, 0)
 		values := make([]float64, 0)
 
-		for _, dp := range metric.datapoints {
+		for _, dp := range metric.Datapoints {
 			if s.isInTimeRange(dp.Timestamp, req.StartTime, req.EndTime) {
 				timestamps = append(timestamps, dp.Timestamp)
 				values = append(values, dp.Value)
@@ -179,7 +294,7 @@ func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricSta
 
 	key := s.makeMetricKey(req.Namespace, req.MetricName, req.Dimensions)
 
-	metric, exists := s.metrics[key]
+	metric, exists := s.Metrics[key]
 	if !exists {
 		return &GetMetricStatisticsResult{
 			Label:      req.MetricName,
@@ -190,7 +305,7 @@ func (s *MemoryStorage) GetMetricStatistics(_ context.Context, req *GetMetricSta
 	// Collect datapoints in time range.
 	var filteredPoints []MetricDatapoint
 
-	for _, dp := range metric.datapoints {
+	for _, dp := range metric.Datapoints {
 		if s.isInTimeRange(dp.Timestamp, req.StartTime, req.EndTime) {
 			filteredPoints = append(filteredPoints, dp)
 		}
@@ -219,26 +334,26 @@ func (s *MemoryStorage) ListMetrics(_ context.Context, req *ListMetricsRequest) 
 
 	metrics := make([]Metric, 0)
 
-	for _, m := range s.metrics {
+	for _, m := range s.Metrics {
 		// Filter by namespace.
-		if req.Namespace != "" && m.namespace != req.Namespace {
+		if req.Namespace != "" && m.Namespace != req.Namespace {
 			continue
 		}
 
 		// Filter by metric name.
-		if req.MetricName != "" && m.metricName != req.MetricName {
+		if req.MetricName != "" && m.MetricName != req.MetricName {
 			continue
 		}
 
 		// Filter by dimensions.
-		if !s.matchesDimensionFilters(m.dimensions, req.Dimensions) {
+		if !s.matchesDimensionFilters(m.Dimensions, req.Dimensions) {
 			continue
 		}
 
 		metrics = append(metrics, Metric{
-			Namespace:  m.namespace,
-			MetricName: m.metricName,
-			Dimensions: m.dimensions,
+			Namespace:  m.Namespace,
+			MetricName: m.MetricName,
+			Dimensions: m.Dimensions,
 		})
 	}
 
@@ -298,7 +413,7 @@ func (s *MemoryStorage) PutMetricAlarm(_ context.Context, req *PutMetricAlarmReq
 		CreatedAt:          now,
 	}
 
-	s.alarms[req.AlarmName] = alarm
+	s.Alarms[req.AlarmName] = alarm
 
 	return nil
 }
@@ -309,7 +424,7 @@ func (s *MemoryStorage) DeleteAlarms(_ context.Context, alarmNames []string) err
 	defer s.mu.Unlock()
 
 	for _, name := range alarmNames {
-		if _, exists := s.alarms[name]; !exists {
+		if _, exists := s.Alarms[name]; !exists {
 			return &Error{
 				Code:    "ResourceNotFound",
 				Message: fmt.Sprintf("Alarm %s does not exist", name),
@@ -318,7 +433,7 @@ func (s *MemoryStorage) DeleteAlarms(_ context.Context, alarmNames []string) err
 	}
 
 	for _, name := range alarmNames {
-		delete(s.alarms, name)
+		delete(s.Alarms, name)
 	}
 
 	return nil
@@ -331,7 +446,7 @@ func (s *MemoryStorage) DescribeAlarms(_ context.Context, req *DescribeAlarmsReq
 
 	alarms := make([]MetricAlarm, 0)
 
-	for _, alarm := range s.alarms {
+	for _, alarm := range s.Alarms {
 		if !s.alarmMatchesFilter(alarm, req) {
 			continue
 		}
@@ -401,7 +516,7 @@ func convertAlarmToJSON(alarm *Alarm) MetricAlarm {
 }
 
 // makeMetricKey creates a unique key for a metric.
-func (s *MemoryStorage) makeMetricKey(namespace, metricName string, dimensions []Dimension) metricKey {
+func (s *MemoryStorage) makeMetricKey(namespace, metricName string, dimensions []Dimension) MetricKey {
 	// Sort dimensions for consistent key generation.
 	sorted := make([]Dimension, len(dimensions))
 	copy(sorted, dimensions)
@@ -415,10 +530,10 @@ func (s *MemoryStorage) makeMetricKey(namespace, metricName string, dimensions [
 		dimParts = append(dimParts, fmt.Sprintf("%s=%s", d.Name, d.Value))
 	}
 
-	return metricKey{
-		namespace:  namespace,
-		metricName: metricName,
-		dimensions: strings.Join(dimParts, ","),
+	return MetricKey{
+		Namespace:  namespace,
+		MetricName: metricName,
+		Dimensions: strings.Join(dimParts, ","),
 	}
 }
 

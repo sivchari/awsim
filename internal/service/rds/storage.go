@@ -2,11 +2,14 @@ package rds
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -30,21 +33,103 @@ type Storage interface {
 	DeleteDBSnapshot(ctx context.Context, identifier string) (*DBSnapshot, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	instances map[string]*DBInstance
-	clusters  map[string]*DBCluster
-	snapshots map[string]*DBSnapshot
+	mu        sync.RWMutex           `json:"-"`
+	Instances map[string]*DBInstance `json:"instances"`
+	Clusters  map[string]*DBCluster  `json:"clusters"`
+	Snapshots map[string]*DBSnapshot `json:"snapshots"`
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		instances: make(map[string]*DBInstance),
-		clusters:  make(map[string]*DBCluster),
-		snapshots: make(map[string]*DBSnapshot),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Instances: make(map[string]*DBInstance),
+		Clusters:  make(map[string]*DBCluster),
+		Snapshots: make(map[string]*DBSnapshot),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "rds", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Instances == nil {
+		m.Instances = make(map[string]*DBInstance)
+	}
+
+	if m.Clusters == nil {
+		m.Clusters = make(map[string]*DBCluster)
+	}
+
+	if m.Snapshots == nil {
+		m.Snapshots = make(map[string]*DBSnapshot)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "rds", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateDBInstance creates a new DB instance.
@@ -52,7 +137,7 @@ func (m *MemoryStorage) CreateDBInstance(_ context.Context, input *CreateDBInsta
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.instances[input.DBInstanceIdentifier]; exists {
+	if _, exists := m.Instances[input.DBInstanceIdentifier]; exists {
 		return nil, &Error{
 			Code:    errDBInstanceAlreadyExists,
 			Message: fmt.Sprintf("DB instance already exists: %s", input.DBInstanceIdentifier),
@@ -60,7 +145,7 @@ func (m *MemoryStorage) CreateDBInstance(_ context.Context, input *CreateDBInsta
 	}
 
 	instance := m.buildDBInstance(input)
-	m.instances[input.DBInstanceIdentifier] = instance
+	m.Instances[input.DBInstanceIdentifier] = instance
 
 	return instance, nil
 }
@@ -117,7 +202,7 @@ func (m *MemoryStorage) DeleteDBInstance(_ context.Context, identifier string, _
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	instance, exists := m.instances[identifier]
+	instance, exists := m.Instances[identifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBInstanceNotFound,
@@ -127,7 +212,7 @@ func (m *MemoryStorage) DeleteDBInstance(_ context.Context, identifier string, _
 
 	instance.DBInstanceStatus = DBInstanceStatusDeleting
 
-	delete(m.instances, identifier)
+	delete(m.Instances, identifier)
 
 	return instance, nil
 }
@@ -138,7 +223,7 @@ func (m *MemoryStorage) DescribeDBInstances(_ context.Context, identifier string
 	defer m.mu.RUnlock()
 
 	if identifier != "" {
-		instance, exists := m.instances[identifier]
+		instance, exists := m.Instances[identifier]
 		if !exists {
 			return nil, &Error{
 				Code:    errDBInstanceNotFound,
@@ -149,8 +234,8 @@ func (m *MemoryStorage) DescribeDBInstances(_ context.Context, identifier string
 		return []DBInstance{*instance}, nil
 	}
 
-	instances := make([]DBInstance, 0, len(m.instances))
-	for _, instance := range m.instances {
+	instances := make([]DBInstance, 0, len(m.Instances))
+	for _, instance := range m.Instances {
 		instances = append(instances, *instance)
 	}
 
@@ -162,7 +247,7 @@ func (m *MemoryStorage) ModifyDBInstance(_ context.Context, input *ModifyDBInsta
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	instance, exists := m.instances[input.DBInstanceIdentifier]
+	instance, exists := m.Instances[input.DBInstanceIdentifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBInstanceNotFound,
@@ -226,7 +311,7 @@ func (m *MemoryStorage) StartDBInstance(_ context.Context, identifier string) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	instance, exists := m.instances[identifier]
+	instance, exists := m.Instances[identifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBInstanceNotFound,
@@ -251,7 +336,7 @@ func (m *MemoryStorage) StopDBInstance(_ context.Context, identifier string) (*D
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	instance, exists := m.instances[identifier]
+	instance, exists := m.Instances[identifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBInstanceNotFound,
@@ -276,7 +361,7 @@ func (m *MemoryStorage) CreateDBCluster(_ context.Context, input *CreateDBCluste
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.clusters[input.DBClusterIdentifier]; exists {
+	if _, exists := m.Clusters[input.DBClusterIdentifier]; exists {
 		return nil, &Error{
 			Code:    errDBClusterAlreadyExists,
 			Message: fmt.Sprintf("DB cluster already exists: %s", input.DBClusterIdentifier),
@@ -322,7 +407,7 @@ func (m *MemoryStorage) CreateDBCluster(_ context.Context, input *CreateDBCluste
 		}
 	}
 
-	m.clusters[input.DBClusterIdentifier] = cluster
+	m.Clusters[input.DBClusterIdentifier] = cluster
 
 	return cluster, nil
 }
@@ -332,7 +417,7 @@ func (m *MemoryStorage) DeleteDBCluster(_ context.Context, identifier string, _ 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.clusters[identifier]
+	cluster, exists := m.Clusters[identifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBClusterNotFound,
@@ -342,7 +427,7 @@ func (m *MemoryStorage) DeleteDBCluster(_ context.Context, identifier string, _ 
 
 	cluster.Status = DBClusterStatusDeleting
 
-	delete(m.clusters, identifier)
+	delete(m.Clusters, identifier)
 
 	return cluster, nil
 }
@@ -353,7 +438,7 @@ func (m *MemoryStorage) DescribeDBClusters(_ context.Context, identifier string)
 	defer m.mu.RUnlock()
 
 	if identifier != "" {
-		cluster, exists := m.clusters[identifier]
+		cluster, exists := m.Clusters[identifier]
 		if !exists {
 			return nil, &Error{
 				Code:    errDBClusterNotFound,
@@ -364,8 +449,8 @@ func (m *MemoryStorage) DescribeDBClusters(_ context.Context, identifier string)
 		return []DBCluster{*cluster}, nil
 	}
 
-	clusters := make([]DBCluster, 0, len(m.clusters))
-	for _, cluster := range m.clusters {
+	clusters := make([]DBCluster, 0, len(m.Clusters))
+	for _, cluster := range m.Clusters {
 		clusters = append(clusters, *cluster)
 	}
 
@@ -377,7 +462,7 @@ func (m *MemoryStorage) ModifyDBCluster(_ context.Context, input *ModifyDBCluste
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cluster, exists := m.clusters[input.DBClusterIdentifier]
+	cluster, exists := m.Clusters[input.DBClusterIdentifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBClusterNotFound,
@@ -409,14 +494,14 @@ func (m *MemoryStorage) CreateDBSnapshot(_ context.Context, input *CreateDBSnaps
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.snapshots[input.DBSnapshotIdentifier]; exists {
+	if _, exists := m.Snapshots[input.DBSnapshotIdentifier]; exists {
 		return nil, &Error{
 			Code:    errDBSnapshotAlreadyExists,
 			Message: fmt.Sprintf("DB snapshot already exists: %s", input.DBSnapshotIdentifier),
 		}
 	}
 
-	instance, exists := m.instances[input.DBInstanceIdentifier]
+	instance, exists := m.Instances[input.DBInstanceIdentifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBInstanceNotFound,
@@ -443,7 +528,7 @@ func (m *MemoryStorage) CreateDBSnapshot(_ context.Context, input *CreateDBSnaps
 		Tags:                 input.Tags,
 	}
 
-	m.snapshots[input.DBSnapshotIdentifier] = snapshot
+	m.Snapshots[input.DBSnapshotIdentifier] = snapshot
 
 	return snapshot, nil
 }
@@ -453,7 +538,7 @@ func (m *MemoryStorage) DeleteDBSnapshot(_ context.Context, identifier string) (
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	snapshot, exists := m.snapshots[identifier]
+	snapshot, exists := m.Snapshots[identifier]
 	if !exists {
 		return nil, &Error{
 			Code:    errDBSnapshotNotFound,
@@ -461,7 +546,7 @@ func (m *MemoryStorage) DeleteDBSnapshot(_ context.Context, identifier string) (
 		}
 	}
 
-	delete(m.snapshots, identifier)
+	delete(m.Snapshots, identifier)
 
 	return snapshot, nil
 }

@@ -2,12 +2,15 @@ package eventbridge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Default event bus name.
@@ -47,38 +50,119 @@ type Storage interface {
 	DispatchAction(action string) bool
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu         sync.RWMutex
-	eventBuses map[string]*EventBus
-	rules      map[string]map[string]*Rule     // eventBusName -> ruleName -> Rule
-	targets    map[string]map[string][]*Target // eventBusName:ruleName -> targets
+	mu         sync.RWMutex                    `json:"-"`
+	EventBuses map[string]*EventBus            `json:"eventBuses"`
+	Rules      map[string]map[string]*Rule     `json:"rules"`
+	Targets    map[string]map[string][]*Target `json:"targets"`
 	region     string
 	accountID  string
+	dataDir    string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	storage := &MemoryStorage{
-		eventBuses: make(map[string]*EventBus),
-		rules:      make(map[string]map[string]*Rule),
-		targets:    make(map[string]map[string][]*Target),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		EventBuses: make(map[string]*EventBus),
+		Rules:      make(map[string]map[string]*Rule),
+		Targets:    make(map[string]map[string][]*Target),
 		region:     "us-east-1",
 		accountID:  "000000000000",
 	}
-
-	// Create default event bus.
-	now := time.Now()
-	storage.eventBuses[defaultEventBusName] = &EventBus{
-		Name:         defaultEventBusName,
-		Arn:          fmt.Sprintf("arn:aws:events:%s:%s:event-bus/%s", storage.region, storage.accountID, defaultEventBusName),
-		CreationTime: now,
-		LastModified: now,
+	for _, o := range opts {
+		o(s)
 	}
 
-	storage.rules[defaultEventBusName] = make(map[string]*Rule)
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "eventbridge", s)
+	}
 
-	return storage
+	// Create default event bus if not present.
+	if _, exists := s.EventBuses[defaultEventBusName]; !exists {
+		now := time.Now()
+		s.EventBuses[defaultEventBusName] = &EventBus{
+			Name:         defaultEventBusName,
+			Arn:          fmt.Sprintf("arn:aws:events:%s:%s:event-bus/%s", s.region, s.accountID, defaultEventBusName),
+			CreationTime: now,
+			LastModified: now,
+		}
+		s.Rules[defaultEventBusName] = make(map[string]*Rule)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.EventBuses == nil {
+		s.EventBuses = make(map[string]*EventBus)
+	}
+
+	if s.Rules == nil {
+		s.Rules = make(map[string]map[string]*Rule)
+	}
+
+	if s.Targets == nil {
+		s.Targets = make(map[string]map[string][]*Target)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "eventbridge", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateEventBus creates a new event bus.
@@ -86,7 +170,7 @@ func (s *MemoryStorage) CreateEventBus(_ context.Context, req *CreateEventBusReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.eventBuses[req.Name]; exists {
+	if _, exists := s.EventBuses[req.Name]; exists {
 		return nil, &ServiceError{Code: errEventBusAlreadyExists, Message: "Event bus already exists"}
 	}
 
@@ -99,8 +183,8 @@ func (s *MemoryStorage) CreateEventBus(_ context.Context, req *CreateEventBusReq
 		LastModified: now,
 	}
 
-	s.eventBuses[req.Name] = eventBus
-	s.rules[req.Name] = make(map[string]*Rule)
+	s.EventBuses[req.Name] = eventBus
+	s.Rules[req.Name] = make(map[string]*Rule)
 
 	return eventBus, nil
 }
@@ -114,17 +198,17 @@ func (s *MemoryStorage) DeleteEventBus(_ context.Context, name string) error {
 		return &ServiceError{Code: errInvalidParameter, Message: "Cannot delete the default event bus"}
 	}
 
-	if _, exists := s.eventBuses[name]; !exists {
+	if _, exists := s.EventBuses[name]; !exists {
 		return &ServiceError{Code: errEventBusNotFound, Message: "Event bus not found"}
 	}
 
-	delete(s.eventBuses, name)
-	delete(s.rules, name)
+	delete(s.EventBuses, name)
+	delete(s.Rules, name)
 
 	// Delete all targets for rules on this event bus.
-	for key := range s.targets {
+	for key := range s.Targets {
 		if strings.HasPrefix(key, name+":") {
-			delete(s.targets, key)
+			delete(s.Targets, key)
 		}
 	}
 
@@ -140,7 +224,7 @@ func (s *MemoryStorage) DescribeEventBus(_ context.Context, name string) (*Event
 		name = defaultEventBusName
 	}
 
-	eventBus, exists := s.eventBuses[name]
+	eventBus, exists := s.EventBuses[name]
 	if !exists {
 		return nil, &ServiceError{Code: errEventBusNotFound, Message: "Event bus not found"}
 	}
@@ -159,7 +243,7 @@ func (s *MemoryStorage) ListEventBuses(_ context.Context, namePrefix string, lim
 
 	var eventBuses []*EventBus
 
-	for _, eb := range s.eventBuses {
+	for _, eb := range s.EventBuses {
 		if namePrefix == "" || strings.HasPrefix(eb.Name, namePrefix) {
 			eventBuses = append(eventBuses, eb)
 		}
@@ -182,7 +266,7 @@ func (s *MemoryStorage) PutRule(_ context.Context, req *PutRuleRequest) (*Rule, 
 		eventBusName = defaultEventBusName
 	}
 
-	if _, exists := s.eventBuses[eventBusName]; !exists {
+	if _, exists := s.EventBuses[eventBusName]; !exists {
 		return nil, &ServiceError{Code: errEventBusNotFound, Message: "Event bus not found"}
 	}
 
@@ -206,11 +290,11 @@ func (s *MemoryStorage) PutRule(_ context.Context, req *PutRuleRequest) (*Rule, 
 		LastModified:       now,
 	}
 
-	if s.rules[eventBusName] == nil {
-		s.rules[eventBusName] = make(map[string]*Rule)
+	if s.Rules[eventBusName] == nil {
+		s.Rules[eventBusName] = make(map[string]*Rule)
 	}
 
-	s.rules[eventBusName][req.Name] = rule
+	s.Rules[eventBusName][req.Name] = rule
 
 	return rule, nil
 }
@@ -224,7 +308,7 @@ func (s *MemoryStorage) DeleteRule(_ context.Context, eventBusName, ruleName str
 		eventBusName = defaultEventBusName
 	}
 
-	rules, exists := s.rules[eventBusName]
+	rules, exists := s.Rules[eventBusName]
 	if !exists {
 		return &ServiceError{Code: errRuleNotFound, Message: "Rule not found"}
 	}
@@ -237,7 +321,7 @@ func (s *MemoryStorage) DeleteRule(_ context.Context, eventBusName, ruleName str
 
 	// Delete targets for this rule.
 	targetKey := eventBusName + ":" + ruleName
-	delete(s.targets, targetKey)
+	delete(s.Targets, targetKey)
 
 	return nil
 }
@@ -251,7 +335,7 @@ func (s *MemoryStorage) DescribeRule(_ context.Context, eventBusName, ruleName s
 		eventBusName = defaultEventBusName
 	}
 
-	rules, exists := s.rules[eventBusName]
+	rules, exists := s.Rules[eventBusName]
 	if !exists {
 		return nil, &ServiceError{Code: errRuleNotFound, Message: "Rule not found"}
 	}
@@ -277,7 +361,7 @@ func (s *MemoryStorage) ListRules(_ context.Context, eventBusName, namePrefix st
 		limit = 10
 	}
 
-	rules, exists := s.rules[eventBusName]
+	rules, exists := s.Rules[eventBusName]
 	if !exists {
 		return nil, "", nil
 	}
@@ -306,7 +390,7 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 		eventBusName = defaultEventBusName
 	}
 
-	rules, exists := s.rules[eventBusName]
+	rules, exists := s.Rules[eventBusName]
 	if !exists {
 		return nil, &ServiceError{Code: errRuleNotFound, Message: "Rule not found"}
 	}
@@ -317,8 +401,8 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 
 	targetKey := eventBusName + ":" + ruleName
 
-	if s.targets[targetKey] == nil {
-		s.targets[targetKey] = make(map[string][]*Target)
+	if s.Targets[targetKey] == nil {
+		s.Targets[targetKey] = make(map[string][]*Target)
 	}
 
 	var failedEntries []PutTargetsResultEntry
@@ -334,7 +418,7 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 
 		// Find and update existing target or add new one.
 		found := false
-		existingTargets := s.targets[targetKey][ruleName]
+		existingTargets := s.Targets[targetKey][ruleName]
 
 		for i, existing := range existingTargets {
 			if existing.ID == t.ID {
@@ -346,7 +430,7 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 		}
 
 		if !found {
-			s.targets[targetKey][ruleName] = append(s.targets[targetKey][ruleName], target)
+			s.Targets[targetKey][ruleName] = append(s.Targets[targetKey][ruleName], target)
 		}
 	}
 
@@ -366,11 +450,11 @@ func (s *MemoryStorage) RemoveTargets(_ context.Context, eventBusName, ruleName 
 
 	var failedEntries []RemoveTargetsResultEntry
 
-	if s.targets[targetKey] == nil {
+	if s.Targets[targetKey] == nil {
 		return failedEntries, nil
 	}
 
-	existingTargets := s.targets[targetKey][ruleName]
+	existingTargets := s.Targets[targetKey][ruleName]
 
 	var newTargets []*Target
 
@@ -385,7 +469,7 @@ func (s *MemoryStorage) RemoveTargets(_ context.Context, eventBusName, ruleName 
 		}
 	}
 
-	s.targets[targetKey][ruleName] = newTargets
+	s.Targets[targetKey][ruleName] = newTargets
 
 	return failedEntries, nil
 }
@@ -405,11 +489,11 @@ func (s *MemoryStorage) ListTargetsByRule(_ context.Context, eventBusName, ruleN
 
 	targetKey := eventBusName + ":" + ruleName
 
-	if s.targets[targetKey] == nil {
+	if s.Targets[targetKey] == nil {
 		return nil, "", nil
 	}
 
-	targets := s.targets[targetKey][ruleName]
+	targets := s.Targets[targetKey][ruleName]
 
 	if int32(len(targets)) > limit { //nolint:gosec // slice length bounded by limit parameter
 		targets = targets[:limit]

@@ -1,11 +1,23 @@
 package codegurureviewer
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	storage := NewMemoryStorage()
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	storage := NewMemoryStorage(opts...)
 	service.Register(New(storage))
 }
 
@@ -49,4 +61,15 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("PUT", "/feedback", s.PutRecommendationFeedback)
 	r.Handle("GET", "/feedback/{CodeReviewArn}", s.DescribeRecommendationFeedback)
 	r.Handle("GET", "/feedback/{CodeReviewArn}/RecommendationFeedback", s.ListRecommendationFeedback)
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

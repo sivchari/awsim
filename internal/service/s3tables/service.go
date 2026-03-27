@@ -2,11 +2,23 @@
 package s3tables
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage()))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
 }
 
 // Service implements the S3 Tables service.
@@ -45,4 +57,15 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.HandleFunc("GET", "/get-table", s.GetTable)
 	r.HandleFunc("GET", "/tables/{tableBucketARN}/{namespace}", s.ListTables)
 	r.HandleFunc("GET", "/tables/{tableBucketARN}", s.ListTables)
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

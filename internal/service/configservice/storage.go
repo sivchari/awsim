@@ -2,10 +2,14 @@ package configservice
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -38,25 +42,107 @@ type Storage interface {
 	GetComplianceDetailsByConfigRule(ctx context.Context, req *GetComplianceDetailsByConfigRuleRequest) ([]*EvaluationResult, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu               sync.RWMutex
-	recorders        map[string]*ConfigurationRecorder
-	recorderStatuses map[string]*ConfigurationRecorderStatus
-	rules            map[string]*ConfigRule
+	mu               sync.RWMutex                            `json:"-"`
+	Recorders        map[string]*ConfigurationRecorder       `json:"recorders"`
+	RecorderStatuses map[string]*ConfigurationRecorderStatus `json:"recorderStatuses"`
+	Rules            map[string]*ConfigRule                  `json:"rules"`
 	region           string
 	accountID        string
+	dataDir          string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		recorders:        make(map[string]*ConfigurationRecorder),
-		recorderStatuses: make(map[string]*ConfigurationRecorderStatus),
-		rules:            make(map[string]*ConfigRule),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Recorders:        make(map[string]*ConfigurationRecorder),
+		RecorderStatuses: make(map[string]*ConfigurationRecorderStatus),
+		Rules:            make(map[string]*ConfigRule),
 		region:           defaultRegion,
 		accountID:        defaultAccountID,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "configservice", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Recorders == nil {
+		m.Recorders = make(map[string]*ConfigurationRecorder)
+	}
+
+	if m.RecorderStatuses == nil {
+		m.RecorderStatuses = make(map[string]*ConfigurationRecorderStatus)
+	}
+
+	if m.Rules == nil {
+		m.Rules = make(map[string]*ConfigRule)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "configservice", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // PutConfigurationRecorder creates or updates a configuration recorder.
@@ -75,8 +161,8 @@ func (m *MemoryStorage) PutConfigurationRecorder(_ context.Context, req *PutConf
 	}
 
 	// AWS Config allows only one configuration recorder per region
-	if len(m.recorders) > 0 {
-		if _, exists := m.recorders[input.Name]; !exists {
+	if len(m.Recorders) > 0 {
+		if _, exists := m.Recorders[input.Name]; !exists {
 			return &Error{Code: errMaxNumberOfConfigurationRecordersExceeded, Message: "Only one configuration recorder is allowed per region"}
 		}
 	}
@@ -99,11 +185,11 @@ func (m *MemoryStorage) PutConfigurationRecorder(_ context.Context, req *PutConf
 		}
 	}
 
-	m.recorders[input.Name] = recorder
+	m.Recorders[input.Name] = recorder
 
 	// Initialize status if not exists
-	if _, exists := m.recorderStatuses[input.Name]; !exists {
-		m.recorderStatuses[input.Name] = &ConfigurationRecorderStatus{
+	if _, exists := m.RecorderStatuses[input.Name]; !exists {
+		m.RecorderStatuses[input.Name] = &ConfigurationRecorderStatus{
 			Name:       input.Name,
 			Recording:  false,
 			LastStatus: "Pending",
@@ -118,12 +204,12 @@ func (m *MemoryStorage) DeleteConfigurationRecorder(_ context.Context, name stri
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.recorders[name]; !exists {
+	if _, exists := m.Recorders[name]; !exists {
 		return &Error{Code: errNoSuchConfigurationRecorder, Message: "Configuration recorder not found"}
 	}
 
-	delete(m.recorders, name)
-	delete(m.recorderStatuses, name)
+	delete(m.Recorders, name)
+	delete(m.RecorderStatuses, name)
 
 	return nil
 }
@@ -135,8 +221,8 @@ func (m *MemoryStorage) DescribeConfigurationRecorders(_ context.Context, names 
 
 	if len(names) == 0 {
 		// Return all recorders
-		result := make([]*ConfigurationRecorder, 0, len(m.recorders))
-		for _, recorder := range m.recorders {
+		result := make([]*ConfigurationRecorder, 0, len(m.Recorders))
+		for _, recorder := range m.Recorders {
 			result = append(result, recorder)
 		}
 
@@ -147,7 +233,7 @@ func (m *MemoryStorage) DescribeConfigurationRecorders(_ context.Context, names 
 	result := make([]*ConfigurationRecorder, 0, len(names))
 
 	for _, name := range names {
-		if recorder, exists := m.recorders[name]; exists {
+		if recorder, exists := m.Recorders[name]; exists {
 			result = append(result, recorder)
 		}
 	}
@@ -160,11 +246,11 @@ func (m *MemoryStorage) StartConfigurationRecorder(_ context.Context, name strin
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.recorders[name]; !exists {
+	if _, exists := m.Recorders[name]; !exists {
 		return &Error{Code: errNoSuchConfigurationRecorder, Message: "Configuration recorder not found"}
 	}
 
-	status := m.recorderStatuses[name]
+	status := m.RecorderStatuses[name]
 	status.Recording = true
 	status.LastStatus = "SUCCESS"
 
@@ -179,11 +265,11 @@ func (m *MemoryStorage) StopConfigurationRecorder(_ context.Context, name string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.recorders[name]; !exists {
+	if _, exists := m.Recorders[name]; !exists {
 		return &Error{Code: errNoSuchConfigurationRecorder, Message: "Configuration recorder not found"}
 	}
 
-	status := m.recorderStatuses[name]
+	status := m.RecorderStatuses[name]
 	status.Recording = false
 
 	now := time.Now()
@@ -212,7 +298,7 @@ func (m *MemoryStorage) PutConfigRule(_ context.Context, req *PutConfigRuleReque
 	}
 
 	// Check if rule exists (update case)
-	existing, exists := m.rules[input.ConfigRuleName]
+	existing, exists := m.Rules[input.ConfigRuleName]
 
 	var ruleID string
 
@@ -244,7 +330,7 @@ func (m *MemoryStorage) PutConfigRule(_ context.Context, req *PutConfigRuleReque
 		}
 	}
 
-	m.rules[input.ConfigRuleName] = rule
+	m.Rules[input.ConfigRuleName] = rule
 
 	return rule, nil
 }
@@ -254,11 +340,11 @@ func (m *MemoryStorage) DeleteConfigRule(_ context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.rules[name]; !exists {
+	if _, exists := m.Rules[name]; !exists {
 		return &Error{Code: errNoSuchConfigRule, Message: "Config rule not found"}
 	}
 
-	delete(m.rules, name)
+	delete(m.Rules, name)
 
 	return nil
 }
@@ -270,8 +356,8 @@ func (m *MemoryStorage) DescribeConfigRules(_ context.Context, names []string) (
 
 	if len(names) == 0 {
 		// Return all rules
-		result := make([]*ConfigRule, 0, len(m.rules))
-		for _, rule := range m.rules {
+		result := make([]*ConfigRule, 0, len(m.Rules))
+		for _, rule := range m.Rules {
 			result = append(result, rule)
 		}
 
@@ -282,7 +368,7 @@ func (m *MemoryStorage) DescribeConfigRules(_ context.Context, names []string) (
 	result := make([]*ConfigRule, 0, len(names))
 
 	for _, name := range names {
-		if rule, exists := m.rules[name]; exists {
+		if rule, exists := m.Rules[name]; exists {
 			result = append(result, rule)
 		}
 	}
@@ -296,7 +382,7 @@ func (m *MemoryStorage) GetComplianceDetailsByConfigRule(_ context.Context, req 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.rules[req.ConfigRuleName]; !exists {
+	if _, exists := m.Rules[req.ConfigRuleName]; !exists {
 		return nil, "", &Error{Code: errNoSuchConfigRule, Message: "Config rule not found"}
 	}
 

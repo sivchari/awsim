@@ -2,9 +2,12 @@ package entityresolution
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -32,21 +35,103 @@ type Storage interface {
 	ListProviderServices(ctx context.Context) ([]ProviderService, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                 sync.RWMutex
-	schemas            map[string]*SchemaMapping
-	matchingWorkflows  map[string]*MatchingWorkflow
-	idMappingWorkflows map[string]*IDMappingWorkflow
+	mu                 sync.RWMutex                  `json:"-"`
+	Schemas            map[string]*SchemaMapping     `json:"schemas"`
+	MatchingWorkflows  map[string]*MatchingWorkflow  `json:"matchingWorkflows"`
+	IDMappingWorkflows map[string]*IDMappingWorkflow `json:"idMappingWorkflows"`
+	dataDir            string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		schemas:            make(map[string]*SchemaMapping),
-		matchingWorkflows:  make(map[string]*MatchingWorkflow),
-		idMappingWorkflows: make(map[string]*IDMappingWorkflow),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Schemas:            make(map[string]*SchemaMapping),
+		MatchingWorkflows:  make(map[string]*MatchingWorkflow),
+		IDMappingWorkflows: make(map[string]*IDMappingWorkflow),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "entityresolution", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Schemas == nil {
+		m.Schemas = make(map[string]*SchemaMapping)
+	}
+
+	if m.MatchingWorkflows == nil {
+		m.MatchingWorkflows = make(map[string]*MatchingWorkflow)
+	}
+
+	if m.IDMappingWorkflows == nil {
+		m.IDMappingWorkflows = make(map[string]*IDMappingWorkflow)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "entityresolution", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateSchemaMapping creates a new schema mapping.
@@ -54,7 +139,7 @@ func (m *MemoryStorage) CreateSchemaMapping(_ context.Context, req *CreateSchema
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.schemas[req.SchemaName]; exists {
+	if _, exists := m.Schemas[req.SchemaName]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Schema mapping %s already exists", req.SchemaName),
@@ -72,7 +157,7 @@ func (m *MemoryStorage) CreateSchemaMapping(_ context.Context, req *CreateSchema
 		Tags:              req.Tags,
 	}
 
-	m.schemas[req.SchemaName] = schema
+	m.Schemas[req.SchemaName] = schema
 
 	return schema, nil
 }
@@ -82,7 +167,7 @@ func (m *MemoryStorage) GetSchemaMapping(_ context.Context, schemaName string) (
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	schema, exists := m.schemas[schemaName]
+	schema, exists := m.Schemas[schemaName]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -98,14 +183,14 @@ func (m *MemoryStorage) DeleteSchemaMapping(_ context.Context, schemaName string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.schemas[schemaName]; !exists {
+	if _, exists := m.Schemas[schemaName]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Schema mapping %s not found", schemaName),
 		}
 	}
 
-	delete(m.schemas, schemaName)
+	delete(m.Schemas, schemaName)
 
 	return nil
 }
@@ -115,8 +200,8 @@ func (m *MemoryStorage) ListSchemaMappings(_ context.Context) ([]SchemaMappingSu
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	summaries := make([]SchemaMappingSummary, 0, len(m.schemas))
-	for _, s := range m.schemas {
+	summaries := make([]SchemaMappingSummary, 0, len(m.Schemas))
+	for _, s := range m.Schemas {
 		summaries = append(summaries, SchemaMappingSummary{
 			SchemaName: s.SchemaName,
 			SchemaArn:  s.SchemaArn,
@@ -133,7 +218,7 @@ func (m *MemoryStorage) CreateMatchingWorkflow(_ context.Context, req *CreateMat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.matchingWorkflows[req.WorkflowName]; exists {
+	if _, exists := m.MatchingWorkflows[req.WorkflowName]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Matching workflow %s already exists", req.WorkflowName),
@@ -154,7 +239,7 @@ func (m *MemoryStorage) CreateMatchingWorkflow(_ context.Context, req *CreateMat
 		Tags:                 req.Tags,
 	}
 
-	m.matchingWorkflows[req.WorkflowName] = workflow
+	m.MatchingWorkflows[req.WorkflowName] = workflow
 
 	return workflow, nil
 }
@@ -164,7 +249,7 @@ func (m *MemoryStorage) GetMatchingWorkflow(_ context.Context, workflowName stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	workflow, exists := m.matchingWorkflows[workflowName]
+	workflow, exists := m.MatchingWorkflows[workflowName]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -180,14 +265,14 @@ func (m *MemoryStorage) DeleteMatchingWorkflow(_ context.Context, workflowName s
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.matchingWorkflows[workflowName]; !exists {
+	if _, exists := m.MatchingWorkflows[workflowName]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("Matching workflow %s not found", workflowName),
 		}
 	}
 
-	delete(m.matchingWorkflows, workflowName)
+	delete(m.MatchingWorkflows, workflowName)
 
 	return nil
 }
@@ -197,8 +282,8 @@ func (m *MemoryStorage) ListMatchingWorkflows(_ context.Context) ([]MatchingWork
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	summaries := make([]MatchingWorkflowSummary, 0, len(m.matchingWorkflows))
-	for _, w := range m.matchingWorkflows {
+	summaries := make([]MatchingWorkflowSummary, 0, len(m.MatchingWorkflows))
+	for _, w := range m.MatchingWorkflows {
 		summaries = append(summaries, MatchingWorkflowSummary{
 			WorkflowName: w.WorkflowName,
 			WorkflowArn:  w.WorkflowArn,
@@ -215,7 +300,7 @@ func (m *MemoryStorage) CreateIDMappingWorkflow(_ context.Context, req *CreateID
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.idMappingWorkflows[req.WorkflowName]; exists {
+	if _, exists := m.IDMappingWorkflows[req.WorkflowName]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("ID mapping workflow %s already exists", req.WorkflowName),
@@ -236,7 +321,7 @@ func (m *MemoryStorage) CreateIDMappingWorkflow(_ context.Context, req *CreateID
 		Tags:                req.Tags,
 	}
 
-	m.idMappingWorkflows[req.WorkflowName] = workflow
+	m.IDMappingWorkflows[req.WorkflowName] = workflow
 
 	return workflow, nil
 }
@@ -246,7 +331,7 @@ func (m *MemoryStorage) GetIDMappingWorkflow(_ context.Context, workflowName str
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	workflow, exists := m.idMappingWorkflows[workflowName]
+	workflow, exists := m.IDMappingWorkflows[workflowName]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -262,14 +347,14 @@ func (m *MemoryStorage) DeleteIDMappingWorkflow(_ context.Context, workflowName 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.idMappingWorkflows[workflowName]; !exists {
+	if _, exists := m.IDMappingWorkflows[workflowName]; !exists {
 		return &Error{
 			Code:    errNotFound,
 			Message: fmt.Sprintf("ID mapping workflow %s not found", workflowName),
 		}
 	}
 
-	delete(m.idMappingWorkflows, workflowName)
+	delete(m.IDMappingWorkflows, workflowName)
 
 	return nil
 }
@@ -279,8 +364,8 @@ func (m *MemoryStorage) ListIDMappingWorkflows(_ context.Context) ([]IDMappingWo
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	summaries := make([]IDMappingWorkflowSummary, 0, len(m.idMappingWorkflows))
-	for _, w := range m.idMappingWorkflows {
+	summaries := make([]IDMappingWorkflowSummary, 0, len(m.IDMappingWorkflows))
+	for _, w := range m.IDMappingWorkflows {
 		summaries = append(summaries, IDMappingWorkflowSummary{
 			WorkflowName: w.WorkflowName,
 			WorkflowArn:  w.WorkflowArn,

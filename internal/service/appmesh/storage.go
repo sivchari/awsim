@@ -2,11 +2,14 @@ package appmesh
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -52,25 +55,115 @@ type Storage interface {
 	DeleteRoute(ctx context.Context, meshName, virtualRouterName, routeName string) (*RouteData, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory storage.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	meshes          map[string]*MeshData
-	virtualNodes    map[string]map[string]*VirtualNodeData      // meshName -> virtualNodeName -> data
-	virtualServices map[string]map[string]*VirtualServiceData   // meshName -> virtualServiceName -> data
-	virtualRouters  map[string]map[string]*VirtualRouterData    // meshName -> virtualRouterName -> data
-	routes          map[string]map[string]map[string]*RouteData // meshName -> virtualRouterName -> routeName -> data
+	mu              sync.RWMutex                                `json:"-"`
+	Meshes          map[string]*MeshData                        `json:"meshes"`
+	VirtualNodes    map[string]map[string]*VirtualNodeData      `json:"virtualNodes"`    // meshName -> virtualNodeName -> data
+	VirtualServices map[string]map[string]*VirtualServiceData   `json:"virtualServices"` // meshName -> virtualServiceName -> data
+	VirtualRouters  map[string]map[string]*VirtualRouterData    `json:"virtualRouters"`  // meshName -> virtualRouterName -> data
+	Routes          map[string]map[string]map[string]*RouteData `json:"routes"`          // meshName -> virtualRouterName -> routeName -> data
+	dataDir         string
 }
 
 // NewMemoryStorage creates a new MemoryStorage instance.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		meshes:          make(map[string]*MeshData),
-		virtualNodes:    make(map[string]map[string]*VirtualNodeData),
-		virtualServices: make(map[string]map[string]*VirtualServiceData),
-		virtualRouters:  make(map[string]map[string]*VirtualRouterData),
-		routes:          make(map[string]map[string]map[string]*RouteData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Meshes:          make(map[string]*MeshData),
+		VirtualNodes:    make(map[string]map[string]*VirtualNodeData),
+		VirtualServices: make(map[string]map[string]*VirtualServiceData),
+		VirtualRouters:  make(map[string]map[string]*VirtualRouterData),
+		Routes:          make(map[string]map[string]map[string]*RouteData),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "appmesh", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.Meshes == nil {
+		m.Meshes = make(map[string]*MeshData)
+	}
+
+	if m.VirtualNodes == nil {
+		m.VirtualNodes = make(map[string]map[string]*VirtualNodeData)
+	}
+
+	if m.VirtualServices == nil {
+		m.VirtualServices = make(map[string]map[string]*VirtualServiceData)
+	}
+
+	if m.VirtualRouters == nil {
+		m.VirtualRouters = make(map[string]map[string]*VirtualRouterData)
+	}
+
+	if m.Routes == nil {
+		m.Routes = make(map[string]map[string]map[string]*RouteData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "appmesh", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // --- Mesh Operations ---
@@ -80,7 +173,7 @@ func (m *MemoryStorage) CreateMesh(_ context.Context, req *CreateMeshInput) (*Me
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; exists {
+	if _, exists := m.Meshes[req.MeshName]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("Mesh %s already exists", req.MeshName),
@@ -106,11 +199,11 @@ func (m *MemoryStorage) CreateMesh(_ context.Context, req *CreateMeshInput) (*Me
 		Status: ResourceStatus{Status: StatusActive},
 	}
 
-	m.meshes[req.MeshName] = mesh
-	m.virtualNodes[req.MeshName] = make(map[string]*VirtualNodeData)
-	m.virtualServices[req.MeshName] = make(map[string]*VirtualServiceData)
-	m.virtualRouters[req.MeshName] = make(map[string]*VirtualRouterData)
-	m.routes[req.MeshName] = make(map[string]map[string]*RouteData)
+	m.Meshes[req.MeshName] = mesh
+	m.VirtualNodes[req.MeshName] = make(map[string]*VirtualNodeData)
+	m.VirtualServices[req.MeshName] = make(map[string]*VirtualServiceData)
+	m.VirtualRouters[req.MeshName] = make(map[string]*VirtualRouterData)
+	m.Routes[req.MeshName] = make(map[string]map[string]*RouteData)
 
 	return mesh, nil
 }
@@ -120,7 +213,7 @@ func (m *MemoryStorage) DescribeMesh(_ context.Context, meshName string) (*MeshD
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	mesh, exists := m.meshes[meshName]
+	mesh, exists := m.Meshes[meshName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -141,9 +234,9 @@ func (m *MemoryStorage) ListMeshes(_ context.Context, req *ListMeshesInput) (*Li
 		limit = 100
 	}
 
-	meshRefs := make([]MeshRef, 0, len(m.meshes))
+	meshRefs := make([]MeshRef, 0, len(m.Meshes))
 
-	for _, mesh := range m.meshes {
+	for _, mesh := range m.Meshes {
 		meshRefs = append(meshRefs, MeshRef{
 			Arn:           mesh.Metadata.Arn,
 			CreatedAt:     mesh.Metadata.CreatedAt,
@@ -169,7 +262,7 @@ func (m *MemoryStorage) UpdateMesh(_ context.Context, req *UpdateMeshInput) (*Me
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	mesh, exists := m.meshes[req.MeshName]
+	mesh, exists := m.Meshes[req.MeshName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -189,7 +282,7 @@ func (m *MemoryStorage) DeleteMesh(_ context.Context, meshName string) (*MeshDat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	mesh, exists := m.meshes[meshName]
+	mesh, exists := m.Meshes[meshName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -198,21 +291,21 @@ func (m *MemoryStorage) DeleteMesh(_ context.Context, meshName string) (*MeshDat
 	}
 
 	// Check if mesh has any child resources.
-	if len(m.virtualNodes[meshName]) > 0 {
+	if len(m.VirtualNodes[meshName]) > 0 {
 		return nil, &Error{
 			Code:    errResourceInUseException,
 			Message: fmt.Sprintf("Mesh %s has virtual nodes and cannot be deleted", meshName),
 		}
 	}
 
-	if len(m.virtualServices[meshName]) > 0 {
+	if len(m.VirtualServices[meshName]) > 0 {
 		return nil, &Error{
 			Code:    errResourceInUseException,
 			Message: fmt.Sprintf("Mesh %s has virtual services and cannot be deleted", meshName),
 		}
 	}
 
-	if len(m.virtualRouters[meshName]) > 0 {
+	if len(m.VirtualRouters[meshName]) > 0 {
 		return nil, &Error{
 			Code:    errResourceInUseException,
 			Message: fmt.Sprintf("Mesh %s has virtual routers and cannot be deleted", meshName),
@@ -221,11 +314,11 @@ func (m *MemoryStorage) DeleteMesh(_ context.Context, meshName string) (*MeshDat
 
 	mesh.Status.Status = StatusDeleted
 
-	delete(m.meshes, meshName)
-	delete(m.virtualNodes, meshName)
-	delete(m.virtualServices, meshName)
-	delete(m.virtualRouters, meshName)
-	delete(m.routes, meshName)
+	delete(m.Meshes, meshName)
+	delete(m.VirtualNodes, meshName)
+	delete(m.VirtualServices, meshName)
+	delete(m.VirtualRouters, meshName)
+	delete(m.Routes, meshName)
 
 	return mesh, nil
 }
@@ -237,14 +330,14 @@ func (m *MemoryStorage) CreateVirtualNode(_ context.Context, req *CreateVirtualN
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualNodes[req.MeshName][req.VirtualNodeName]; exists {
+	if _, exists := m.VirtualNodes[req.MeshName][req.VirtualNodeName]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("VirtualNode %s already exists in mesh %s", req.VirtualNodeName, req.MeshName),
@@ -272,7 +365,7 @@ func (m *MemoryStorage) CreateVirtualNode(_ context.Context, req *CreateVirtualN
 		Status: ResourceStatus{Status: StatusActive},
 	}
 
-	m.virtualNodes[req.MeshName][req.VirtualNodeName] = node
+	m.VirtualNodes[req.MeshName][req.VirtualNodeName] = node
 
 	return node, nil
 }
@@ -282,14 +375,14 @@ func (m *MemoryStorage) DescribeVirtualNode(_ context.Context, meshName, virtual
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	node, exists := m.virtualNodes[meshName][virtualNodeName]
+	node, exists := m.VirtualNodes[meshName][virtualNodeName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -305,7 +398,7 @@ func (m *MemoryStorage) ListVirtualNodes(_ context.Context, req *ListVirtualNode
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
@@ -319,7 +412,7 @@ func (m *MemoryStorage) ListVirtualNodes(_ context.Context, req *ListVirtualNode
 
 	nodeRefs := make([]VirtualNodeRef, 0)
 
-	for _, node := range m.virtualNodes[req.MeshName] {
+	for _, node := range m.VirtualNodes[req.MeshName] {
 		nodeRefs = append(nodeRefs, VirtualNodeRef{
 			Arn:             node.Metadata.Arn,
 			CreatedAt:       node.Metadata.CreatedAt,
@@ -346,14 +439,14 @@ func (m *MemoryStorage) UpdateVirtualNode(_ context.Context, req *UpdateVirtualN
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	node, exists := m.virtualNodes[req.MeshName][req.VirtualNodeName]
+	node, exists := m.VirtualNodes[req.MeshName][req.VirtualNodeName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -373,14 +466,14 @@ func (m *MemoryStorage) DeleteVirtualNode(_ context.Context, meshName, virtualNo
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	node, exists := m.virtualNodes[meshName][virtualNodeName]
+	node, exists := m.VirtualNodes[meshName][virtualNodeName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -390,7 +483,7 @@ func (m *MemoryStorage) DeleteVirtualNode(_ context.Context, meshName, virtualNo
 
 	node.Status.Status = StatusDeleted
 
-	delete(m.virtualNodes[meshName], virtualNodeName)
+	delete(m.VirtualNodes[meshName], virtualNodeName)
 
 	return node, nil
 }
@@ -402,14 +495,14 @@ func (m *MemoryStorage) CreateVirtualService(_ context.Context, req *CreateVirtu
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualServices[req.MeshName][req.VirtualServiceName]; exists {
+	if _, exists := m.VirtualServices[req.MeshName][req.VirtualServiceName]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("VirtualService %s already exists in mesh %s", req.VirtualServiceName, req.MeshName),
@@ -437,7 +530,7 @@ func (m *MemoryStorage) CreateVirtualService(_ context.Context, req *CreateVirtu
 		Status: ResourceStatus{Status: StatusActive},
 	}
 
-	m.virtualServices[req.MeshName][req.VirtualServiceName] = service
+	m.VirtualServices[req.MeshName][req.VirtualServiceName] = service
 
 	return service, nil
 }
@@ -447,14 +540,14 @@ func (m *MemoryStorage) DescribeVirtualService(_ context.Context, meshName, virt
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	service, exists := m.virtualServices[meshName][virtualServiceName]
+	service, exists := m.VirtualServices[meshName][virtualServiceName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -470,7 +563,7 @@ func (m *MemoryStorage) ListVirtualServices(_ context.Context, req *ListVirtualS
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
@@ -484,7 +577,7 @@ func (m *MemoryStorage) ListVirtualServices(_ context.Context, req *ListVirtualS
 
 	serviceRefs := make([]VirtualServiceRef, 0)
 
-	for _, service := range m.virtualServices[req.MeshName] {
+	for _, service := range m.VirtualServices[req.MeshName] {
 		serviceRefs = append(serviceRefs, VirtualServiceRef{
 			Arn:                service.Metadata.Arn,
 			CreatedAt:          service.Metadata.CreatedAt,
@@ -511,14 +604,14 @@ func (m *MemoryStorage) UpdateVirtualService(_ context.Context, req *UpdateVirtu
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	service, exists := m.virtualServices[req.MeshName][req.VirtualServiceName]
+	service, exists := m.VirtualServices[req.MeshName][req.VirtualServiceName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -538,14 +631,14 @@ func (m *MemoryStorage) DeleteVirtualService(_ context.Context, meshName, virtua
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	service, exists := m.virtualServices[meshName][virtualServiceName]
+	service, exists := m.VirtualServices[meshName][virtualServiceName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -555,7 +648,7 @@ func (m *MemoryStorage) DeleteVirtualService(_ context.Context, meshName, virtua
 
 	service.Status.Status = StatusDeleted
 
-	delete(m.virtualServices[meshName], virtualServiceName)
+	delete(m.VirtualServices[meshName], virtualServiceName)
 
 	return service, nil
 }
@@ -567,14 +660,14 @@ func (m *MemoryStorage) CreateVirtualRouter(_ context.Context, req *CreateVirtua
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[req.MeshName][req.VirtualRouterName]; exists {
+	if _, exists := m.VirtualRouters[req.MeshName][req.VirtualRouterName]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("VirtualRouter %s already exists in mesh %s", req.VirtualRouterName, req.MeshName),
@@ -602,8 +695,8 @@ func (m *MemoryStorage) CreateVirtualRouter(_ context.Context, req *CreateVirtua
 		Status: ResourceStatus{Status: StatusActive},
 	}
 
-	m.virtualRouters[req.MeshName][req.VirtualRouterName] = router
-	m.routes[req.MeshName][req.VirtualRouterName] = make(map[string]*RouteData)
+	m.VirtualRouters[req.MeshName][req.VirtualRouterName] = router
+	m.Routes[req.MeshName][req.VirtualRouterName] = make(map[string]*RouteData)
 
 	return router, nil
 }
@@ -613,14 +706,14 @@ func (m *MemoryStorage) DescribeVirtualRouter(_ context.Context, meshName, virtu
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	router, exists := m.virtualRouters[meshName][virtualRouterName]
+	router, exists := m.VirtualRouters[meshName][virtualRouterName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -636,7 +729,7 @@ func (m *MemoryStorage) ListVirtualRouters(_ context.Context, req *ListVirtualRo
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
@@ -650,7 +743,7 @@ func (m *MemoryStorage) ListVirtualRouters(_ context.Context, req *ListVirtualRo
 
 	routerRefs := make([]VirtualRouterRef, 0)
 
-	for _, router := range m.virtualRouters[req.MeshName] {
+	for _, router := range m.VirtualRouters[req.MeshName] {
 		routerRefs = append(routerRefs, VirtualRouterRef{
 			Arn:               router.Metadata.Arn,
 			CreatedAt:         router.Metadata.CreatedAt,
@@ -677,14 +770,14 @@ func (m *MemoryStorage) UpdateVirtualRouter(_ context.Context, req *UpdateVirtua
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	router, exists := m.virtualRouters[req.MeshName][req.VirtualRouterName]
+	router, exists := m.VirtualRouters[req.MeshName][req.VirtualRouterName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -704,14 +797,14 @@ func (m *MemoryStorage) DeleteVirtualRouter(_ context.Context, meshName, virtual
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	router, exists := m.virtualRouters[meshName][virtualRouterName]
+	router, exists := m.VirtualRouters[meshName][virtualRouterName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -720,7 +813,7 @@ func (m *MemoryStorage) DeleteVirtualRouter(_ context.Context, meshName, virtual
 	}
 
 	// Check if router has any routes.
-	if len(m.routes[meshName][virtualRouterName]) > 0 {
+	if len(m.Routes[meshName][virtualRouterName]) > 0 {
 		return nil, &Error{
 			Code:    errResourceInUseException,
 			Message: fmt.Sprintf("VirtualRouter %s has routes and cannot be deleted", virtualRouterName),
@@ -729,8 +822,8 @@ func (m *MemoryStorage) DeleteVirtualRouter(_ context.Context, meshName, virtual
 
 	router.Status.Status = StatusDeleted
 
-	delete(m.virtualRouters[meshName], virtualRouterName)
-	delete(m.routes[meshName], virtualRouterName)
+	delete(m.VirtualRouters[meshName], virtualRouterName)
+	delete(m.Routes[meshName], virtualRouterName)
 
 	return router, nil
 }
@@ -742,21 +835,21 @@ func (m *MemoryStorage) CreateRoute(_ context.Context, req *CreateRouteInput) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
+	if _, exists := m.VirtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("VirtualRouter %s not found in mesh %s", req.VirtualRouterName, req.MeshName),
 		}
 	}
 
-	if _, exists := m.routes[req.MeshName][req.VirtualRouterName][req.RouteName]; exists {
+	if _, exists := m.Routes[req.MeshName][req.VirtualRouterName][req.RouteName]; exists {
 		return nil, &Error{
 			Code:    errConflictException,
 			Message: fmt.Sprintf("Route %s already exists in virtual router %s", req.RouteName, req.VirtualRouterName),
@@ -785,7 +878,7 @@ func (m *MemoryStorage) CreateRoute(_ context.Context, req *CreateRouteInput) (*
 		Status: ResourceStatus{Status: StatusActive},
 	}
 
-	m.routes[req.MeshName][req.VirtualRouterName][req.RouteName] = route
+	m.Routes[req.MeshName][req.VirtualRouterName][req.RouteName] = route
 
 	return route, nil
 }
@@ -795,21 +888,21 @@ func (m *MemoryStorage) DescribeRoute(_ context.Context, meshName, virtualRouter
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[meshName][virtualRouterName]; !exists {
+	if _, exists := m.VirtualRouters[meshName][virtualRouterName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("VirtualRouter %s not found in mesh %s", virtualRouterName, meshName),
 		}
 	}
 
-	route, exists := m.routes[meshName][virtualRouterName][routeName]
+	route, exists := m.Routes[meshName][virtualRouterName][routeName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -825,14 +918,14 @@ func (m *MemoryStorage) ListRoutes(_ context.Context, req *ListRoutesInput) (*Li
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
+	if _, exists := m.VirtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("VirtualRouter %s not found in mesh %s", req.VirtualRouterName, req.MeshName),
@@ -846,7 +939,7 @@ func (m *MemoryStorage) ListRoutes(_ context.Context, req *ListRoutesInput) (*Li
 
 	routeRefs := make([]RouteRef, 0)
 
-	for _, route := range m.routes[req.MeshName][req.VirtualRouterName] {
+	for _, route := range m.Routes[req.MeshName][req.VirtualRouterName] {
 		routeRefs = append(routeRefs, RouteRef{
 			Arn:               route.Metadata.Arn,
 			CreatedAt:         route.Metadata.CreatedAt,
@@ -874,21 +967,21 @@ func (m *MemoryStorage) UpdateRoute(_ context.Context, req *UpdateRouteInput) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[req.MeshName]; !exists {
+	if _, exists := m.Meshes[req.MeshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", req.MeshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
+	if _, exists := m.VirtualRouters[req.MeshName][req.VirtualRouterName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("VirtualRouter %s not found in mesh %s", req.VirtualRouterName, req.MeshName),
 		}
 	}
 
-	route, exists := m.routes[req.MeshName][req.VirtualRouterName][req.RouteName]
+	route, exists := m.Routes[req.MeshName][req.VirtualRouterName][req.RouteName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -908,21 +1001,21 @@ func (m *MemoryStorage) DeleteRoute(_ context.Context, meshName, virtualRouterNa
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.meshes[meshName]; !exists {
+	if _, exists := m.Meshes[meshName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("Mesh %s not found", meshName),
 		}
 	}
 
-	if _, exists := m.virtualRouters[meshName][virtualRouterName]; !exists {
+	if _, exists := m.VirtualRouters[meshName][virtualRouterName]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
 			Message: fmt.Sprintf("VirtualRouter %s not found in mesh %s", virtualRouterName, meshName),
 		}
 	}
 
-	route, exists := m.routes[meshName][virtualRouterName][routeName]
+	route, exists := m.Routes[meshName][virtualRouterName][routeName]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFoundException,
@@ -932,7 +1025,7 @@ func (m *MemoryStorage) DeleteRoute(_ context.Context, meshName, virtualRouterNa
 
 	route.Status.Status = StatusDeleted
 
-	delete(m.routes[meshName][virtualRouterName], routeName)
+	delete(m.Routes[meshName][virtualRouterName], routeName)
 
 	return route, nil
 }

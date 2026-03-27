@@ -1,14 +1,26 @@
 package ce
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
 // Compile-time check to ensure Service implements service.Service.
 var _ service.Service = (*Service)(nil)
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage()))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
 }
 
 // Service implements the AWS Cost Explorer service.
@@ -39,4 +51,15 @@ func (s *Service) JSONProtocol() {}
 // RegisterRoutes registers the routes for this service.
 func (s *Service) RegisterRoutes(_ service.Router) {
 	// JSON protocol services use DispatchAction for routing
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

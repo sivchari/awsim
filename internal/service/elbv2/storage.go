@@ -2,12 +2,15 @@ package elbv2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -32,23 +35,109 @@ type Storage interface {
 	DeleteListener(ctx context.Context, listenerArn string) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu            sync.RWMutex
-	loadBalancers map[string]*LoadBalancer // keyed by ARN
-	targetGroups  map[string]*TargetGroup  // keyed by ARN
-	listeners     map[string]*Listener     // keyed by ARN
-	targets       map[string][]Target      // keyed by targetGroupArn
+	mu            sync.RWMutex             `json:"-"`
+	LoadBalancers map[string]*LoadBalancer `json:"loadBalancers"` // keyed by ARN
+	TargetGroups  map[string]*TargetGroup  `json:"targetGroups"`  // keyed by ARN
+	Listeners     map[string]*Listener     `json:"listeners"`     // keyed by ARN
+	Targets       map[string][]Target      `json:"targets"`       // keyed by targetGroupArn
+	dataDir       string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		loadBalancers: make(map[string]*LoadBalancer),
-		targetGroups:  make(map[string]*TargetGroup),
-		listeners:     make(map[string]*Listener),
-		targets:       make(map[string][]Target),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		LoadBalancers: make(map[string]*LoadBalancer),
+		TargetGroups:  make(map[string]*TargetGroup),
+		Listeners:     make(map[string]*Listener),
+		Targets:       make(map[string][]Target),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "elbv2", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.LoadBalancers == nil {
+		m.LoadBalancers = make(map[string]*LoadBalancer)
+	}
+
+	if m.TargetGroups == nil {
+		m.TargetGroups = make(map[string]*TargetGroup)
+	}
+
+	if m.Listeners == nil {
+		m.Listeners = make(map[string]*Listener)
+	}
+
+	if m.Targets == nil {
+		m.Targets = make(map[string][]Target)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "elbv2", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // loadBalancerDefaults holds default values for load balancer creation.
@@ -92,14 +181,14 @@ func (m *MemoryStorage) CreateLoadBalancer(_ context.Context, req *CreateLoadBal
 
 	defaults := getLoadBalancerDefaults(req)
 	lb := m.buildLoadBalancer(req, defaults)
-	m.loadBalancers[lb.LoadBalancerArn] = lb
+	m.LoadBalancers[lb.LoadBalancerArn] = lb
 
 	return lb, nil
 }
 
 // checkDuplicateLoadBalancerName checks if a load balancer with the given name already exists.
 func (m *MemoryStorage) checkDuplicateLoadBalancerName(name string) error {
-	for _, lb := range m.loadBalancers {
+	for _, lb := range m.LoadBalancers {
 		if lb.LoadBalancerName == name {
 			return &Error{
 				Code:    "DuplicateLoadBalancerName",
@@ -147,7 +236,7 @@ func (m *MemoryStorage) DeleteLoadBalancer(_ context.Context, loadBalancerArn st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.loadBalancers[loadBalancerArn]; !ok {
+	if _, ok := m.LoadBalancers[loadBalancerArn]; !ok {
 		return &Error{
 			Code:    "LoadBalancerNotFound",
 			Message: fmt.Sprintf("Load balancer '%s' not found", loadBalancerArn),
@@ -155,13 +244,13 @@ func (m *MemoryStorage) DeleteLoadBalancer(_ context.Context, loadBalancerArn st
 	}
 
 	// Delete associated listeners.
-	for arn, listener := range m.listeners {
+	for arn, listener := range m.Listeners {
 		if listener.LoadBalancerArn == loadBalancerArn {
-			delete(m.listeners, arn)
+			delete(m.Listeners, arn)
 		}
 	}
 
-	delete(m.loadBalancers, loadBalancerArn)
+	delete(m.LoadBalancers, loadBalancerArn)
 
 	return nil
 }
@@ -175,7 +264,7 @@ func (m *MemoryStorage) DescribeLoadBalancers(_ context.Context, arns, names []s
 
 	if len(arns) == 0 && len(names) == 0 {
 		// Return all load balancers.
-		for _, lb := range m.loadBalancers {
+		for _, lb := range m.LoadBalancers {
 			result = append(result, lb)
 		}
 
@@ -194,7 +283,7 @@ func (m *MemoryStorage) DescribeLoadBalancers(_ context.Context, arns, names []s
 		nameSet[name] = true
 	}
 
-	for _, lb := range m.loadBalancers {
+	for _, lb := range m.LoadBalancers {
 		if len(arns) > 0 && arnSet[lb.LoadBalancerArn] {
 			result = append(result, lb)
 
@@ -283,15 +372,15 @@ func (m *MemoryStorage) CreateTargetGroup(_ context.Context, req *CreateTargetGr
 
 	defaults := getTargetGroupDefaults(req)
 	tg := m.buildTargetGroup(req, &defaults)
-	m.targetGroups[tg.TargetGroupArn] = tg
-	m.targets[tg.TargetGroupArn] = []Target{}
+	m.TargetGroups[tg.TargetGroupArn] = tg
+	m.Targets[tg.TargetGroupArn] = []Target{}
 
 	return tg, nil
 }
 
 // checkDuplicateTargetGroupName checks if a target group with the given name already exists.
 func (m *MemoryStorage) checkDuplicateTargetGroupName(name string) error {
-	for _, tg := range m.targetGroups {
+	for _, tg := range m.TargetGroups {
 		if tg.TargetGroupName == name {
 			return &Error{
 				Code:    "DuplicateTargetGroupName",
@@ -333,15 +422,15 @@ func (m *MemoryStorage) DeleteTargetGroup(_ context.Context, targetGroupArn stri
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.targetGroups[targetGroupArn]; !ok {
+	if _, ok := m.TargetGroups[targetGroupArn]; !ok {
 		return &Error{
 			Code:    "TargetGroupNotFound",
 			Message: fmt.Sprintf("Target group '%s' not found", targetGroupArn),
 		}
 	}
 
-	delete(m.targetGroups, targetGroupArn)
-	delete(m.targets, targetGroupArn)
+	delete(m.TargetGroups, targetGroupArn)
+	delete(m.Targets, targetGroupArn)
 
 	return nil
 }
@@ -355,7 +444,7 @@ func (m *MemoryStorage) DescribeTargetGroups(_ context.Context, arns, names []st
 
 	if len(arns) == 0 && len(names) == 0 && lbArn == "" {
 		// Return all target groups.
-		for _, tg := range m.targetGroups {
+		for _, tg := range m.TargetGroups {
 			result = append(result, tg)
 		}
 
@@ -374,7 +463,7 @@ func (m *MemoryStorage) DescribeTargetGroups(_ context.Context, arns, names []st
 		nameSet[name] = true
 	}
 
-	for _, tg := range m.targetGroups {
+	for _, tg := range m.TargetGroups {
 		if len(arns) > 0 && arnSet[tg.TargetGroupArn] {
 			result = append(result, tg)
 
@@ -400,14 +489,14 @@ func (m *MemoryStorage) RegisterTargets(_ context.Context, targetGroupArn string
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.targetGroups[targetGroupArn]; !ok {
+	if _, ok := m.TargetGroups[targetGroupArn]; !ok {
 		return &Error{
 			Code:    "TargetGroupNotFound",
 			Message: fmt.Sprintf("Target group '%s' not found", targetGroupArn),
 		}
 	}
 
-	existingTargets := m.targets[targetGroupArn]
+	existingTargets := m.Targets[targetGroupArn]
 	existingSet := make(map[string]bool)
 
 	for _, t := range existingTargets {
@@ -420,7 +509,7 @@ func (m *MemoryStorage) RegisterTargets(_ context.Context, targetGroupArn string
 		}
 	}
 
-	m.targets[targetGroupArn] = existingTargets
+	m.Targets[targetGroupArn] = existingTargets
 
 	return nil
 }
@@ -430,7 +519,7 @@ func (m *MemoryStorage) DeregisterTargets(_ context.Context, targetGroupArn stri
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.targetGroups[targetGroupArn]; !ok {
+	if _, ok := m.TargetGroups[targetGroupArn]; !ok {
 		return &Error{
 			Code:    "TargetGroupNotFound",
 			Message: fmt.Sprintf("Target group '%s' not found", targetGroupArn),
@@ -442,7 +531,7 @@ func (m *MemoryStorage) DeregisterTargets(_ context.Context, targetGroupArn stri
 		removeSet[t.ID] = true
 	}
 
-	existingTargets := m.targets[targetGroupArn]
+	existingTargets := m.Targets[targetGroupArn]
 	newTargets := make([]Target, 0, len(existingTargets))
 
 	for _, t := range existingTargets {
@@ -451,7 +540,7 @@ func (m *MemoryStorage) DeregisterTargets(_ context.Context, targetGroupArn stri
 		}
 	}
 
-	m.targets[targetGroupArn] = newTargets
+	m.Targets[targetGroupArn] = newTargets
 
 	return nil
 }
@@ -461,7 +550,7 @@ func (m *MemoryStorage) CreateListener(_ context.Context, req *CreateListenerReq
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	lb, ok := m.loadBalancers[req.LoadBalancerArn]
+	lb, ok := m.LoadBalancers[req.LoadBalancerArn]
 	if !ok {
 		return nil, &Error{
 			Code:    "LoadBalancerNotFound",
@@ -489,12 +578,12 @@ func (m *MemoryStorage) CreateListener(_ context.Context, req *CreateListenerReq
 		DefaultActions:  req.DefaultActions,
 	}
 
-	m.listeners[arn] = listener
+	m.Listeners[arn] = listener
 
 	// Update target group's load balancer ARNs.
 	for _, action := range req.DefaultActions {
 		if action.TargetGroupArn != "" {
-			if tg, exists := m.targetGroups[action.TargetGroupArn]; exists {
+			if tg, exists := m.TargetGroups[action.TargetGroupArn]; exists {
 				if !slices.Contains(tg.LoadBalancerArns, req.LoadBalancerArn) {
 					tg.LoadBalancerArns = append(tg.LoadBalancerArns, req.LoadBalancerArn)
 				}
@@ -510,14 +599,14 @@ func (m *MemoryStorage) DeleteListener(_ context.Context, listenerArn string) er
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.listeners[listenerArn]; !ok {
+	if _, ok := m.Listeners[listenerArn]; !ok {
 		return &Error{
 			Code:    "ListenerNotFound",
 			Message: fmt.Sprintf("Listener '%s' not found", listenerArn),
 		}
 	}
 
-	delete(m.listeners, listenerArn)
+	delete(m.Listeners, listenerArn)
 
 	return nil
 }

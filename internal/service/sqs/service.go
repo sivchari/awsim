@@ -1,13 +1,25 @@
 package sqs
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
 const defaultBaseURL = "http://localhost:4566"
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage(defaultBaseURL), defaultBaseURL))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(defaultBaseURL, opts...), defaultBaseURL))
 }
 
 // Service implements the SQS service.
@@ -43,3 +55,14 @@ func (s *Service) TargetPrefix() string {
 
 // JSONProtocol is a marker method that indicates SQS uses AWS JSON 1.0 protocol.
 func (s *Service) JSONProtocol() {}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

@@ -2,11 +2,14 @@ package athena
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes for Athena.
@@ -25,30 +28,111 @@ type Storage interface {
 	DeleteWorkGroup(ctx context.Context, name string, recursiveDelete bool) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu              sync.RWMutex
-	queryExecutions map[string]*QueryExecution
-	workGroups      map[string]*WorkGroup
-	queryResults    map[string]*ResultSet
+	mu              sync.RWMutex               `json:"-"`
+	QueryExecutions map[string]*QueryExecution `json:"queryExecutions"`
+	WorkGroups      map[string]*WorkGroup      `json:"workGroups"`
+	QueryResults    map[string]*ResultSet      `json:"queryResults"`
+	dataDir         string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
 	s := &MemoryStorage{
-		queryExecutions: make(map[string]*QueryExecution),
-		workGroups:      make(map[string]*WorkGroup),
-		queryResults:    make(map[string]*ResultSet),
+		QueryExecutions: make(map[string]*QueryExecution),
+		WorkGroups:      make(map[string]*WorkGroup),
+		QueryResults:    make(map[string]*ResultSet),
 	}
 
 	// Create the default "primary" workgroup.
-	s.workGroups["primary"] = &WorkGroup{
+	s.WorkGroups["primary"] = &WorkGroup{
 		Name:         "primary",
 		State:        WorkGroupStateEnabled,
 		CreationTime: time.Now(),
 	}
 
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "athena", s)
+	}
+
 	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.QueryExecutions == nil {
+		s.QueryExecutions = make(map[string]*QueryExecution)
+	}
+
+	if s.WorkGroups == nil {
+		s.WorkGroups = make(map[string]*WorkGroup)
+	}
+
+	if s.QueryResults == nil {
+		s.QueryResults = make(map[string]*ResultSet)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "athena", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // StartQueryExecution starts a new query execution.
@@ -61,7 +145,7 @@ func (s *MemoryStorage) StartQueryExecution(_ context.Context, query, workGroup 
 	}
 
 	// Verify workgroup exists.
-	if _, ok := s.workGroups[workGroup]; !ok {
+	if _, ok := s.WorkGroups[workGroup]; !ok {
 		return nil, &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s is not found.", workGroup),
@@ -99,8 +183,8 @@ func (s *MemoryStorage) StartQueryExecution(_ context.Context, query, workGroup 
 		},
 	}
 
-	s.queryExecutions[queryExecutionID] = qe
-	s.queryResults[queryExecutionID] = createMockResultSet()
+	s.QueryExecutions[queryExecutionID] = qe
+	s.QueryResults[queryExecutionID] = createMockResultSet()
 
 	return qe, nil
 }
@@ -125,7 +209,7 @@ func (s *MemoryStorage) StopQueryExecution(_ context.Context, queryExecutionID s
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qe, ok := s.queryExecutions[queryExecutionID]
+	qe, ok := s.QueryExecutions[queryExecutionID]
 	if !ok {
 		return &ServiceError{
 			Code:    errInvalidRequestException,
@@ -149,7 +233,7 @@ func (s *MemoryStorage) GetQueryExecution(_ context.Context, queryExecutionID st
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	qe, ok := s.queryExecutions[queryExecutionID]
+	qe, ok := s.QueryExecutions[queryExecutionID]
 	if !ok {
 		return nil, &ServiceError{
 			Code:    errInvalidRequestException,
@@ -165,7 +249,7 @@ func (s *MemoryStorage) GetQueryResults(_ context.Context, queryExecutionID, _ s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	qe, ok := s.queryExecutions[queryExecutionID]
+	qe, ok := s.QueryExecutions[queryExecutionID]
 	if !ok {
 		return nil, "", &ServiceError{
 			Code:    errInvalidRequestException,
@@ -180,7 +264,7 @@ func (s *MemoryStorage) GetQueryResults(_ context.Context, queryExecutionID, _ s
 		}
 	}
 
-	rs, ok := s.queryResults[queryExecutionID]
+	rs, ok := s.QueryResults[queryExecutionID]
 	if !ok {
 		// Return empty result set.
 		return &ResultSet{
@@ -203,7 +287,7 @@ func (s *MemoryStorage) ListQueryExecutions(_ context.Context, workGroup, _ stri
 
 	ids := make([]string, 0)
 
-	for id, qe := range s.queryExecutions {
+	for id, qe := range s.QueryExecutions {
 		if workGroup != "" && qe.WorkGroup != workGroup {
 			continue
 		}
@@ -223,7 +307,7 @@ func (s *MemoryStorage) CreateWorkGroup(_ context.Context, name string, configur
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.workGroups[name]; ok {
+	if _, ok := s.WorkGroups[name]; ok {
 		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s already exists.", name),
@@ -238,7 +322,7 @@ func (s *MemoryStorage) CreateWorkGroup(_ context.Context, name string, configur
 		CreationTime:  time.Now(),
 	}
 
-	s.workGroups[name] = wg
+	s.WorkGroups[name] = wg
 
 	return nil
 }
@@ -255,7 +339,7 @@ func (s *MemoryStorage) DeleteWorkGroup(_ context.Context, name string, recursiv
 		}
 	}
 
-	if _, ok := s.workGroups[name]; !ok {
+	if _, ok := s.WorkGroups[name]; !ok {
 		return &ServiceError{
 			Code:    errInvalidRequestException,
 			Message: fmt.Sprintf("WorkGroup %s is not found.", name),
@@ -264,7 +348,7 @@ func (s *MemoryStorage) DeleteWorkGroup(_ context.Context, name string, recursiv
 
 	// Check if there are any query executions in this workgroup.
 	if !recursiveDelete {
-		for _, qe := range s.queryExecutions {
+		for _, qe := range s.QueryExecutions {
 			if qe.WorkGroup == name {
 				return &ServiceError{
 					Code:    errInvalidRequestException,
@@ -276,15 +360,15 @@ func (s *MemoryStorage) DeleteWorkGroup(_ context.Context, name string, recursiv
 
 	// Delete query executions if recursive delete.
 	if recursiveDelete {
-		for id, qe := range s.queryExecutions {
+		for id, qe := range s.QueryExecutions {
 			if qe.WorkGroup == name {
-				delete(s.queryExecutions, id)
-				delete(s.queryResults, id)
+				delete(s.QueryExecutions, id)
+				delete(s.QueryResults, id)
 			}
 		}
 	}
 
-	delete(s.workGroups, name)
+	delete(s.WorkGroups, name)
 
 	return nil
 }

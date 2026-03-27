@@ -1,7 +1,13 @@
 // Package servicequotas provides AWS Service Quotas service emulation.
 package servicequotas
 
-import "github.com/sivchari/kumo/internal/service"
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/sivchari/kumo/internal/service"
+)
 
 // Service implements the Service Quotas service.
 type Service struct {
@@ -29,11 +35,30 @@ func (s *Service) JSONProtocol() {}
 // RegisterRoutes registers HTTP routes for the service.
 func (s *Service) RegisterRoutes(_ service.Router) {}
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage()))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
 }
 
 var (
 	_ service.Service             = (*Service)(nil)
 	_ service.JSONProtocolService = (*Service)(nil)
 )
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}

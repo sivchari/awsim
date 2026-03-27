@@ -2,11 +2,15 @@ package sesv2
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
@@ -38,21 +42,99 @@ type Storage interface {
 	GetSentEmails(ctx context.Context) ([]*SentEmail, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data structures.
 type MemoryStorage struct {
-	mu                sync.RWMutex
-	emailIdentities   map[string]*EmailIdentity
-	configurationSets map[string]*ConfigurationSet
-	sentEmails        []*SentEmail
+	mu                sync.RWMutex                 `json:"-"`
+	EmailIdentities   map[string]*EmailIdentity    `json:"emailIdentities"`
+	ConfigurationSets map[string]*ConfigurationSet `json:"configurationSets"`
+	SentEmails        []*SentEmail                 `json:"sentEmails"`
+	dataDir           string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		emailIdentities:   make(map[string]*EmailIdentity),
-		configurationSets: make(map[string]*ConfigurationSet),
-		sentEmails:        make([]*SentEmail, 0),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		EmailIdentities:   make(map[string]*EmailIdentity),
+		ConfigurationSets: make(map[string]*ConfigurationSet),
+		SentEmails:        make([]*SentEmail, 0),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "sesv2", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.EmailIdentities == nil {
+		s.EmailIdentities = make(map[string]*EmailIdentity)
+	}
+
+	if s.ConfigurationSets == nil {
+		s.ConfigurationSets = make(map[string]*ConfigurationSet)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "sesv2", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateEmailIdentity creates a new email identity.
@@ -67,7 +149,7 @@ func (s *MemoryStorage) CreateEmailIdentity(_ context.Context, req *CreateEmailI
 		}
 	}
 
-	if _, exists := s.emailIdentities[req.EmailIdentity]; exists {
+	if _, exists := s.EmailIdentities[req.EmailIdentity]; exists {
 		return nil, &IdentityError{
 			Code:    errAlreadyExists,
 			Message: "The email identity already exists",
@@ -92,7 +174,7 @@ func (s *MemoryStorage) CreateEmailIdentity(_ context.Context, req *CreateEmailI
 		CreatedAt: time.Now(),
 	}
 
-	s.emailIdentities[req.EmailIdentity] = identity
+	s.EmailIdentities[req.EmailIdentity] = identity
 
 	return identity, nil
 }
@@ -102,7 +184,7 @@ func (s *MemoryStorage) GetEmailIdentity(_ context.Context, emailIdentity string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	identity, exists := s.emailIdentities[emailIdentity]
+	identity, exists := s.EmailIdentities[emailIdentity]
 	if !exists {
 		return nil, &IdentityError{
 			Code:    errNotFound,
@@ -122,8 +204,8 @@ func (s *MemoryStorage) ListEmailIdentities(_ context.Context, _ string, pageSiz
 		pageSize = 100
 	}
 
-	identities := make([]*EmailIdentity, 0, len(s.emailIdentities))
-	for _, identity := range s.emailIdentities {
+	identities := make([]*EmailIdentity, 0, len(s.EmailIdentities))
+	for _, identity := range s.EmailIdentities {
 		identities = append(identities, identity)
 	}
 
@@ -140,14 +222,14 @@ func (s *MemoryStorage) DeleteEmailIdentity(_ context.Context, emailIdentity str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.emailIdentities[emailIdentity]; !exists {
+	if _, exists := s.EmailIdentities[emailIdentity]; !exists {
 		return &IdentityError{
 			Code:    errNotFound,
 			Message: "The email identity does not exist",
 		}
 	}
 
-	delete(s.emailIdentities, emailIdentity)
+	delete(s.EmailIdentities, emailIdentity)
 
 	return nil
 }
@@ -164,7 +246,7 @@ func (s *MemoryStorage) CreateConfigurationSet(_ context.Context, req *CreateCon
 		}
 	}
 
-	if _, exists := s.configurationSets[req.ConfigurationSetName]; exists {
+	if _, exists := s.ConfigurationSets[req.ConfigurationSetName]; exists {
 		return nil, &IdentityError{
 			Code:    errAlreadyExists,
 			Message: "The configuration set already exists",
@@ -185,7 +267,7 @@ func (s *MemoryStorage) CreateConfigurationSet(_ context.Context, req *CreateCon
 		configSet.SendingOptions = &SendingOptions{SendingEnabled: true}
 	}
 
-	s.configurationSets[req.ConfigurationSetName] = configSet
+	s.ConfigurationSets[req.ConfigurationSetName] = configSet
 
 	return configSet, nil
 }
@@ -195,7 +277,7 @@ func (s *MemoryStorage) GetConfigurationSet(_ context.Context, name string) (*Co
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	configSet, exists := s.configurationSets[name]
+	configSet, exists := s.ConfigurationSets[name]
 	if !exists {
 		return nil, &IdentityError{
 			Code:    errNotFound,
@@ -215,8 +297,8 @@ func (s *MemoryStorage) ListConfigurationSets(_ context.Context, _ string, pageS
 		pageSize = 100
 	}
 
-	names := make([]string, 0, len(s.configurationSets))
-	for name := range s.configurationSets {
+	names := make([]string, 0, len(s.ConfigurationSets))
+	for name := range s.ConfigurationSets {
 		names = append(names, name)
 	}
 
@@ -232,14 +314,14 @@ func (s *MemoryStorage) DeleteConfigurationSet(_ context.Context, name string) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.configurationSets[name]; !exists {
+	if _, exists := s.ConfigurationSets[name]; !exists {
 		return &IdentityError{
 			Code:    errNotFound,
 			Message: "The configuration set does not exist",
 		}
 	}
 
-	delete(s.configurationSets, name)
+	delete(s.ConfigurationSets, name)
 
 	return nil
 }
@@ -284,7 +366,7 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 		SentAt:               time.Now(),
 	}
 
-	s.sentEmails = append(s.sentEmails, sentEmail)
+	s.SentEmails = append(s.SentEmails, sentEmail)
 
 	return messageID, nil
 }
@@ -294,7 +376,7 @@ func (s *MemoryStorage) GetSentEmails(_ context.Context) ([]*SentEmail, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.sentEmails, nil
+	return s.SentEmails, nil
 }
 
 // extractSimpleEmailContent extracts subject and body from a SimpleEmail.

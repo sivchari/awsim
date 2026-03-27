@@ -1,11 +1,14 @@
 package dataexchange
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for Data Exchange storage operations.
@@ -27,21 +30,103 @@ type Storage interface {
 	ListJobs() []Job
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage is an in-memory implementation of Storage.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	dataSets  map[string]*DataSet
-	revisions map[string]map[string]*Revision // dataSetID -> revisionID -> revision
-	jobs      map[string]*Job
+	mu        sync.RWMutex                    `json:"-"`
+	DataSets  map[string]*DataSet             `json:"dataSets"`
+	Revisions map[string]map[string]*Revision `json:"revisions"` // dataSetID -> revisionID -> revision
+	Jobs      map[string]*Job                 `json:"jobs"`
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		dataSets:  make(map[string]*DataSet),
-		revisions: make(map[string]map[string]*Revision),
-		jobs:      make(map[string]*Job),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		DataSets:  make(map[string]*DataSet),
+		Revisions: make(map[string]map[string]*Revision),
+		Jobs:      make(map[string]*Job),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "dataexchange", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (m *MemoryStorage) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(m)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (m *MemoryStorage) UnmarshalJSON(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if m.DataSets == nil {
+		m.DataSets = make(map[string]*DataSet)
+	}
+
+	if m.Revisions == nil {
+		m.Revisions = make(map[string]map[string]*Revision)
+	}
+
+	if m.Jobs == nil {
+		m.Jobs = make(map[string]*Job)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (m *MemoryStorage) Close() error {
+	if m.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(m.dataDir, "dataexchange", m); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateDataSet creates a new data set.
@@ -64,7 +149,7 @@ func (m *MemoryStorage) CreateDataSet(input *CreateDataSetInput) *DataSet {
 		Tags:        input.Tags,
 	}
 
-	m.dataSets[id] = ds
+	m.DataSets[id] = ds
 
 	return ds
 }
@@ -74,7 +159,7 @@ func (m *MemoryStorage) GetDataSet(id string) (*DataSet, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	ds, ok := m.dataSets[id]
+	ds, ok := m.DataSets[id]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: data set %s not found", id)
 	}
@@ -87,8 +172,8 @@ func (m *MemoryStorage) ListDataSets() []DataSet {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]DataSet, 0, len(m.dataSets))
-	for _, ds := range m.dataSets {
+	result := make([]DataSet, 0, len(m.DataSets))
+	for _, ds := range m.DataSets {
 		result = append(result, *ds)
 	}
 
@@ -100,7 +185,7 @@ func (m *MemoryStorage) UpdateDataSet(id string, input *UpdateDataSetInput) (*Da
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ds, ok := m.dataSets[id]
+	ds, ok := m.DataSets[id]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: data set %s not found", id)
 	}
@@ -123,12 +208,12 @@ func (m *MemoryStorage) DeleteDataSet(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.dataSets[id]; !ok {
+	if _, ok := m.DataSets[id]; !ok {
 		return fmt.Errorf("ResourceNotFoundException: data set %s not found", id)
 	}
 
-	delete(m.dataSets, id)
-	delete(m.revisions, id)
+	delete(m.DataSets, id)
+	delete(m.Revisions, id)
 
 	return nil
 }
@@ -138,7 +223,7 @@ func (m *MemoryStorage) CreateRevision(dataSetID string, input *CreateRevisionIn
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.dataSets[dataSetID]; !ok {
+	if _, ok := m.DataSets[dataSetID]; !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: data set %s not found", dataSetID)
 	}
 
@@ -154,11 +239,11 @@ func (m *MemoryStorage) CreateRevision(dataSetID string, input *CreateRevisionIn
 		UpdatedAt: now,
 	}
 
-	if m.revisions[dataSetID] == nil {
-		m.revisions[dataSetID] = make(map[string]*Revision)
+	if m.Revisions[dataSetID] == nil {
+		m.Revisions[dataSetID] = make(map[string]*Revision)
 	}
 
-	m.revisions[dataSetID][id] = rev
+	m.Revisions[dataSetID][id] = rev
 
 	return rev, nil
 }
@@ -168,7 +253,7 @@ func (m *MemoryStorage) GetRevision(dataSetID, revisionID string) (*Revision, er
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	dsRevisions, ok := m.revisions[dataSetID]
+	dsRevisions, ok := m.Revisions[dataSetID]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: revision %s not found", revisionID)
 	}
@@ -186,11 +271,11 @@ func (m *MemoryStorage) ListRevisions(dataSetID string) ([]Revision, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, ok := m.dataSets[dataSetID]; !ok {
+	if _, ok := m.DataSets[dataSetID]; !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: data set %s not found", dataSetID)
 	}
 
-	dsRevisions := m.revisions[dataSetID]
+	dsRevisions := m.Revisions[dataSetID]
 	result := make([]Revision, 0, len(dsRevisions))
 
 	for _, rev := range dsRevisions {
@@ -205,7 +290,7 @@ func (m *MemoryStorage) UpdateRevision(dataSetID, revisionID string, input *Upda
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	dsRevisions, ok := m.revisions[dataSetID]
+	dsRevisions, ok := m.Revisions[dataSetID]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: revision %s not found", revisionID)
 	}
@@ -233,7 +318,7 @@ func (m *MemoryStorage) DeleteRevision(dataSetID, revisionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	dsRevisions, ok := m.revisions[dataSetID]
+	dsRevisions, ok := m.Revisions[dataSetID]
 	if !ok {
 		return fmt.Errorf("ResourceNotFoundException: revision %s not found", revisionID)
 	}
@@ -264,7 +349,7 @@ func (m *MemoryStorage) CreateJob(input *CreateJobInput) *Job {
 		UpdatedAt: now,
 	}
 
-	m.jobs[id] = job
+	m.Jobs[id] = job
 
 	return job
 }
@@ -274,7 +359,7 @@ func (m *MemoryStorage) GetJob(id string) (*Job, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	job, ok := m.jobs[id]
+	job, ok := m.Jobs[id]
 	if !ok {
 		return nil, fmt.Errorf("ResourceNotFoundException: job %s not found", id)
 	}
@@ -287,8 +372,8 @@ func (m *MemoryStorage) ListJobs() []Job {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]Job, 0, len(m.jobs))
-	for _, job := range m.jobs {
+	result := make([]Job, 0, len(m.Jobs))
+	for _, job := range m.Jobs {
 		result = append(result, *job)
 	}
 

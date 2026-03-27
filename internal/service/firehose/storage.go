@@ -2,6 +2,7 @@ package firehose
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Storage defines the interface for Firehose storage operations.
@@ -22,28 +25,104 @@ type Storage interface {
 	UpdateDestination(ctx context.Context, input *UpdateDestinationInput) error
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu      sync.RWMutex
-	streams map[string]*streamData
+	mu      sync.RWMutex           `json:"-"`
+	Streams map[string]*StreamData `json:"streams"`
+	dataDir string
 }
 
-type streamData struct {
-	stream  *DeliveryStream
-	records []storedRecord
+// StreamData holds a delivery stream and its records.
+type StreamData struct {
+	Stream  *DeliveryStream `json:"stream"`
+	Records []StoredRecord  `json:"records"`
 }
 
-type storedRecord struct {
-	recordID string
-	data     []byte
-	received time.Time
+// StoredRecord holds a stored record.
+type StoredRecord struct {
+	RecordID string    `json:"recordId"`
+	Data     []byte    `json:"data"`
+	Received time.Time `json:"received"`
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		streams: make(map[string]*streamData),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Streams: make(map[string]*StreamData),
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "firehose", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Streams == nil {
+		s.Streams = make(map[string]*StreamData)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "firehose", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateDeliveryStream creates a new delivery stream.
@@ -51,7 +130,7 @@ func (s *MemoryStorage) CreateDeliveryStream(_ context.Context, input *CreateDel
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.streams[input.DeliveryStreamName]; exists {
+	if _, exists := s.Streams[input.DeliveryStreamName]; exists {
 		return nil, &Error{
 			Code:    errResourceInUse,
 			Message: fmt.Sprintf("Delivery stream %s already exists", input.DeliveryStreamName),
@@ -59,9 +138,9 @@ func (s *MemoryStorage) CreateDeliveryStream(_ context.Context, input *CreateDel
 	}
 
 	stream := s.buildDeliveryStream(input)
-	s.streams[input.DeliveryStreamName] = &streamData{
-		stream:  stream,
-		records: make([]storedRecord, 0),
+	s.Streams[input.DeliveryStreamName] = &StreamData{
+		Stream:  stream,
+		Records: make([]StoredRecord, 0),
 	}
 
 	return stream, nil
@@ -158,14 +237,14 @@ func (s *MemoryStorage) DeleteDeliveryStream(_ context.Context, name string, _ b
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.streams[name]; !exists {
+	if _, exists := s.Streams[name]; !exists {
 		return &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Delivery stream %s not found", name),
 		}
 	}
 
-	delete(s.streams, name)
+	delete(s.Streams, name)
 
 	return nil
 }
@@ -175,7 +254,7 @@ func (s *MemoryStorage) DescribeDeliveryStream(_ context.Context, name string, _
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.streams[name]
+	data, exists := s.Streams[name]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -183,7 +262,7 @@ func (s *MemoryStorage) DescribeDeliveryStream(_ context.Context, name string, _
 		}
 	}
 
-	return data.stream, nil
+	return data.Stream, nil
 }
 
 // ListDeliveryStreams lists delivery streams.
@@ -221,10 +300,10 @@ func (s *MemoryStorage) ListDeliveryStreams(_ context.Context, streamType, exclu
 }
 
 func (s *MemoryStorage) collectStreamNames(streamType string) []string {
-	names := make([]string, 0, len(s.streams))
+	names := make([]string, 0, len(s.Streams))
 
-	for name, data := range s.streams {
-		if streamType != "" && string(data.stream.DeliveryStreamType) != streamType {
+	for name, data := range s.Streams {
+		if streamType != "" && string(data.Stream.DeliveryStreamType) != streamType {
 			continue
 		}
 
@@ -253,7 +332,7 @@ func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, record R
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.streams[streamName]
+	data, exists := s.Streams[streamName]
 	if !exists {
 		return "", &Error{
 			Code:    errResourceNotFound,
@@ -263,10 +342,10 @@ func (s *MemoryStorage) PutRecord(_ context.Context, streamName string, record R
 
 	recordID := uuid.New().String()
 
-	data.records = append(data.records, storedRecord{
-		recordID: recordID,
-		data:     record.Data,
-		received: time.Now(),
+	data.Records = append(data.Records, StoredRecord{
+		RecordID: recordID,
+		Data:     record.Data,
+		Received: time.Now(),
 	})
 
 	return recordID, nil
@@ -277,7 +356,7 @@ func (s *MemoryStorage) PutRecordBatch(_ context.Context, streamName string, rec
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.streams[streamName]
+	data, exists := s.Streams[streamName]
 	if !exists {
 		return nil, 0, &Error{
 			Code:    errResourceNotFound,
@@ -291,10 +370,10 @@ func (s *MemoryStorage) PutRecordBatch(_ context.Context, streamName string, rec
 	for i, record := range records {
 		recordID := uuid.New().String()
 
-		data.records = append(data.records, storedRecord{
-			recordID: recordID,
-			data:     record.Data,
-			received: now,
+		data.Records = append(data.Records, StoredRecord{
+			RecordID: recordID,
+			Data:     record.Data,
+			Received: now,
 		})
 
 		responses[i] = PutRecordBatchResponseEntry{
@@ -310,7 +389,7 @@ func (s *MemoryStorage) UpdateDestination(_ context.Context, input *UpdateDestin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.streams[input.DeliveryStreamName]
+	data, exists := s.Streams[input.DeliveryStreamName]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -318,7 +397,7 @@ func (s *MemoryStorage) UpdateDestination(_ context.Context, input *UpdateDestin
 		}
 	}
 
-	if data.stream.VersionID != input.CurrentDeliveryStreamVersionID {
+	if data.Stream.VersionID != input.CurrentDeliveryStreamVersionID {
 		return &Error{
 			Code:    errInvalidArgument,
 			Message: "Invalid version ID",
@@ -327,7 +406,7 @@ func (s *MemoryStorage) UpdateDestination(_ context.Context, input *UpdateDestin
 
 	found := false
 
-	for i, dest := range data.stream.Destinations {
+	for i, dest := range data.Stream.Destinations {
 		if dest.DestinationID != input.DestinationID {
 			continue
 		}
@@ -350,7 +429,7 @@ func (s *MemoryStorage) UpdateDestination(_ context.Context, input *UpdateDestin
 			s.applyExtendedS3Update(dest.ExtendedS3DestinationDescription, input.ExtendedS3DestinationUpdate)
 		}
 
-		data.stream.Destinations[i] = dest
+		data.Stream.Destinations[i] = dest
 
 		break
 	}
@@ -362,9 +441,9 @@ func (s *MemoryStorage) UpdateDestination(_ context.Context, input *UpdateDestin
 		}
 	}
 
-	versionNum, _ := strconv.Atoi(data.stream.VersionID)
-	data.stream.VersionID = strconv.Itoa(versionNum + 1)
-	data.stream.LastUpdateTimestamp = time.Now()
+	versionNum, _ := strconv.Atoi(data.Stream.VersionID)
+	data.Stream.VersionID = strconv.Itoa(versionNum + 1)
+	data.Stream.LastUpdateTimestamp = time.Now()
 
 	return nil
 }

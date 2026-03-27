@@ -2,12 +2,15 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -37,21 +40,95 @@ type Storage interface {
 	UpdateClusterConfiguration(ctx context.Context, clusterArn string, req *UpdateClusterConfigurationRequest) (*UpdateClusterConfigurationResponse, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex
-	clusters  map[string]*ClusterInfo // keyed by clusterArn
+	mu        sync.RWMutex            `json:"-"`
+	Clusters  map[string]*ClusterInfo `json:"clusters"` // keyed by clusterArn
 	region    string
 	accountID string
+	dataDir   string
 }
 
 // NewMemoryStorage creates a new MemoryStorage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		clusters:  make(map[string]*ClusterInfo),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Clusters:  make(map[string]*ClusterInfo),
 		region:    "us-east-1",
 		accountID: "123456789012",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "kafka", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Clusters == nil {
+		s.Clusters = make(map[string]*ClusterInfo)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "kafka", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateCluster creates a new MSK cluster.
@@ -60,7 +137,7 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 	defer s.mu.Unlock()
 
 	// Check for duplicate cluster name.
-	for _, c := range s.clusters {
+	for _, c := range s.Clusters {
 		if c.ClusterName == req.ClusterName {
 			return nil, &Error{
 				Code:    errConflict,
@@ -110,7 +187,7 @@ func (s *MemoryStorage) CreateCluster(_ context.Context, req *CreateClusterReque
 		Tags:                req.Tags,
 	}
 
-	s.clusters[clusterArn] = cluster
+	s.Clusters[clusterArn] = cluster
 
 	return &CreateClusterResponse{
 		ClusterArn:  clusterArn,
@@ -124,7 +201,7 @@ func (s *MemoryStorage) DescribeCluster(_ context.Context, clusterArn string) (*
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cluster, exists := s.clusters[clusterArn]
+	cluster, exists := s.Clusters[clusterArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -140,7 +217,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, clusterArn string) (*De
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cluster, exists := s.clusters[clusterArn]
+	cluster, exists := s.Clusters[clusterArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -150,7 +227,7 @@ func (s *MemoryStorage) DeleteCluster(_ context.Context, clusterArn string) (*De
 
 	cluster.State = statusDeleting
 
-	delete(s.clusters, clusterArn)
+	delete(s.Clusters, clusterArn)
 
 	return &DeleteClusterResponse{
 		ClusterArn: clusterArn,
@@ -163,8 +240,8 @@ func (s *MemoryStorage) ListClusters(_ context.Context, _ int, _ string) ([]Clus
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	clusters := make([]ClusterInfo, 0, len(s.clusters))
-	for _, c := range s.clusters {
+	clusters := make([]ClusterInfo, 0, len(s.Clusters))
+	for _, c := range s.Clusters {
 		clusters = append(clusters, *c)
 	}
 
@@ -176,7 +253,7 @@ func (s *MemoryStorage) GetBootstrapBrokers(_ context.Context, clusterArn string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	cluster, exists := s.clusters[clusterArn]
+	cluster, exists := s.Clusters[clusterArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,
@@ -205,7 +282,7 @@ func (s *MemoryStorage) UpdateClusterConfiguration(_ context.Context, clusterArn
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cluster, exists := s.clusters[clusterArn]
+	cluster, exists := s.Clusters[clusterArn]
 	if !exists {
 		return nil, &Error{
 			Code:    errNotFound,

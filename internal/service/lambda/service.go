@@ -1,13 +1,25 @@
 package lambda
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"github.com/sivchari/kumo/internal/service"
 )
 
 const defaultBaseURL = "http://localhost:4566"
 
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
 func init() {
-	service.Register(New(NewMemoryStorage(defaultBaseURL), defaultBaseURL))
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(defaultBaseURL, opts...), defaultBaseURL))
 }
 
 // Service implements the Lambda service.
@@ -68,4 +80,15 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 	// DeleteEventSourceMapping: DELETE /lambda/2015-03-31/event-source-mappings/{UUID}
 	r.Handle("DELETE", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.DeleteEventSourceMapping)
+}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
 }

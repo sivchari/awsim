@@ -2,12 +2,15 @@ package finspace
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -47,27 +50,113 @@ type Storage interface {
 	ListTagsForResource(ctx context.Context, resourceARN string) (map[string]string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for FinSpace.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	environments map[string]*KxEnvironment
-	databases    map[string]*KxDatabase // key: environmentID/databaseName
-	users        map[string]*KxUser     // key: environmentID/userName
-	tags         map[string]map[string]string
+	mu           sync.RWMutex                 `json:"-"`
+	Environments map[string]*KxEnvironment    `json:"environments"`
+	Databases    map[string]*KxDatabase       `json:"databases"`
+	Users        map[string]*KxUser           `json:"users"`
+	Tags         map[string]map[string]string `json:"tags"`
 	accountID    string
 	region       string
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		environments: make(map[string]*KxEnvironment),
-		databases:    make(map[string]*KxDatabase),
-		users:        make(map[string]*KxUser),
-		tags:         make(map[string]map[string]string),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Environments: make(map[string]*KxEnvironment),
+		Databases:    make(map[string]*KxDatabase),
+		Users:        make(map[string]*KxUser),
+		Tags:         make(map[string]map[string]string),
 		accountID:    "123456789012",
 		region:       "us-east-1",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "finspace", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Environments == nil {
+		s.Environments = make(map[string]*KxEnvironment)
+	}
+
+	if s.Databases == nil {
+		s.Databases = make(map[string]*KxDatabase)
+	}
+
+	if s.Users == nil {
+		s.Users = make(map[string]*KxUser)
+	}
+
+	if s.Tags == nil {
+		s.Tags = make(map[string]map[string]string)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "finspace", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateKxEnvironment creates a new kdb environment.
@@ -76,7 +165,7 @@ func (s *MemoryStorage) CreateKxEnvironment(_ context.Context, req *CreateKxEnvi
 	defer s.mu.Unlock()
 
 	// Check for duplicate name
-	for _, env := range s.environments {
+	for _, env := range s.Environments {
 		if env.Name == req.Name {
 			return nil, &Error{
 				Code:    errConflict,
@@ -101,10 +190,10 @@ func (s *MemoryStorage) CreateKxEnvironment(_ context.Context, req *CreateKxEnvi
 		UpdateTimestamp:   now,
 	}
 
-	s.environments[environmentID] = env
+	s.Environments[environmentID] = env
 
 	if len(req.Tags) > 0 {
-		s.tags[arn] = req.Tags
+		s.Tags[arn] = req.Tags
 	}
 
 	return &CreateKxEnvironmentResponse{
@@ -123,7 +212,7 @@ func (s *MemoryStorage) GetKxEnvironment(_ context.Context, environmentID string
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	env, exists := s.environments[environmentID]
+	env, exists := s.Environments[environmentID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -156,7 +245,7 @@ func (s *MemoryStorage) DeleteKxEnvironment(_ context.Context, environmentID str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	env, exists := s.environments[environmentID]
+	env, exists := s.Environments[environmentID]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -164,8 +253,8 @@ func (s *MemoryStorage) DeleteKxEnvironment(_ context.Context, environmentID str
 		}
 	}
 
-	delete(s.tags, env.EnvironmentARN)
-	delete(s.environments, environmentID)
+	delete(s.Tags, env.EnvironmentARN)
+	delete(s.Environments, environmentID)
 
 	return nil
 }
@@ -179,9 +268,9 @@ func (s *MemoryStorage) ListKxEnvironments(_ context.Context, maxResults int, _ 
 		maxResults = 10
 	}
 
-	environments := make([]*KxEnvironment, 0, len(s.environments))
+	environments := make([]*KxEnvironment, 0, len(s.Environments))
 
-	for _, env := range s.environments {
+	for _, env := range s.Environments {
 		environments = append(environments, env)
 
 		if len(environments) >= maxResults {
@@ -199,7 +288,7 @@ func (s *MemoryStorage) UpdateKxEnvironment(_ context.Context, req *UpdateKxEnvi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	env, exists := s.environments[req.EnvironmentID]
+	env, exists := s.Environments[req.EnvironmentID]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -240,7 +329,7 @@ func (s *MemoryStorage) CreateKxDatabase(_ context.Context, req *CreateKxDatabas
 	defer s.mu.Unlock()
 
 	// Check if environment exists
-	if _, exists := s.environments[req.EnvironmentID]; !exists {
+	if _, exists := s.Environments[req.EnvironmentID]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Environment with ID %s not found", req.EnvironmentID),
@@ -250,7 +339,7 @@ func (s *MemoryStorage) CreateKxDatabase(_ context.Context, req *CreateKxDatabas
 	key := fmt.Sprintf("%s/%s", req.EnvironmentID, req.DatabaseName)
 
 	// Check for duplicate
-	if _, exists := s.databases[key]; exists {
+	if _, exists := s.Databases[key]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("Database with name %s already exists in environment %s", req.DatabaseName, req.EnvironmentID),
@@ -269,10 +358,10 @@ func (s *MemoryStorage) CreateKxDatabase(_ context.Context, req *CreateKxDatabas
 		LastModifiedTimestamp: now,
 	}
 
-	s.databases[key] = db
+	s.Databases[key] = db
 
 	if len(req.Tags) > 0 {
-		s.tags[arn] = req.Tags
+		s.Tags[arn] = req.Tags
 	}
 
 	return &CreateKxDatabaseResponse{
@@ -291,7 +380,7 @@ func (s *MemoryStorage) GetKxDatabase(_ context.Context, environmentID, database
 
 	key := fmt.Sprintf("%s/%s", environmentID, databaseName)
 
-	db, exists := s.databases[key]
+	db, exists := s.Databases[key]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -320,7 +409,7 @@ func (s *MemoryStorage) DeleteKxDatabase(_ context.Context, environmentID, datab
 
 	key := fmt.Sprintf("%s/%s", environmentID, databaseName)
 
-	db, exists := s.databases[key]
+	db, exists := s.Databases[key]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -328,8 +417,8 @@ func (s *MemoryStorage) DeleteKxDatabase(_ context.Context, environmentID, datab
 		}
 	}
 
-	delete(s.tags, db.DatabaseARN)
-	delete(s.databases, key)
+	delete(s.Tags, db.DatabaseARN)
+	delete(s.Databases, key)
 
 	return nil
 }
@@ -345,7 +434,7 @@ func (s *MemoryStorage) ListKxDatabases(_ context.Context, environmentID string,
 
 	databases := make([]*KxDatabase, 0)
 
-	for key, db := range s.databases {
+	for key, db := range s.Databases {
 		if db.EnvironmentID == environmentID {
 			databases = append(databases, db)
 
@@ -369,7 +458,7 @@ func (s *MemoryStorage) UpdateKxDatabase(_ context.Context, req *UpdateKxDatabas
 
 	key := fmt.Sprintf("%s/%s", req.EnvironmentID, req.DatabaseName)
 
-	db, exists := s.databases[key]
+	db, exists := s.Databases[key]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -398,7 +487,7 @@ func (s *MemoryStorage) CreateKxUser(_ context.Context, req *CreateKxUserRequest
 	defer s.mu.Unlock()
 
 	// Check if environment exists
-	if _, exists := s.environments[req.EnvironmentID]; !exists {
+	if _, exists := s.Environments[req.EnvironmentID]; !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Environment with ID %s not found", req.EnvironmentID),
@@ -408,7 +497,7 @@ func (s *MemoryStorage) CreateKxUser(_ context.Context, req *CreateKxUserRequest
 	key := fmt.Sprintf("%s/%s", req.EnvironmentID, req.UserName)
 
 	// Check for duplicate
-	if _, exists := s.users[key]; exists {
+	if _, exists := s.Users[key]; exists {
 		return nil, &Error{
 			Code:    errConflict,
 			Message: fmt.Sprintf("User with name %s already exists in environment %s", req.UserName, req.EnvironmentID),
@@ -426,10 +515,10 @@ func (s *MemoryStorage) CreateKxUser(_ context.Context, req *CreateKxUserRequest
 		UserName:        req.UserName,
 	}
 
-	s.users[key] = user
+	s.Users[key] = user
 
 	if len(req.Tags) > 0 {
-		s.tags[arn] = req.Tags
+		s.Tags[arn] = req.Tags
 	}
 
 	return &CreateKxUserResponse{
@@ -447,7 +536,7 @@ func (s *MemoryStorage) GetKxUser(_ context.Context, environmentID, userName str
 
 	key := fmt.Sprintf("%s/%s", environmentID, userName)
 
-	user, exists := s.users[key]
+	user, exists := s.Users[key]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -470,7 +559,7 @@ func (s *MemoryStorage) DeleteKxUser(_ context.Context, environmentID, userName 
 
 	key := fmt.Sprintf("%s/%s", environmentID, userName)
 
-	user, exists := s.users[key]
+	user, exists := s.Users[key]
 	if !exists {
 		return &Error{
 			Code:    errResourceNotFound,
@@ -478,8 +567,8 @@ func (s *MemoryStorage) DeleteKxUser(_ context.Context, environmentID, userName 
 		}
 	}
 
-	delete(s.tags, user.UserARN)
-	delete(s.users, key)
+	delete(s.Tags, user.UserARN)
+	delete(s.Users, key)
 
 	return nil
 }
@@ -495,7 +584,7 @@ func (s *MemoryStorage) ListKxUsers(_ context.Context, environmentID string, max
 
 	users := make([]*KxUser, 0)
 
-	for key, user := range s.users {
+	for key, user := range s.Users {
 		// Check if the key starts with the environmentID
 		if len(key) > len(environmentID) && key[:len(environmentID)] == environmentID && key[len(environmentID)] == '/' {
 			users = append(users, user)
@@ -518,7 +607,7 @@ func (s *MemoryStorage) UpdateKxUser(_ context.Context, req *UpdateKxUserRequest
 
 	key := fmt.Sprintf("%s/%s", req.EnvironmentID, req.UserName)
 
-	user, exists := s.users[key]
+	user, exists := s.Users[key]
 	if !exists {
 		return nil, &Error{
 			Code:    errResourceNotFound,
@@ -545,11 +634,11 @@ func (s *MemoryStorage) TagResource(_ context.Context, resourceARN string, tags 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.tags[resourceARN] == nil {
-		s.tags[resourceARN] = make(map[string]string)
+	if s.Tags[resourceARN] == nil {
+		s.Tags[resourceARN] = make(map[string]string)
 	}
 
-	maps.Copy(s.tags[resourceARN], tags)
+	maps.Copy(s.Tags[resourceARN], tags)
 
 	return nil
 }
@@ -559,12 +648,12 @@ func (s *MemoryStorage) UntagResource(_ context.Context, resourceARN string, tag
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.tags[resourceARN] == nil {
+	if s.Tags[resourceARN] == nil {
 		return nil
 	}
 
 	for _, key := range tagKeys {
-		delete(s.tags[resourceARN], key)
+		delete(s.Tags[resourceARN], key)
 	}
 
 	return nil
@@ -575,7 +664,7 @@ func (s *MemoryStorage) ListTagsForResource(_ context.Context, resourceARN strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tags := s.tags[resourceARN]
+	tags := s.Tags[resourceARN]
 	if tags == nil {
 		tags = make(map[string]string)
 	}

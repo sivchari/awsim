@@ -2,11 +2,14 @@ package route53resolver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/sivchari/kumo/internal/storage"
 )
 
 const (
@@ -38,25 +41,107 @@ type Storage interface {
 	ListResolverRuleAssociations(ctx context.Context, maxResults int, nextToken string) ([]*ResolverRuleAssociation, string, error)
 }
 
+// Option is a configuration option for MemoryStorage.
+type Option func(*MemoryStorage)
+
+// WithDataDir enables persistent storage in the specified directory.
+func WithDataDir(dir string) Option {
+	return func(s *MemoryStorage) {
+		s.dataDir = dir
+	}
+}
+
+// Compile-time interface checks.
+var (
+	_ json.Marshaler   = (*MemoryStorage)(nil)
+	_ json.Unmarshaler = (*MemoryStorage)(nil)
+)
+
 // MemoryStorage implements in-memory storage for Route 53 Resolver.
 type MemoryStorage struct {
-	mu           sync.RWMutex
-	endpoints    map[string]*ResolverEndpoint
-	rules        map[string]*ResolverRule
-	associations map[string]*ResolverRuleAssociation
+	mu           sync.RWMutex                        `json:"-"`
+	Endpoints    map[string]*ResolverEndpoint        `json:"endpoints"`
+	Rules        map[string]*ResolverRule            `json:"rules"`
+	Associations map[string]*ResolverRuleAssociation `json:"associations"`
 	accountID    string
 	region       string
+	dataDir      string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
-func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		endpoints:    make(map[string]*ResolverEndpoint),
-		rules:        make(map[string]*ResolverRule),
-		associations: make(map[string]*ResolverRuleAssociation),
+func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	s := &MemoryStorage{
+		Endpoints:    make(map[string]*ResolverEndpoint),
+		Rules:        make(map[string]*ResolverRule),
+		Associations: make(map[string]*ResolverRuleAssociation),
 		accountID:    "123456789012",
 		region:       "us-east-1",
 	}
+	for _, o := range opts {
+		o(s)
+	}
+
+	if s.dataDir != "" {
+		_ = storage.Load(s.dataDir, "route53resolver", s)
+	}
+
+	return s
+}
+
+// MarshalJSON serializes the storage state to JSON.
+func (s *MemoryStorage) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type Alias MemoryStorage
+
+	data, err := json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	return data, nil
+}
+
+// UnmarshalJSON restores the storage state from JSON.
+func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type Alias MemoryStorage
+
+	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	if s.Endpoints == nil {
+		s.Endpoints = make(map[string]*ResolverEndpoint)
+	}
+
+	if s.Rules == nil {
+		s.Rules = make(map[string]*ResolverRule)
+	}
+
+	if s.Associations == nil {
+		s.Associations = make(map[string]*ResolverRuleAssociation)
+	}
+
+	return nil
+}
+
+// Close saves the storage state to disk if persistence is enabled.
+func (s *MemoryStorage) Close() error {
+	if s.dataDir == "" {
+		return nil
+	}
+
+	if err := storage.Save(s.dataDir, "route53resolver", s); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	return nil
 }
 
 // CreateResolverEndpoint creates a new resolver endpoint.
@@ -117,7 +202,7 @@ func (s *MemoryStorage) CreateResolverEndpoint(_ context.Context, req *CreateRes
 		endpoint.Protocols = []string{"Do53"}
 	}
 
-	s.endpoints[id] = endpoint
+	s.Endpoints[id] = endpoint
 
 	return endpoint, nil
 }
@@ -127,7 +212,7 @@ func (s *MemoryStorage) GetResolverEndpoint(_ context.Context, id string) (*Reso
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	endpoint, exists := s.endpoints[id]
+	endpoint, exists := s.Endpoints[id]
 	if !exists {
 		return nil, &ResolverError{
 			Code:    errResourceNotFound,
@@ -143,7 +228,7 @@ func (s *MemoryStorage) DeleteResolverEndpoint(_ context.Context, id string) (*R
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	endpoint, exists := s.endpoints[id]
+	endpoint, exists := s.Endpoints[id]
 	if !exists {
 		return nil, &ResolverError{
 			Code:    errResourceNotFound,
@@ -153,7 +238,7 @@ func (s *MemoryStorage) DeleteResolverEndpoint(_ context.Context, id string) (*R
 
 	endpoint.Status = statusDeleting
 
-	delete(s.endpoints, id)
+	delete(s.Endpoints, id)
 
 	return endpoint, nil
 }
@@ -167,8 +252,8 @@ func (s *MemoryStorage) ListResolverEndpoints(_ context.Context, maxResults int,
 		maxResults = 10
 	}
 
-	endpoints := make([]*ResolverEndpoint, 0, len(s.endpoints))
-	for _, endpoint := range s.endpoints {
+	endpoints := make([]*ResolverEndpoint, 0, len(s.Endpoints))
+	for _, endpoint := range s.Endpoints {
 		endpoints = append(endpoints, endpoint)
 		if len(endpoints) >= maxResults {
 			break
@@ -212,7 +297,7 @@ func (s *MemoryStorage) CreateResolverRule(_ context.Context, req *CreateResolve
 		ModificationTime:   now,
 	}
 
-	s.rules[id] = rule
+	s.Rules[id] = rule
 
 	return rule, nil
 }
@@ -222,7 +307,7 @@ func (s *MemoryStorage) GetResolverRule(_ context.Context, id string) (*Resolver
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rule, exists := s.rules[id]
+	rule, exists := s.Rules[id]
 	if !exists {
 		return nil, &ResolverError{
 			Code:    errResourceNotFound,
@@ -238,7 +323,7 @@ func (s *MemoryStorage) DeleteResolverRule(_ context.Context, id string) (*Resol
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rule, exists := s.rules[id]
+	rule, exists := s.Rules[id]
 	if !exists {
 		return nil, &ResolverError{
 			Code:    errResourceNotFound,
@@ -247,7 +332,7 @@ func (s *MemoryStorage) DeleteResolverRule(_ context.Context, id string) (*Resol
 	}
 
 	// Check if rule is associated with any VPC
-	for _, assoc := range s.associations {
+	for _, assoc := range s.Associations {
 		if assoc.ResolverRuleID == id {
 			return nil, &ResolverError{
 				Code:    errResourceInUse,
@@ -258,7 +343,7 @@ func (s *MemoryStorage) DeleteResolverRule(_ context.Context, id string) (*Resol
 
 	rule.Status = statusDeleting
 
-	delete(s.rules, id)
+	delete(s.Rules, id)
 
 	return rule, nil
 }
@@ -272,8 +357,8 @@ func (s *MemoryStorage) ListResolverRules(_ context.Context, maxResults int, _ s
 		maxResults = 10
 	}
 
-	rules := make([]*ResolverRule, 0, len(s.rules))
-	for _, rule := range s.rules {
+	rules := make([]*ResolverRule, 0, len(s.Rules))
+	for _, rule := range s.Rules {
 		rules = append(rules, rule)
 		if len(rules) >= maxResults {
 			break
@@ -289,7 +374,7 @@ func (s *MemoryStorage) AssociateResolverRule(_ context.Context, req *AssociateR
 	defer s.mu.Unlock()
 
 	// Check if rule exists
-	if _, exists := s.rules[req.ResolverRuleID]; !exists {
+	if _, exists := s.Rules[req.ResolverRuleID]; !exists {
 		return nil, &ResolverError{
 			Code:    errResourceNotFound,
 			Message: fmt.Sprintf("Resolver rule with ID '%s' does not exist", req.ResolverRuleID),
@@ -297,7 +382,7 @@ func (s *MemoryStorage) AssociateResolverRule(_ context.Context, req *AssociateR
 	}
 
 	// Check if association already exists
-	for _, assoc := range s.associations {
+	for _, assoc := range s.Associations {
 		if assoc.ResolverRuleID == req.ResolverRuleID && assoc.VPCID == req.VPCID {
 			return nil, &ResolverError{
 				Code:    errResourceExists,
@@ -316,7 +401,7 @@ func (s *MemoryStorage) AssociateResolverRule(_ context.Context, req *AssociateR
 		Status:         "COMPLETE",
 	}
 
-	s.associations[id] = assoc
+	s.Associations[id] = assoc
 
 	return assoc, nil
 }
@@ -326,11 +411,11 @@ func (s *MemoryStorage) DisassociateResolverRule(_ context.Context, ruleID, vpcI
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for id, assoc := range s.associations {
+	for id, assoc := range s.Associations {
 		if assoc.ResolverRuleID == ruleID && assoc.VPCID == vpcID {
 			assoc.Status = statusDeleting
 
-			delete(s.associations, id)
+			delete(s.Associations, id)
 
 			return assoc, nil
 		}
@@ -351,8 +436,8 @@ func (s *MemoryStorage) ListResolverRuleAssociations(_ context.Context, maxResul
 		maxResults = 10
 	}
 
-	associations := make([]*ResolverRuleAssociation, 0, len(s.associations))
-	for _, assoc := range s.associations {
+	associations := make([]*ResolverRuleAssociation, 0, len(s.Associations))
+	for _, assoc := range s.Associations {
 		associations = append(associations, assoc)
 		if len(associations) >= maxResults {
 			break
