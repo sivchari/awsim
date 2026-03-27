@@ -5,7 +5,9 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -448,5 +450,113 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 
 	if *previousOutput.SecretString != "version-1" {
 		t.Errorf("previous version mismatch: got %s, want version-1", *previousOutput.SecretString)
+	}
+}
+
+func TestSecretsManager_GetRandomPassword(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+
+	// Default parameters.
+	output, err := client.GetRandomPassword(ctx, &secretsmanager.GetRandomPasswordInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if output.RandomPassword == nil {
+		t.Fatal("expected non-nil RandomPassword")
+	}
+
+	if len(*output.RandomPassword) != 32 {
+		t.Errorf("expected default length 32, got %d", len(*output.RandomPassword))
+	}
+}
+
+func TestSecretsManager_GetRandomPassword_CustomLength(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+
+	output, err := client.GetRandomPassword(ctx, &secretsmanager.GetRandomPasswordInput{
+		PasswordLength: aws.Int64(64),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(*output.RandomPassword) != 64 {
+		t.Errorf("expected length 64, got %d", len(*output.RandomPassword))
+	}
+}
+
+func TestSecretsManager_GetRandomPassword_ExcludeTypes(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+
+	// Only lowercase letters.
+	output, err := client.GetRandomPassword(ctx, &secretsmanager.GetRandomPasswordInput{
+		PasswordLength:     aws.Int64(100),
+		ExcludeUppercase:   aws.Bool(true),
+		ExcludeNumbers:     aws.Bool(true),
+		ExcludePunctuation: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	password := *output.RandomPassword
+	for _, c := range password {
+		if !unicode.IsLower(c) {
+			t.Errorf("expected only lowercase, got %c", c)
+
+			break
+		}
+	}
+}
+
+func TestSecretsManager_GetRandomPassword_ExcludeCharacters(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+
+	output, err := client.GetRandomPassword(ctx, &secretsmanager.GetRandomPasswordInput{
+		PasswordLength:    aws.Int64(100),
+		ExcludeCharacters: aws.String("aeiouAEIOU"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	password := *output.RandomPassword
+	if strings.ContainsAny(password, "aeiouAEIOU") {
+		t.Errorf("password contains excluded vowels: %s", password)
+	}
+}
+
+func TestSecretsManager_GetRandomPassword_RequireEachType(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+
+	output, err := client.GetRandomPassword(ctx, &secretsmanager.GetRandomPasswordInput{
+		PasswordLength:          aws.Int64(20),
+		RequireEachIncludedType: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	password := *output.RandomPassword
+	hasUpper := strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	hasLower := strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz")
+	hasDigit := strings.ContainsAny(password, "0123456789")
+
+	if !hasUpper {
+		t.Error("expected at least one uppercase letter")
+	}
+
+	if !hasLower {
+		t.Error("expected at least one lowercase letter")
+	}
+
+	if !hasDigit {
+		t.Error("expected at least one digit")
 	}
 }

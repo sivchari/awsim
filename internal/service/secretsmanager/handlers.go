@@ -1,14 +1,22 @@
 package secretsmanager
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
+)
+
+const (
+	defaultPasswordLength = 32
+	maxPasswordLength     = 4096
+	punctuation           = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 )
 
 // Error codes for Secrets Manager.
@@ -474,7 +482,190 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.DescribeSecret(w, r)
 	case "UpdateSecret":
 		s.UpdateSecret(w, r)
+	case "GetRandomPassword":
+		s.GetRandomPassword(w, r)
 	default:
 		writeSecretsManagerError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 	}
+}
+
+// GetRandomPassword handles the GetRandomPassword action.
+func (s *Service) GetRandomPassword(w http.ResponseWriter, r *http.Request) {
+	var req GetRandomPasswordRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSecretsManagerError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	password, err := generateRandomPassword(&req)
+	if err != nil {
+		writeSecretsManagerError(w, errInvalidParameter, err.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	writeJSONResponse(w, GetRandomPasswordResponse{
+		RandomPassword: password,
+	})
+}
+
+// generateRandomPassword generates a random password based on the request parameters.
+func generateRandomPassword(req *GetRandomPasswordRequest) (string, error) {
+	length := req.PasswordLength
+	if length == 0 {
+		length = defaultPasswordLength
+	}
+
+	if length < 1 || length > maxPasswordLength {
+		return "", fmt.Errorf("password length must be between 1 and %d", maxPasswordLength)
+	}
+
+	charset := buildCharset(req)
+	if charset == "" {
+		return "", fmt.Errorf("no characters available to generate password")
+	}
+
+	password, err := randomString(charset, int(length))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate password: %w", err)
+	}
+
+	if req.RequireEachIncludedType {
+		password, err = ensureAllTypes(password, req)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate password: %w", err)
+		}
+	}
+
+	return password, nil
+}
+
+// buildCharset constructs the character set based on request parameters.
+func buildCharset(req *GetRandomPasswordRequest) string {
+	var charset string
+
+	if !req.ExcludeUppercase {
+		charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	}
+
+	if !req.ExcludeLowercase {
+		charset += "abcdefghijklmnopqrstuvwxyz"
+	}
+
+	if !req.ExcludeNumbers {
+		charset += "0123456789"
+	}
+
+	if !req.ExcludePunctuation {
+		charset += punctuation
+	}
+
+	if req.IncludeSpace {
+		charset += " "
+	}
+
+	// Remove excluded characters.
+	if req.ExcludeCharacters != "" {
+		var filtered []byte
+
+		for i := range len(charset) {
+			if !strings.ContainsRune(req.ExcludeCharacters, rune(charset[i])) {
+				filtered = append(filtered, charset[i])
+			}
+		}
+
+		charset = string(filtered)
+	}
+
+	return charset
+}
+
+// randomString generates a cryptographically random string from the given charset.
+func randomString(charset string, length int) (string, error) {
+	result := make([]byte, length)
+	charsetLen := big.NewInt(int64(len(charset)))
+
+	for i := range length {
+		n, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random number: %w", err)
+		}
+
+		result[i] = charset[n.Int64()]
+	}
+
+	return string(result), nil
+}
+
+// ensureAllTypes ensures the password contains at least one character from each included type.
+func ensureAllTypes(password string, req *GetRandomPasswordRequest) (string, error) {
+	types := collectRequiredTypes(req)
+	if len(types) == 0 {
+		return password, nil
+	}
+
+	buf := []byte(password)
+
+	for i, typ := range types {
+		if !containsAny(password, typ) {
+			if i >= len(buf) {
+				break
+			}
+
+			c, err := randomString(typ, 1)
+			if err != nil {
+				return "", err
+			}
+
+			buf[i] = c[0]
+		}
+	}
+
+	// Shuffle to avoid predictable positions.
+	for i := len(buf) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return "", fmt.Errorf("failed to shuffle: %w", err)
+		}
+
+		j := n.Int64()
+		buf[i], buf[j] = buf[j], buf[i]
+	}
+
+	return string(buf), nil
+}
+
+// collectRequiredTypes returns the character sets for each required type.
+func collectRequiredTypes(req *GetRandomPasswordRequest) []string {
+	var types []string
+
+	if !req.ExcludeUppercase {
+		types = append(types, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	}
+
+	if !req.ExcludeLowercase {
+		types = append(types, "abcdefghijklmnopqrstuvwxyz")
+	}
+
+	if !req.ExcludeNumbers {
+		types = append(types, "0123456789")
+	}
+
+	if !req.ExcludePunctuation {
+		types = append(types, punctuation)
+	}
+
+	return types
+}
+
+// containsAny checks if the string contains any character from the given set.
+func containsAny(s, chars string) bool {
+	for _, c := range chars {
+		if strings.ContainsRune(s, c) {
+			return true
+		}
+	}
+
+	return false
 }
