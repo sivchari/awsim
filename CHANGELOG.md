@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.0](https://github.com/sivchari/kumo/compare/v0.5.4...v0.6.0) - 2026-03-27
+- feat(storage): add optional persistent storage via KUMO_DATA_DIR by @sivchari in https://github.com/sivchari/kumo/pull/378
+- feat(secretsmanager): add GetRandomPassword API by @sivchari in https://github.com/sivchari/kumo/pull/380
+- release v0.6.0 by @sivchari in https://github.com/sivchari/kumo/pull/382
+- feat(server): add API action name to request logs by @sivchari in https://github.com/sivchari/kumo/pull/381
+
 ## [v0.5.4](https://github.com/sivchari/kumo/compare/v0.5.3...v0.5.4) - 2026-03-24
 - Fix/goreleaser cask token by @sivchari in https://github.com/sivchari/kumo/pull/373
 
