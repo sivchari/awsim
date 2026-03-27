@@ -389,6 +389,36 @@ Environment variables:
 | `KUMO_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `KUMO_DATA_DIR` | (unset) | Directory for persistent storage. When unset, data is in-memory only. |
 
+## Logging
+
+kumo logs all requests with structured fields. The log level controls the amount of detail:
+
+### INFO (default)
+
+Each request is logged with method, path, status, duration, and API action name:
+
+```
+level=INFO msg=request method=POST path=/ status=200 duration=61µs request_id=... target=secretsmanager.CreateSecret
+level=INFO msg=request method=PUT path=/my-bucket pattern=/{bucket} status=200 duration=30µs request_id=...
+```
+
+- `target` -- appears for JSON/Query protocol services (Secrets Manager, DynamoDB, SQS, etc.)
+- `action` -- appears for Query protocol services (EC2, SNS, etc.) when Action is in the URL query string
+
+### DEBUG
+
+In addition to INFO output, the full request body is logged:
+
+```
+level=DEBUG msg="request body" request_id=... body={"Name":"my-secret","SecretString":"..."}
+```
+
+Enable with:
+
+```bash
+KUMO_LOG_LEVEL=debug ./bin/kumo
+```
+
 ## Data Persistence
 
 By default kumo runs as a pure in-memory emulator -- all data is lost when the process stops. This is ideal for CI/CD pipelines where each test run starts from a clean state.

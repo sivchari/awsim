@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -100,21 +102,48 @@ func (r *Router) wrapHandler(method, pattern string, handler http.HandlerFunc) h
 		w.Header().Set("x-amz-request-id", requestID)
 		w.Header().Set("x-amzn-RequestId", requestID)
 
+		// Capture request body for debug logging.
+		var requestBody string
+
+		if r.logger.Enabled(req.Context(), slog.LevelDebug) && req.Body != nil {
+			body, err := io.ReadAll(req.Body)
+			if err == nil {
+				requestBody = string(body)
+				req.Body = io.NopCloser(bytes.NewReader(body))
+			}
+		}
+
 		// Wrap response writer to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
 		// Call the actual handler
 		handler(wrapped, req)
 
-		// Log the request
-		r.logger.Info("request",
+		// Build log attributes.
+		attrs := []any{
 			"method", method,
 			"path", req.URL.Path,
 			"pattern", pattern,
 			"status", wrapped.statusCode,
 			"duration", time.Since(start),
 			"request_id", requestID,
-		)
+		}
+
+		// Extract service and action from protocol headers.
+		if target := req.Header.Get("X-Amz-Target"); target != "" {
+			attrs = append(attrs, "target", target)
+		}
+
+		if action := req.URL.Query().Get("Action"); action != "" {
+			attrs = append(attrs, "action", action)
+		}
+
+		r.logger.Info("request", attrs...)
+
+		// Log request body at debug level.
+		if requestBody != "" {
+			r.logger.Debug("request body", "request_id", requestID, "body", requestBody)
+		}
 	}
 }
 

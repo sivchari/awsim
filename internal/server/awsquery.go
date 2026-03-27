@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -90,10 +91,16 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	writeQueryError(w, "UnknownAction", "Unknown action: "+action, http.StatusBadRequest)
 }
 
+// indexedEntry holds a value with its original index from the query parameter.
+type indexedEntry struct {
+	index int
+	value string
+}
+
 // formToJSON converts form values to JSON.
 func formToJSON(form map[string][]string) []byte {
 	result := make(map[string]any)
-	indexedArrays := make(map[string][]string)
+	indexedArrays := make(map[string][]indexedEntry)
 
 	for key, values := range form {
 		if key == "Action" || key == "Version" {
@@ -103,10 +110,12 @@ func formToJSON(form map[string][]string) []byte {
 		// Check for indexed array pattern: Name.1, Name.2, etc.
 		if idx := strings.LastIndex(key, "."); idx > 0 {
 			suffix := key[idx+1:]
-			if _, err := strconv.Atoi(suffix); err == nil {
+
+			n, err := strconv.Atoi(suffix)
+			if err == nil {
 				baseName := key[:idx]
 				if len(values) == 1 {
-					indexedArrays[baseName] = append(indexedArrays[baseName], values[0])
+					indexedArrays[baseName] = append(indexedArrays[baseName], indexedEntry{index: n, value: values[0]})
 				}
 
 				continue
@@ -123,11 +132,20 @@ func formToJSON(form map[string][]string) []byte {
 		}
 	}
 
-	// Add indexed arrays to result.
+	// Add indexed arrays to result, sorted by original index.
 	// Handle two patterns:
 	// 1. List.member.N pattern (AWS Query Protocol lists) -> strip ".member" to get "List"
 	// 2. Simple InstanceId.N pattern -> pluralize to "InstanceIds"
-	for baseName, arr := range indexedArrays {
+	for baseName, entries := range indexedArrays {
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].index < entries[j].index
+		})
+
+		arr := make([]string, 0, len(entries))
+		for _, e := range entries {
+			arr = append(arr, e.value)
+		}
+
 		var keyName string
 
 		if stripped, found := strings.CutSuffix(baseName, ".member"); found {
