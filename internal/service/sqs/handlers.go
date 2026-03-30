@@ -173,6 +173,94 @@ func (s *Service) SendMessage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SendMessageBatch handles the SendMessageBatch action.
+func (s *Service) SendMessageBatch(w http.ResponseWriter, r *http.Request) {
+	var req SendMessageBatchRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) == 0 {
+		writeSQSError(w, "EmptyBatchRequest", "There should be at least one SendMessageBatchRequestEntry in the request", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) > 10 {
+		writeSQSError(w, "TooManyEntriesInBatchRequest", "Maximum number of entries per request are 10", http.StatusBadRequest)
+
+		return
+	}
+
+	// Check for duplicate IDs.
+	seen := make(map[string]struct{}, len(req.Entries))
+	for _, entry := range req.Entries {
+		if _, exists := seen[entry.ID]; exists {
+			writeSQSError(w, "BatchEntryIdsNotDistinct", "Two or more batch entries in the request have the same Id", http.StatusBadRequest)
+
+			return
+		}
+
+		seen[entry.ID] = struct{}{}
+	}
+
+	var resp SendMessageBatchResponse
+
+	for _, entry := range req.Entries {
+		if entry.MessageBody == "" {
+			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
+				ID:          entry.ID,
+				SenderFault: true,
+				Code:        "MissingParameter",
+				Message:     "The request must contain the parameter MessageBody",
+			})
+
+			continue
+		}
+
+		msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, entry.MessageBody, entry.DelaySeconds, entry.MessageAttributes, entry.MessageGroupID, entry.MessageDeduplicationID)
+		if err != nil {
+			var qErr *QueueError
+			if errors.As(err, &qErr) {
+				resp.Failed = append(resp.Failed, BatchResultErrorEntry{
+					ID:          entry.ID,
+					SenderFault: true,
+					Code:        qErr.Code,
+					Message:     qErr.Message,
+				})
+
+				continue
+			}
+
+			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
+				ID:          entry.ID,
+				SenderFault: false,
+				Code:        "InternalError",
+				Message:     "Internal server error",
+			})
+
+			continue
+		}
+
+		resp.Successful = append(resp.Successful, SendMessageBatchResultEntry{
+			ID:               entry.ID,
+			MessageID:        msg.MessageID,
+			MD5OfMessageBody: msg.MD5OfBody,
+			SequenceNumber:   msg.SequenceNumber,
+		})
+	}
+
+	writeJSONResponse(w, resp)
+}
+
 // ReceiveMessage handles the ReceiveMessage action.
 func (s *Service) ReceiveMessage(w http.ResponseWriter, r *http.Request) {
 	var req ReceiveMessageRequest
@@ -422,6 +510,8 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.GetQueueURL(w, r)
 	case "SendMessage":
 		s.SendMessage(w, r)
+	case "SendMessageBatch":
+		s.SendMessageBatch(w, r)
 	case "ReceiveMessage":
 		s.ReceiveMessage(w, r)
 	case "DeleteMessage":

@@ -443,6 +443,49 @@ func TestSQS_FIFOQueue_ExplicitDeduplicationId(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "SequenceNumber", "ResultMetadata")).Assert(t.Name(), sendOutput)
 }
 
+func TestSQS_SendMessageBatch(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-send-batch"
+
+	// Create queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message batch.
+	batchOutput, err := client.SendMessageBatch(ctx, &sqs.SendMessageBatchInput{
+		QueueUrl: createOutput.QueueUrl,
+		Entries: []types.SendMessageBatchRequestEntry{
+			{
+				Id:          aws.String("msg1"),
+				MessageBody: aws.String("Hello, batch message 1"),
+			},
+			{
+				Id:          aws.String("msg2"),
+				MessageBody: aws.String("Hello, batch message 2"),
+			},
+			{
+				Id:          aws.String("msg3"),
+				MessageBody: aws.String("Hello, batch message 3"),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "ResultMetadata")).Assert(t.Name(), batchOutput)
+}
+
 func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
 	client := newSQSClient(t)
 	ctx := t.Context()

@@ -107,6 +107,45 @@ type SendMessageResponse struct {
 	SequenceNumber               string `json:"SequenceNumber,omitempty"`
 }
 
+// SendMessageBatchRequest is the request for SendMessageBatch.
+type SendMessageBatchRequest struct {
+	QueueURL string                         `json:"QueueUrl"`
+	Entries  []SendMessageBatchRequestEntry `json:"Entries"`
+}
+
+// SendMessageBatchRequestEntry is an individual entry in a SendMessageBatch request.
+type SendMessageBatchRequestEntry struct {
+	ID                     string                           `json:"Id"`
+	MessageBody            string                           `json:"MessageBody"`
+	DelaySeconds           int                              `json:"DelaySeconds,omitempty"`
+	MessageAttributes      map[string]MessageAttributeValue `json:"MessageAttributes,omitempty"`
+	MessageDeduplicationID string                           `json:"MessageDeduplicationId,omitempty"`
+	MessageGroupID         string                           `json:"MessageGroupId,omitempty"`
+}
+
+// SendMessageBatchResponse is the response for SendMessageBatch.
+type SendMessageBatchResponse struct {
+	Successful []SendMessageBatchResultEntry `json:"Successful,omitempty"`
+	Failed     []BatchResultErrorEntry       `json:"Failed,omitempty"`
+}
+
+// SendMessageBatchResultEntry is a successful entry in a SendMessageBatch response.
+type SendMessageBatchResultEntry struct {
+	ID                     string `json:"Id"`
+	MessageID              string `json:"MessageId"`
+	MD5OfMessageBody       string `json:"MD5OfMessageBody"`
+	MD5OfMessageAttributes string `json:"MD5OfMessageAttributes,omitempty"`
+	SequenceNumber         string `json:"SequenceNumber,omitempty"`
+}
+
+// BatchResultErrorEntry is a failed entry in a batch response.
+type BatchResultErrorEntry struct {
+	ID          string `json:"Id"`
+	SenderFault bool   `json:"SenderFault"`
+	Code        string `json:"Code"`
+	Message     string `json:"Message,omitempty"`
+}
+
 // ReceiveMessageRequest is the request for ReceiveMessage.
 type ReceiveMessageRequest struct {
 	QueueURL                string   `json:"QueueUrl"`
