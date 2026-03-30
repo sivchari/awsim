@@ -160,7 +160,7 @@ func (s *MemoryStorage) PutParameter(_ context.Context, req *PutParameterRequest
 		Value:            req.Value,
 		Version:          version,
 		LastModifiedDate: time.Now().UTC(),
-		ARN:              fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.region, s.accountID, req.Name),
+		ARN:              fmt.Sprintf("arn:aws:ssm:%s:%s:parameter/%s", s.region, s.accountID, strings.TrimPrefix(req.Name, "/")),
 		DataType:         dataType,
 		Tier:             tier,
 		Description:      req.Description,
