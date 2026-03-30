@@ -811,11 +811,11 @@ func (m *MemoryStorage) applyUpdateExpression(item Item, updateExpr string, expr
 }
 
 // UpdateTimeToLive updates the TTL configuration for a table.
-func (s *MemoryStorage) UpdateTimeToLive(_ context.Context, tableName, attributeName string, enabled bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (m *MemoryStorage) UpdateTimeToLive(_ context.Context, tableName, attributeName string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	td, exists := s.Tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return &TableError{Code: "ResourceNotFoundException", Message: "Requested resource not found"}
 	}
@@ -827,11 +827,11 @@ func (s *MemoryStorage) UpdateTimeToLive(_ context.Context, tableName, attribute
 }
 
 // DescribeTimeToLive returns the TTL configuration for a table.
-func (s *MemoryStorage) DescribeTimeToLive(_ context.Context, tableName string) (string, bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (m *MemoryStorage) DescribeTimeToLive(_ context.Context, tableName string) (string, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	td, exists := s.Tables[tableName]
+	td, exists := m.Tables[tableName]
 	if !exists {
 		return "", false, &TableError{Code: "ResourceNotFoundException", Message: "Requested resource not found"}
 	}
