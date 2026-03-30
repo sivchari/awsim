@@ -478,6 +478,81 @@ func writeDynamoDBError(w http.ResponseWriter, code, message string, status int)
 	})
 }
 
+// UpdateTimeToLive handles the UpdateTimeToLive action.
+func (s *Service) UpdateTimeToLive(w http.ResponseWriter, r *http.Request) {
+	var req UpdateTimeToLiveRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.TableName == "" {
+		writeDynamoDBError(w, "ValidationException", "TableName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.UpdateTimeToLive(r.Context(), req.TableName, req.TimeToLiveSpecification.AttributeName, req.TimeToLiveSpecification.Enabled); err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, UpdateTimeToLiveResponse{
+		TimeToLiveSpecification: req.TimeToLiveSpecification,
+	})
+}
+
+// DescribeTimeToLive handles the DescribeTimeToLive action.
+func (s *Service) DescribeTimeToLive(w http.ResponseWriter, r *http.Request) {
+	var req DescribeTimeToLiveRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.TableName == "" {
+		writeDynamoDBError(w, "ValidationException", "TableName is required", http.StatusBadRequest)
+
+		return
+	}
+
+	attrName, enabled, err := s.storage.DescribeTimeToLive(r.Context(), req.TableName)
+	if err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	status := "DISABLED"
+	if enabled {
+		status = "ENABLED"
+	}
+
+	writeJSONResponse(w, DescribeTimeToLiveResponse{
+		TimeToLiveDescription: TimeToLiveDescription{
+			AttributeName:    attrName,
+			TimeToLiveStatus: status,
+		},
+	})
+}
+
 // DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
 // This method implements the JSONProtocolService interface.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
@@ -505,6 +580,10 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.Query(w, r)
 	case "Scan":
 		s.Scan(w, r)
+	case "UpdateTimeToLive":
+		s.UpdateTimeToLive(w, r)
+	case "DescribeTimeToLive":
+		s.DescribeTimeToLive(w, r)
 	default:
 		writeDynamoDBError(w, "UnknownOperationException", "The action "+action+" is not valid", http.StatusBadRequest)
 	}

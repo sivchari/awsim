@@ -554,3 +554,52 @@ func TestDynamoDB_CompositeKey(t *testing.T) {
 	}
 	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }
+
+func TestDynamoDB_UpdateTimeToLive(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-ttl"
+
+	// Create table.
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Enable TTL.
+	updateOutput, err := client.UpdateTimeToLive(ctx, &dynamodb.UpdateTimeToLiveInput{
+		TableName: aws.String(tableName),
+		TimeToLiveSpecification: &types.TimeToLiveSpecification{
+			AttributeName: aws.String("ttl"),
+			Enabled:       aws.Bool(true),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_update", updateOutput)
+
+	// Describe TTL.
+	describeOutput, err := client.DescribeTimeToLive(ctx, &dynamodb.DescribeTimeToLiveInput{
+		TableName: aws.String(tableName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
+}

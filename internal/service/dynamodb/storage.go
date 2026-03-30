@@ -31,6 +31,8 @@ type Storage interface {
 	UpdateItem(ctx context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string) (Item, error)
 	Query(ctx context.Context, tableName string, keyCondExpr string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error)
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
+	UpdateTimeToLive(ctx context.Context, tableName, attributeName string, enabled bool) error
+	DescribeTimeToLive(ctx context.Context, tableName string) (string, bool, error)
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -806,4 +808,33 @@ func (m *MemoryStorage) applyUpdateExpression(item Item, updateExpr string, expr
 	}
 
 	return item
+}
+
+// UpdateTimeToLive updates the TTL configuration for a table.
+func (s *MemoryStorage) UpdateTimeToLive(_ context.Context, tableName, attributeName string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	td, exists := s.Tables[tableName]
+	if !exists {
+		return &TableError{Code: "ResourceNotFoundException", Message: "Requested resource not found"}
+	}
+
+	td.Table.TTLAttributeName = attributeName
+	td.Table.TTLEnabled = enabled
+
+	return nil
+}
+
+// DescribeTimeToLive returns the TTL configuration for a table.
+func (s *MemoryStorage) DescribeTimeToLive(_ context.Context, tableName string) (string, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	td, exists := s.Tables[tableName]
+	if !exists {
+		return "", false, &TableError{Code: "ResourceNotFoundException", Message: "Requested resource not found"}
+	}
+
+	return td.Table.TTLAttributeName, td.Table.TTLEnabled, nil
 }

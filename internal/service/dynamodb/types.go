@@ -68,6 +68,8 @@ type Table struct {
 	TableARN              string
 	BillingMode           string
 	DeletionProtection    bool
+	TTLAttributeName      string
+	TTLEnabled            bool
 }
 
 // TableDescription represents a table description in responses.
@@ -248,6 +250,39 @@ type ScanResponse struct {
 	Count            int    `json:"Count"`
 	ScannedCount     int    `json:"ScannedCount"`
 	LastEvaluatedKey Item   `json:"LastEvaluatedKey,omitempty"`
+}
+
+// TimeToLiveSpecification represents a TTL specification for UpdateTimeToLive.
+type TimeToLiveSpecification struct {
+	AttributeName string `json:"AttributeName"`
+	Enabled       bool   `json:"Enabled"`
+}
+
+// TimeToLiveDescription represents a TTL description in responses.
+type TimeToLiveDescription struct {
+	AttributeName    string `json:"AttributeName,omitempty"`
+	TimeToLiveStatus string `json:"TimeToLiveStatus"`
+}
+
+// UpdateTimeToLiveRequest is the request for UpdateTimeToLive.
+type UpdateTimeToLiveRequest struct {
+	TableName               string                  `json:"TableName"`
+	TimeToLiveSpecification TimeToLiveSpecification `json:"TimeToLiveSpecification"`
+}
+
+// UpdateTimeToLiveResponse is the response for UpdateTimeToLive.
+type UpdateTimeToLiveResponse struct {
+	TimeToLiveSpecification TimeToLiveSpecification `json:"TimeToLiveSpecification"`
+}
+
+// DescribeTimeToLiveRequest is the request for DescribeTimeToLive.
+type DescribeTimeToLiveRequest struct {
+	TableName string `json:"TableName"`
+}
+
+// DescribeTimeToLiveResponse is the response for DescribeTimeToLive.
+type DescribeTimeToLiveResponse struct {
+	TimeToLiveDescription TimeToLiveDescription `json:"TimeToLiveDescription"`
 }
 
 // ErrorResponse represents a DynamoDB error response in JSON format.
