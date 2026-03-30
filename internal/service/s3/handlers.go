@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -507,62 +508,59 @@ func (s *Service) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, obj := range req.Objects {
-		var deleteMarker *Object
-
-		var err error
-
-		if obj.VersionID != "" {
-			deleteMarker, err = s.storage.DeleteObjectVersion(r.Context(), bucket, obj.Key, obj.VersionID)
-		} else {
-			deleteMarker, err = s.storage.DeleteObject(r.Context(), bucket, obj.Key)
-		}
-
-		if err != nil {
-			var bucketErr *BucketError
-			if errors.As(err, &bucketErr) {
-				result.Errors = append(result.Errors, DeleteObjectError{
-					Key:       obj.Key,
-					Code:      bucketErr.Code,
-					Message:   bucketErr.Message,
-					VersionID: obj.VersionID,
-				})
-
-				continue
-			}
-
-			result.Errors = append(result.Errors, DeleteObjectError{
-				Key:       obj.Key,
-				Code:      "InternalError",
-				Message:   "Internal server error",
-				VersionID: obj.VersionID,
-			})
-
-			continue
-		}
-
-		if req.Quiet {
-			continue
-		}
-
-		deleted := DeletedObject{
-			Key: obj.Key,
-		}
-
-		if deleteMarker != nil {
-			if deleteMarker.VersionID != "" {
-				deleted.VersionID = deleteMarker.VersionID
-			}
-
-			if deleteMarker.IsDeleteMarker {
-				deleted.DeleteMarker = true
-				deleted.DeleteMarkerVersionID = deleteMarker.VersionID
-			}
-		}
-
-		result.Deleted = append(result.Deleted, deleted)
+		s.deleteOneObject(r.Context(), bucket, obj, req.Quiet, &result)
 	}
 
 	writeXMLResponse(w, result)
+}
+
+// deleteOneObject processes a single object deletion for DeleteObjects.
+func (s *Service) deleteOneObject(ctx context.Context, bucket string, obj DeleteObjectEntry, quiet bool, result *DeleteResult) {
+	var deleteMarker *Object
+
+	var err error
+
+	if obj.VersionID != "" {
+		deleteMarker, err = s.storage.DeleteObjectVersion(ctx, bucket, obj.Key, obj.VersionID)
+	} else {
+		deleteMarker, err = s.storage.DeleteObject(ctx, bucket, obj.Key)
+	}
+
+	if err != nil {
+		var bucketErr *BucketError
+		if errors.As(err, &bucketErr) {
+			result.Errors = append(result.Errors, DeleteObjectError{
+				Key: obj.Key, Code: bucketErr.Code, Message: bucketErr.Message, VersionID: obj.VersionID,
+			})
+
+			return
+		}
+
+		result.Errors = append(result.Errors, DeleteObjectError{
+			Key: obj.Key, Code: "InternalError", Message: "Internal server error", VersionID: obj.VersionID,
+		})
+
+		return
+	}
+
+	if quiet {
+		return
+	}
+
+	deleted := DeletedObject{Key: obj.Key}
+
+	if deleteMarker != nil {
+		if deleteMarker.VersionID != "" {
+			deleted.VersionID = deleteMarker.VersionID
+		}
+
+		if deleteMarker.IsDeleteMarker {
+			deleted.DeleteMarker = true
+			deleted.DeleteMarkerVersionID = deleteMarker.VersionID
+		}
+	}
+
+	result.Deleted = append(result.Deleted, deleted)
 }
 
 // HeadObject handles HEAD /{bucket}/{key...} - get object metadata.
