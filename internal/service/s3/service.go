@@ -47,6 +47,7 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 	// Bucket-level GET handles ListObjects, ListMultipartUploads, versioning queries
 	r.Handle("GET", "/{bucket}", s.handleBucketGet)
+	r.Handle("POST", "/{bucket}", s.handleBucketPost)
 
 	// Object operations with multipart upload support
 	r.Handle("PUT", "/{bucket}/{key...}", s.handleObjectPut)
