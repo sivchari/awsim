@@ -1,6 +1,7 @@
 package sqs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -212,9 +213,16 @@ func (s *Service) SendMessageBatch(w http.ResponseWriter, r *http.Request) {
 		seen[entry.ID] = struct{}{}
 	}
 
+	resp := s.processBatchEntries(r.Context(), req.QueueURL, req.Entries)
+
+	writeJSONResponse(w, resp)
+}
+
+// processBatchEntries processes individual entries in a SendMessageBatch request.
+func (s *Service) processBatchEntries(ctx context.Context, queueURL string, entries []SendMessageBatchRequestEntry) SendMessageBatchResponse {
 	var resp SendMessageBatchResponse
 
-	for _, entry := range req.Entries {
+	for _, entry := range entries {
 		if entry.MessageBody == "" {
 			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
 				ID:          entry.ID,
@@ -226,26 +234,9 @@ func (s *Service) SendMessageBatch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		msg, err := s.storage.SendMessage(r.Context(), req.QueueURL, entry.MessageBody, entry.DelaySeconds, entry.MessageAttributes, entry.MessageGroupID, entry.MessageDeduplicationID)
+		msg, err := s.storage.SendMessage(ctx, queueURL, entry.MessageBody, entry.DelaySeconds, entry.MessageAttributes, entry.MessageGroupID, entry.MessageDeduplicationID)
 		if err != nil {
-			var qErr *QueueError
-			if errors.As(err, &qErr) {
-				resp.Failed = append(resp.Failed, BatchResultErrorEntry{
-					ID:          entry.ID,
-					SenderFault: true,
-					Code:        qErr.Code,
-					Message:     qErr.Message,
-				})
-
-				continue
-			}
-
-			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
-				ID:          entry.ID,
-				SenderFault: false,
-				Code:        "InternalError",
-				Message:     "Internal server error",
-			})
+			resp.Failed = append(resp.Failed, s.batchEntryError(entry.ID, err))
 
 			continue
 		}
@@ -258,7 +249,27 @@ func (s *Service) SendMessageBatch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSONResponse(w, resp)
+	return resp
+}
+
+// batchEntryError converts an error to a BatchResultErrorEntry.
+func (s *Service) batchEntryError(id string, err error) BatchResultErrorEntry {
+	var qErr *QueueError
+	if errors.As(err, &qErr) {
+		return BatchResultErrorEntry{
+			ID:          id,
+			SenderFault: true,
+			Code:        qErr.Code,
+			Message:     qErr.Message,
+		}
+	}
+
+	return BatchResultErrorEntry{
+		ID:          id,
+		SenderFault: false,
+		Code:        "InternalError",
+		Message:     "Internal server error",
+	}
 }
 
 // ReceiveMessage handles the ReceiveMessage action.
