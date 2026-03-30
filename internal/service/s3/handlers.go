@@ -44,6 +44,17 @@ func (s *Service) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	s.ListObjects(w, r)
 }
 
+// handleBucketPost dispatches POST /{bucket} requests based on query parameters.
+func (s *Service) handleBucketPost(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.URL.Query()["delete"]; ok {
+		s.DeleteObjects(w, r)
+
+		return
+	}
+
+	writeS3Error(w, r, "InvalidRequest", "Invalid request", http.StatusBadRequest)
+}
+
 // handleObjectPut dispatches PUT /{bucket}/{key} requests based on query parameters.
 func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("uploadId") != "" && r.URL.Query().Get("partNumber") != "" {
@@ -472,6 +483,86 @@ func (s *Service) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteObjects handles POST /{bucket}?delete - delete multiple objects.
+func (s *Service) DeleteObjects(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+
+	if bucket == "" {
+		writeS3Error(w, r, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+		return
+	}
+
+	var req DeleteRequest
+	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeS3Error(w, r, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
+
+		return
+	}
+
+	result := DeleteResult{
+		Xmlns: s3Namespace,
+	}
+
+	for _, obj := range req.Objects {
+		var deleteMarker *Object
+
+		var err error
+
+		if obj.VersionID != "" {
+			deleteMarker, err = s.storage.DeleteObjectVersion(r.Context(), bucket, obj.Key, obj.VersionID)
+		} else {
+			deleteMarker, err = s.storage.DeleteObject(r.Context(), bucket, obj.Key)
+		}
+
+		if err != nil {
+			var bucketErr *BucketError
+			if errors.As(err, &bucketErr) {
+				result.Errors = append(result.Errors, DeleteObjectError{
+					Key:       obj.Key,
+					Code:      bucketErr.Code,
+					Message:   bucketErr.Message,
+					VersionID: obj.VersionID,
+				})
+
+				continue
+			}
+
+			result.Errors = append(result.Errors, DeleteObjectError{
+				Key:       obj.Key,
+				Code:      "InternalError",
+				Message:   "Internal server error",
+				VersionID: obj.VersionID,
+			})
+
+			continue
+		}
+
+		if req.Quiet {
+			continue
+		}
+
+		deleted := DeletedObject{
+			Key: obj.Key,
+		}
+
+		if deleteMarker != nil {
+			if deleteMarker.VersionID != "" {
+				deleted.VersionID = deleteMarker.VersionID
+			}
+
+			if deleteMarker.IsDeleteMarker {
+				deleted.DeleteMarker = true
+				deleted.DeleteMarkerVersionID = deleteMarker.VersionID
+			}
+		}
+
+		result.Deleted = append(result.Deleted, deleted)
+	}
+
+	writeXMLResponse(w, result)
 }
 
 // HeadObject handles HEAD /{bucket}/{key...} - get object metadata.

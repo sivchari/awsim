@@ -140,6 +140,45 @@ type DeleteMarkerInfo struct {
 	Owner        Owner  `xml:"Owner"`
 }
 
+// DeleteObjects Types
+
+// DeleteRequest is the request body for DeleteObjects.
+type DeleteRequest struct {
+	XMLName xml.Name            `xml:"Delete"`
+	Objects []DeleteObjectEntry `xml:"Object"`
+	Quiet   bool                `xml:"Quiet"`
+}
+
+// DeleteObjectEntry represents an object to delete in a DeleteObjects request.
+type DeleteObjectEntry struct {
+	Key       string `xml:"Key"`
+	VersionID string `xml:"VersionId,omitempty"`
+}
+
+// DeleteResult is the response for DeleteObjects.
+type DeleteResult struct {
+	XMLName xml.Name            `xml:"DeleteResult"`
+	Xmlns   string              `xml:"xmlns,attr"`
+	Deleted []DeletedObject     `xml:"Deleted,omitempty"`
+	Errors  []DeleteObjectError `xml:"Error,omitempty"`
+}
+
+// DeletedObject represents a successfully deleted object.
+type DeletedObject struct {
+	Key                   string `xml:"Key"`
+	VersionID             string `xml:"VersionId,omitempty"`
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
+	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
+}
+
+// DeleteObjectError represents an error deleting an object.
+type DeleteObjectError struct {
+	Key       string `xml:"Key"`
+	Code      string `xml:"Code"`
+	Message   string `xml:"Message"`
+	VersionID string `xml:"VersionId,omitempty"`
+}
+
 // Multipart Upload Types
 
 // MultipartUpload represents an in-progress multipart upload.

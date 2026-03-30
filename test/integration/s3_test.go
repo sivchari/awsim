@@ -1237,3 +1237,64 @@ func TestS3_Versioning_ListObjectVersions(t *testing.T) {
 		t.Errorf("expected exactly 1 latest version/marker, got %d", latestCount)
 	}
 }
+
+func TestS3_DeleteObjects(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-delete-objects-bucket"
+
+	// Create bucket.
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	})
+
+	// Put multiple objects.
+	keys := []string{"obj1.txt", "obj2.txt", "obj3.txt"}
+	for _, key := range keys {
+		_, err := client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(key),
+			Body:   strings.NewReader("content-" + key),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Delete multiple objects.
+	deleteOutput, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &types.Delete{
+			Objects: []types.ObjectIdentifier{
+				{Key: aws.String("obj1.txt")},
+				{Key: aws.String("obj2.txt")},
+				{Key: aws.String("obj3.txt")},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("VersionId", "ResultMetadata")).Assert(t.Name(), deleteOutput)
+
+	// Verify objects are deleted.
+	listOutput, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listOutput.Contents) != 0 {
+		t.Errorf("expected 0 objects after delete, got %d", len(listOutput.Contents))
+	}
+}
