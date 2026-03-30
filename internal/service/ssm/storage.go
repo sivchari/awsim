@@ -270,6 +270,12 @@ func (s *MemoryStorage) GetParametersByPath(_ context.Context, path string, recu
 
 // matchesPath checks if a parameter name matches the given path.
 func matchesPath(name, path string, recursive bool) bool {
+	// Normalize parameter name to have a leading slash for consistent matching.
+	// AWS SSM treats parameters without a leading "/" as root-level parameters.
+	if !strings.HasPrefix(name, "/") {
+		name = "/" + name
+	}
+
 	if !strings.HasPrefix(name, path) {
 		return false
 	}
