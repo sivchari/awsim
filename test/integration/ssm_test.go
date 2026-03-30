@@ -167,6 +167,7 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 		{"/myapp/config/param1", "value1"},
 		{"/myapp/config/param2", "value2"},
 		{"/myapp/config/nested/param3", "value3"},
+		{"no_slash_param", "value4"},
 	}
 
 	// Put parameters.
@@ -210,6 +211,16 @@ func TestSSM_GetParametersByPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_recursive", getOutput)
+
+	// Get by root path "/" should include parameter without leading slash.
+	getOutput, err = client.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
+		Path:      aws.String("/"),
+		Recursive: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "LastModifiedDate", "ResultMetadata")).Assert(t.Name()+"_root_recursive", getOutput)
 }
 
 func TestSSM_DeleteParameter(t *testing.T) {
