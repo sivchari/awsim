@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.7.0](https://github.com/sivchari/kumo/compare/v0.6.0...v0.7.0) - 2026-03-31
+- feat(s3): add DeleteObjects (multi-object delete) support by @sivchari in https://github.com/sivchari/kumo/pull/388
+- feat(dynamodb): add UpdateTimeToLive and DescribeTimeToLive actions by @sivchari in https://github.com/sivchari/kumo/pull/389
+- feat(sqs): add SendMessageBatch action by @sivchari in https://github.com/sivchari/kumo/pull/387
+- fix(ssm): return parameters without leading slash in GetParametersByPath by @tchssk in https://github.com/sivchari/kumo/pull/386
+- release v0.7.0 by @sivchari in https://github.com/sivchari/kumo/pull/391
+
 ## [v0.6.0](https://github.com/sivchari/kumo/compare/v0.5.4...v0.6.0) - 2026-03-27
 - feat(storage): add optional persistent storage via KUMO_DATA_DIR by @sivchari in https://github.com/sivchari/kumo/pull/378
 - feat(secretsmanager): add GetRandomPassword API by @sivchari in https://github.com/sivchari/kumo/pull/380
