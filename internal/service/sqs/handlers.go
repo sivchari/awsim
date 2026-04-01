@@ -410,9 +410,16 @@ func (s *Service) DeleteMessageBatch(w http.ResponseWriter, r *http.Request) {
 		seen[entry.ID] = struct{}{}
 	}
 
+	resp := s.processDeleteBatchEntries(r.Context(), req.QueueURL, req.Entries)
+
+	writeJSONResponse(w, resp)
+}
+
+// processDeleteBatchEntries processes individual entries in a DeleteMessageBatch request.
+func (s *Service) processDeleteBatchEntries(ctx context.Context, queueURL string, entries []DeleteMessageBatchRequestEntry) DeleteMessageBatchResponse {
 	var resp DeleteMessageBatchResponse
 
-	for _, entry := range req.Entries {
+	for _, entry := range entries {
 		if entry.ReceiptHandle == "" {
 			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
 				ID:          entry.ID,
@@ -424,7 +431,7 @@ func (s *Service) DeleteMessageBatch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if err := s.storage.DeleteMessage(r.Context(), req.QueueURL, entry.ReceiptHandle); err != nil {
+		if err := s.storage.DeleteMessage(ctx, queueURL, entry.ReceiptHandle); err != nil {
 			resp.Failed = append(resp.Failed, s.batchEntryError(entry.ID, err))
 
 			continue
@@ -435,7 +442,7 @@ func (s *Service) DeleteMessageBatch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSONResponse(w, resp)
+	return resp
 }
 
 // PurgeQueue handles the PurgeQueue action.
