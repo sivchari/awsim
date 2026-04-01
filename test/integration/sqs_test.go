@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -484,6 +485,82 @@ func TestSQS_SendMessageBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden.New(t, golden.WithIgnoreFields("MessageId", "MD5OfMessageBody", "ResultMetadata")).Assert(t.Name(), batchOutput)
+}
+
+func TestSQS_DeleteMessageBatch(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-delete-batch"
+
+	// Create queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send 3 messages.
+	for i := range 3 {
+		_, err = client.SendMessage(ctx, &sqs.SendMessageInput{
+			QueueUrl:    createOutput.QueueUrl,
+			MessageBody: aws.String(fmt.Sprintf("batch delete message %d", i)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Receive messages.
+	receiveOutput, err := client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            createOutput.QueueUrl,
+		MaxNumberOfMessages: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(receiveOutput.Messages) == 0 {
+		t.Fatal("expected messages, got 0")
+	}
+
+	// Build batch delete entries.
+	entries := make([]types.DeleteMessageBatchRequestEntry, len(receiveOutput.Messages))
+	for i, msg := range receiveOutput.Messages {
+		entries[i] = types.DeleteMessageBatchRequestEntry{
+			Id:            aws.String(fmt.Sprintf("msg%d", i)),
+			ReceiptHandle: msg.ReceiptHandle,
+		}
+	}
+
+	// Delete message batch.
+	batchOutput, err := client.DeleteMessageBatch(ctx, &sqs.DeleteMessageBatchInput{
+		QueueUrl: createOutput.QueueUrl,
+		Entries:  entries,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), batchOutput)
+
+	// Verify queue is empty.
+	receiveOutput2, err := client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            createOutput.QueueUrl,
+		MaxNumberOfMessages: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(receiveOutput2.Messages) != 0 {
+		t.Errorf("expected 0 messages after batch delete, got %d", len(receiveOutput2.Messages))
+	}
 }
 
 func TestSQS_FIFOQueue_MissingDeduplicationId(t *testing.T) {
