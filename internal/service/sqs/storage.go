@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -157,6 +158,35 @@ func (s *MemoryStorage) Close() error {
 	return nil
 }
 
+// resolveQueueData finds a queue by URL, tolerating hostname differences.
+// It must be called with s.mu held.
+func (s *MemoryStorage) resolveQueueData(queueURL string) (string, *QueueData, error) {
+	// Fast path: exact match.
+	if qd, exists := s.Queues[queueURL]; exists {
+		return queueURL, qd, nil
+	}
+
+	// Slow path: match by URL path to handle hostname differences
+	// (e.g., localhost:4566 vs kumo:4566).
+	parsed, err := url.Parse(queueURL)
+	if err != nil {
+		return "", nil, ErrQueueDoesNotExist
+	}
+
+	for storedURL, qd := range s.Queues {
+		storedParsed, err := url.Parse(storedURL)
+		if err != nil {
+			continue
+		}
+
+		if storedParsed.Path == parsed.Path {
+			return storedURL, qd, nil
+		}
+	}
+
+	return "", nil, ErrQueueDoesNotExist
+}
+
 // CreateQueue creates a new queue.
 func (s *MemoryStorage) CreateQueue(_ context.Context, name string, attributes map[string]string) (*Queue, error) {
 	s.mu.Lock()
@@ -216,11 +246,12 @@ func (s *MemoryStorage) DeleteQueue(_ context.Context, queueURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.Queues[queueURL]; !exists {
-		return ErrQueueDoesNotExist
+	storedURL, _, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return err
 	}
 
-	delete(s.Queues, queueURL)
+	delete(s.Queues, storedURL)
 
 	return nil
 }
@@ -260,9 +291,9 @@ func (s *MemoryStorage) GetQueue(_ context.Context, queueURL string) (*Queue, er
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return nil, ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return nil, err
 	}
 
 	return qd.Queue, nil
@@ -340,9 +371,9 @@ func (s *MemoryStorage) SendMessage(_ context.Context, queueURL, body string, de
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return nil, ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -401,9 +432,9 @@ func (s *MemoryStorage) ReceiveMessage(_ context.Context, queueURL string, maxMe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return nil, ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return nil, err
 	}
 
 	if visibilityTimeout == 0 {
@@ -451,9 +482,9 @@ func (s *MemoryStorage) DeleteMessage(_ context.Context, queueURL, receiptHandle
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return err
 	}
 
 	if _, exists := qd.Inflight[receiptHandle]; !exists {
@@ -470,9 +501,9 @@ func (s *MemoryStorage) PurgeQueue(_ context.Context, queueURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return err
 	}
 
 	qd.Messages = make([]*Message, 0)
@@ -486,9 +517,9 @@ func (s *MemoryStorage) GetQueueAttributes(_ context.Context, queueURL string, a
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return nil, ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return nil, err
 	}
 
 	q := qd.Queue
@@ -528,9 +559,9 @@ func (s *MemoryStorage) SetQueueAttributes(_ context.Context, queueURL string, a
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qd, exists := s.Queues[queueURL]
-	if !exists {
-		return ErrQueueDoesNotExist
+	_, qd, err := s.resolveQueueData(queueURL)
+	if err != nil {
+		return err
 	}
 
 	applyQueueAttributes(qd.Queue, attributes)
