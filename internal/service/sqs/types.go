@@ -180,6 +180,29 @@ type DeleteMessageRequest struct {
 	ReceiptHandle string `json:"ReceiptHandle"`
 }
 
+// DeleteMessageBatchRequest is the request for DeleteMessageBatch.
+type DeleteMessageBatchRequest struct {
+	QueueURL string                           `json:"QueueUrl"`
+	Entries  []DeleteMessageBatchRequestEntry `json:"Entries"`
+}
+
+// DeleteMessageBatchRequestEntry is an individual entry in a DeleteMessageBatch request.
+type DeleteMessageBatchRequestEntry struct {
+	ID            string `json:"Id"`
+	ReceiptHandle string `json:"ReceiptHandle"`
+}
+
+// DeleteMessageBatchResponse is the response for DeleteMessageBatch.
+type DeleteMessageBatchResponse struct {
+	Successful []DeleteMessageBatchResultEntry `json:"Successful,omitempty"`
+	Failed     []BatchResultErrorEntry         `json:"Failed,omitempty"`
+}
+
+// DeleteMessageBatchResultEntry is a successful entry in a DeleteMessageBatch response.
+type DeleteMessageBatchResultEntry struct {
+	ID string `json:"Id"`
+}
+
 // PurgeQueueRequest is the request for PurgeQueue.
 type PurgeQueueRequest struct {
 	QueueURL string `json:"QueueUrl"`
