@@ -371,6 +371,73 @@ func (s *Service) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, struct{}{})
 }
 
+// DeleteMessageBatch handles the DeleteMessageBatch action.
+func (s *Service) DeleteMessageBatch(w http.ResponseWriter, r *http.Request) {
+	var req DeleteMessageBatchRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) == 0 {
+		writeSQSError(w, "EmptyBatchRequest", "There should be at least one DeleteMessageBatchRequestEntry in the request", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) > 10 {
+		writeSQSError(w, "TooManyEntriesInBatchRequest", "Maximum number of entries per request are 10", http.StatusBadRequest)
+
+		return
+	}
+
+	// Check for duplicate IDs.
+	seen := make(map[string]struct{}, len(req.Entries))
+	for _, entry := range req.Entries {
+		if _, exists := seen[entry.ID]; exists {
+			writeSQSError(w, "BatchEntryIdsNotDistinct", "Two or more batch entries in the request have the same Id", http.StatusBadRequest)
+
+			return
+		}
+
+		seen[entry.ID] = struct{}{}
+	}
+
+	var resp DeleteMessageBatchResponse
+
+	for _, entry := range req.Entries {
+		if entry.ReceiptHandle == "" {
+			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
+				ID:          entry.ID,
+				SenderFault: true,
+				Code:        "MissingParameter",
+				Message:     "The request must contain the parameter ReceiptHandle",
+			})
+
+			continue
+		}
+
+		if err := s.storage.DeleteMessage(r.Context(), req.QueueURL, entry.ReceiptHandle); err != nil {
+			resp.Failed = append(resp.Failed, s.batchEntryError(entry.ID, err))
+
+			continue
+		}
+
+		resp.Successful = append(resp.Successful, DeleteMessageBatchResultEntry{
+			ID: entry.ID,
+		})
+	}
+
+	writeJSONResponse(w, resp)
+}
+
 // PurgeQueue handles the PurgeQueue action.
 func (s *Service) PurgeQueue(w http.ResponseWriter, r *http.Request) {
 	var req PurgeQueueRequest
@@ -527,6 +594,8 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.ReceiveMessage(w, r)
 	case "DeleteMessage":
 		s.DeleteMessage(w, r)
+	case "DeleteMessageBatch":
+		s.DeleteMessageBatch(w, r)
 	case "PurgeQueue":
 		s.PurgeQueue(w, r)
 	case "GetQueueAttributes":
