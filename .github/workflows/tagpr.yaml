@@ -75,3 +75,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+  helm-push:
+    needs: [tagpr, goreleaser]
+    if: needs.tagpr.outputs.tagpr-tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ needs.tagpr.outputs.tagpr-tag }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.tagpr.outputs.tagpr-tag }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Login to GitHub Container Registry
+        env:
+          HELM_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "${HELM_PASSWORD}" | helm registry login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+      - name: Update chart image repository for forks
+        if: github.repository_owner != 'sivchari'
+        run: |
+          yq -i '.kumo.image.repository = strenv(OWNER) + "/kumo"' charts/kumo/values.yaml
+
+      - name: Lint Helm Chart
+        run: helm lint charts/kumo
+
+      - name: Package and Push Helm Chart
+        run: |
+          VERSION="${TAG#v}"
+          helm package charts/kumo --version "${VERSION}" --app-version "${VERSION}"
+          helm push "kumo-${VERSION}.tgz" "oci://ghcr.io/${OWNER}/helm-charts"

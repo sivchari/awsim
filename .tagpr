@@ -4,5 +4,5 @@
 	vPrefix = true
 	releaseBranch = main
 	release = draft
-	versionFile = version.go
+	versionFile = version.go,charts/kumo/Chart.yaml,charts/kumo/values.yaml
 	changelog = true

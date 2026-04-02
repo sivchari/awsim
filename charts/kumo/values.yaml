@@ -3,8 +3,8 @@ kumo:
   image:
     registry: ghcr.io
     repository: sivchari/kumo
-    # -- Overrides the image tag whose default is the chart appVersion
-    tag: ""
+    # -- Image tag for kumo. Set to empty to fall back to the chart appVersion.
+    tag: "0.8.0"
   logLevel: info
   resources:
     requests:
