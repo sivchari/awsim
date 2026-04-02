@@ -46,7 +46,7 @@ release:
 
 dockers:
   - image_templates:
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-amd64"
     use: buildx
     goos: linux
     goarch: amd64
@@ -55,10 +55,10 @@ dockers:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/sivchari/kumo"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
 
   - image_templates:
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-arm64"
     use: buildx
     goos: linux
     goarch: arm64
@@ -67,7 +67,7 @@ dockers:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/sivchari/kumo"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
 
 homebrew_casks:
   - name: kumo
@@ -75,19 +75,19 @@ homebrew_casks:
       - kumo
     binaries:
       - kumo
-    homepage: "https://github.com/sivchari/kumo"
+    homepage: "https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
     description: "A lightweight AWS service emulator for CI/CD environments"
     repository:
-      owner: sivchari
+      owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
 docker_manifests:
-  - name_template: "ghcr.io/sivchari/kumo:{{ .Version }}"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}"
     image_templates:
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/sivchari/kumo:latest"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:latest"
     image_templates:
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-amd64"
-      - "ghcr.io/sivchari/kumo:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/kumo:{{ .Version }}-arm64"
