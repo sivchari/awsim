@@ -305,6 +305,62 @@ func TestSQS_SetQueueAttributes(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), getOutput)
 }
 
+func TestSQS_QueueTags(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-tags"
+
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Tags: map[string]string{
+			"key1": "val1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	listOutput, err := client.ListQueueTags(ctx, &sqs.ListQueueTagsInput{
+		QueueUrl: createOutput.QueueUrl,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_initial", listOutput)
+
+	_, err = client.TagQueue(ctx, &sqs.TagQueueInput{
+		QueueUrl: createOutput.QueueUrl,
+		Tags: map[string]string{
+			"key2": "val2",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.UntagQueue(ctx, &sqs.UntagQueueInput{
+		QueueUrl: createOutput.QueueUrl,
+		TagKeys:  []string{"key1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listOutput, err = client.ListQueueTags(ctx, &sqs.ListQueueTagsInput{
+		QueueUrl: createOutput.QueueUrl,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_updated", listOutput)
+}
+
 func TestSQS_FIFOQueue_CreateAndSendMessage(t *testing.T) {
 	client := newSQSClient(t)
 	ctx := t.Context()

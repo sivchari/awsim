@@ -27,7 +27,7 @@ func (s *Service) CreateQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue, err := s.storage.CreateQueue(r.Context(), req.QueueName, req.Attributes)
+	queue, err := s.storage.CreateQueue(r.Context(), req.QueueName, req.Attributes, req.Tags)
 	if err != nil {
 		var qErr *QueueError
 		if errors.As(err, &qErr) {
@@ -44,6 +44,102 @@ func (s *Service) CreateQueue(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, CreateQueueResponse{
 		QueueURL: queue.URL,
 	})
+}
+
+// ListQueueTags handles the ListQueueTags action.
+func (s *Service) ListQueueTags(w http.ResponseWriter, r *http.Request) {
+	var req ListQueueTagsRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	tags, err := s.storage.ListQueueTags(r.Context(), req.QueueURL)
+	if err != nil {
+		var qErr *QueueError
+		if errors.As(err, &qErr) {
+			writeSQSError(w, qErr.Code, qErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeSQSError(w, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, ListQueueTagsResponse{
+		Tags: tags,
+	})
+}
+
+// TagQueue handles the TagQueue action.
+func (s *Service) TagQueue(w http.ResponseWriter, r *http.Request) {
+	var req TagQueueRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.TagQueue(r.Context(), req.QueueURL, req.Tags); err != nil {
+		var qErr *QueueError
+		if errors.As(err, &qErr) {
+			writeSQSError(w, qErr.Code, qErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeSQSError(w, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, struct{}{})
+}
+
+// UntagQueue handles the UntagQueue action.
+func (s *Service) UntagQueue(w http.ResponseWriter, r *http.Request) {
+	var req UntagQueueRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.UntagQueue(r.Context(), req.QueueURL, req.TagKeys); err != nil {
+		var qErr *QueueError
+		if errors.As(err, &qErr) {
+			writeSQSError(w, qErr.Code, qErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeSQSError(w, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, struct{}{})
 }
 
 // DeleteQueue handles the DeleteQueue action.
@@ -587,6 +683,12 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "CreateQueue":
 		s.CreateQueue(w, r)
+	case "ListQueueTags":
+		s.ListQueueTags(w, r)
+	case "TagQueue":
+		s.TagQueue(w, r)
+	case "UntagQueue":
+		s.UntagQueue(w, r)
 	case "DeleteQueue":
 		s.DeleteQueue(w, r)
 	case "ListQueues":

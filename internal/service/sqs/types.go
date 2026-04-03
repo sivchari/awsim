@@ -10,6 +10,7 @@ type Queue struct {
 	Name                      string
 	URL                       string
 	ARN                       string
+	Tags                      map[string]string
 	CreatedTimestamp          time.Time
 	LastModifiedTimestamp     time.Time
 	VisibilityTimeout         int
@@ -86,6 +87,28 @@ type GetQueueURLRequest struct {
 // GetQueueURLResponse is the response for GetQueueUrl.
 type GetQueueURLResponse struct {
 	QueueURL string `json:"QueueUrl"`
+}
+
+// ListQueueTagsRequest is the request for ListQueueTags.
+type ListQueueTagsRequest struct {
+	QueueURL string `json:"QueueUrl"`
+}
+
+// ListQueueTagsResponse is the response for ListQueueTags.
+type ListQueueTagsResponse struct {
+	Tags map[string]string `json:"Tags,omitempty"`
+}
+
+// TagQueueRequest is the request for TagQueue.
+type TagQueueRequest struct {
+	QueueURL string            `json:"QueueUrl"`
+	Tags     map[string]string `json:"Tags"`
+}
+
+// UntagQueueRequest is the request for UntagQueue.
+type UntagQueueRequest struct {
+	QueueURL string   `json:"QueueUrl"`
+	TagKeys  []string `json:"TagKeys"`
 }
 
 // SendMessageRequest is the request for SendMessage.

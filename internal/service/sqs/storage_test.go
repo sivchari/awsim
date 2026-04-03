@@ -11,7 +11,7 @@ func TestMemoryStorage_ResolveQueueData_HostnameMismatch(t *testing.T) {
 
 	ctx := t.Context()
 
-	_, err := s.CreateQueue(ctx, "test-queue", nil)
+	_, err := s.CreateQueue(ctx, "test-queue", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestMemoryStorage_DeleteQueue_HostnameMismatch(t *testing.T) {
 
 	ctx := t.Context()
 
-	_, err := s.CreateQueue(ctx, "delete-test", nil)
+	_, err := s.CreateQueue(ctx, "delete-test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,5 +86,56 @@ func TestMemoryStorage_DeleteQueue_HostnameMismatch(t *testing.T) {
 	_, err = s.GetQueueURL(ctx, "delete-test")
 	if err == nil {
 		t.Error("expected error after delete, got nil")
+	}
+}
+
+func TestMemoryStorage_TagsLifecycle(t *testing.T) {
+	t.Parallel()
+
+	const tagValue2 = "val2"
+
+	s := NewMemoryStorage("http://localhost:4566")
+	ctx := t.Context()
+
+	_, err := s.CreateQueue(ctx, "tagged-queue", nil, map[string]string{"key1": "val1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tags, err := s.ListQueueTags(ctx, "http://kumo:4566/000000000000/tagged-queue")
+	if err != nil {
+		t.Fatalf("ListQueueTags() error = %v", err)
+	}
+
+	if len(tags) != 1 || tags["key1"] != "val1" {
+		t.Fatalf("unexpected tags after create: %#v", tags)
+	}
+
+	err = s.TagQueue(ctx, "http://kumo:4566/000000000000/tagged-queue", map[string]string{"key2": tagValue2, "key1": "updated"})
+	if err != nil {
+		t.Fatalf("TagQueue() error = %v", err)
+	}
+
+	tags, err = s.ListQueueTags(ctx, "http://localhost:4566/000000000000/tagged-queue")
+	if err != nil {
+		t.Fatalf("ListQueueTags() error = %v", err)
+	}
+
+	if len(tags) != 2 || tags["key1"] != "updated" || tags["key2"] != tagValue2 {
+		t.Fatalf("unexpected tags after tag: %#v", tags)
+	}
+
+	err = s.UntagQueue(ctx, "http://localhost:4566/000000000000/tagged-queue", []string{"key1"})
+	if err != nil {
+		t.Fatalf("UntagQueue() error = %v", err)
+	}
+
+	tags, err = s.ListQueueTags(ctx, "http://localhost:4566/000000000000/tagged-queue")
+	if err != nil {
+		t.Fatalf("ListQueueTags() error = %v", err)
+	}
+
+	if len(tags) != 1 || tags["key2"] != tagValue2 {
+		t.Fatalf("unexpected tags after untag: %#v", tags)
 	}
 }
