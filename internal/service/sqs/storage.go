@@ -571,8 +571,8 @@ func (s *MemoryStorage) ChangeMessageVisibility(_ context.Context, queueURL, rec
 	}
 
 	if visibilityTimeout == 0 {
-		// Setting to 0 makes the message immediately visible again.
 		delete(qd.Inflight, receiptHandle)
+
 		msg.VisibleAt = time.Now()
 		qd.Messages = append(qd.Messages, msg)
 	} else {

@@ -257,8 +257,8 @@ type ChangeMessageVisibilityRequest struct {
 
 // ChangeMessageVisibilityBatchRequest is the request for ChangeMessageVisibilityBatch.
 type ChangeMessageVisibilityBatchRequest struct {
-	QueueURL string                                        `json:"QueueUrl"`
-	Entries  []ChangeMessageVisibilityBatchRequestEntry    `json:"Entries"`
+	QueueURL string                                     `json:"QueueUrl"`
+	Entries  []ChangeMessageVisibilityBatchRequestEntry `json:"Entries"`
 }
 
 // ChangeMessageVisibilityBatchRequestEntry is an individual entry in a ChangeMessageVisibilityBatch request.
