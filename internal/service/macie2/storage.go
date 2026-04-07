@@ -10,16 +10,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/sivchari/kumo/internal/storage"
 )
 
 // Error codes.
 const (
-	errResourceNotFoundException      = "ResourceNotFoundException"
-	errValidationException            = "ValidationException"
-	errConflictException              = "ConflictException"
-	errInternalServerException        = "InternalServerException"
-	errServiceQuotaExceededException  = "ServiceQuotaExceededException"
+	errResourceNotFoundException     = "ResourceNotFoundException"
+	errValidationException           = "ValidationException"
+	errConflictException             = "ConflictException"
+	errInternalServerException       = "InternalServerException"
+	errServiceQuotaExceededException = "ServiceQuotaExceededException"
 )
 
 // Default values.
@@ -90,13 +91,13 @@ var (
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu                    sync.RWMutex                       `json:"-"`
-	Session               *MacieSession                      `json:"session"`
-	AllowLists            map[string]*AllowList              `json:"allowLists"`
-	ClassificationJobs    map[string]*ClassificationJob      `json:"classificationJobs"`
-	CustomDataIdentifiers map[string]*CustomDataIdentifier   `json:"customDataIdentifiers"`
-	FindingsFilters       map[string]*FindingsFilter         `json:"findingsFilters"`
-	Findings              map[string]*Finding                `json:"findings"`
+	mu                    sync.RWMutex                     `json:"-"`
+	Session               *MacieSession                    `json:"session"`
+	AllowLists            map[string]*AllowList            `json:"allowLists"`
+	ClassificationJobs    map[string]*ClassificationJob    `json:"classificationJobs"`
+	CustomDataIdentifiers map[string]*CustomDataIdentifier `json:"customDataIdentifiers"`
+	FindingsFilters       map[string]*FindingsFilter       `json:"findingsFilters"`
+	Findings              map[string]*Finding              `json:"findings"`
 	region                string
 	accountID             string
 	dataDir               string
@@ -421,7 +422,7 @@ func (m *MemoryStorage) CreateClassificationJob(_ context.Context, req *CreateCl
 	now := time.Now()
 	arn := fmt.Sprintf("arn:aws:macie2:%s:%s:classification-job/%s", m.region, m.accountID, jobID)
 
-	var bucketDefs []BucketDefinition
+	bucketDefs := make([]BucketDefinition, 0, len(req.S3JobDefinition.BucketDefinitions))
 	for _, bd := range req.S3JobDefinition.BucketDefinitions {
 		bucketDefs = append(bucketDefs, BucketDefinition{
 			AccountID: bd.AccountID,
@@ -458,12 +459,9 @@ func (m *MemoryStorage) DescribeClassificationJob(_ context.Context, jobID strin
 		return nil, &Error{Code: errResourceNotFoundException, Message: "Classification job not found: " + jobID}
 	}
 
-	var bucketDefs []BucketDefinitionOutput
+	bucketDefs := make([]BucketDefinitionOutput, 0, len(job.S3JobDefinition.BucketDefinitions))
 	for _, bd := range job.S3JobDefinition.BucketDefinitions {
-		bucketDefs = append(bucketDefs, BucketDefinitionOutput{
-			AccountID: bd.AccountID,
-			Buckets:   bd.Buckets,
-		})
+		bucketDefs = append(bucketDefs, BucketDefinitionOutput(bd))
 	}
 
 	return &DescribeClassificationJobResponse{
@@ -681,14 +679,7 @@ func (m *MemoryStorage) GetFindingsFilter(_ context.Context, id string) (*GetFin
 
 	criterionOut := make(map[string]CriterionValuesOutput, len(ff.FindingCriteria.Criterion))
 	for k, v := range ff.FindingCriteria.Criterion {
-		criterionOut[k] = CriterionValuesOutput{
-			Eq:  v.Eq,
-			Neq: v.Neq,
-			Gt:  v.Gt,
-			Gte: v.Gte,
-			Lt:  v.Lt,
-			Lte: v.Lte,
-		}
+		criterionOut[k] = CriterionValuesOutput(v)
 	}
 
 	return &GetFindingsFilterResponse{

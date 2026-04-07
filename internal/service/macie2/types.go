@@ -503,6 +503,6 @@ type ListFindingsResponse struct {
 
 // ErrorResponse represents an error response.
 type ErrorResponse struct {
-	Type    string `json:"__type"`
+	Type    string `json:"__type"` //nolint:tagliatelle // AWS error response format requires __type field.
 	Message string `json:"message"`
 }
