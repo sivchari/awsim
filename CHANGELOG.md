@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.8.0](https://github.com/sivchari/kumo/compare/v0.7.0...v0.8.0) - 2026-04-07
+- feat(sqs): add DeleteMessageBatch action by @sivchari in https://github.com/sivchari/kumo/pull/395
+- fix(sqs): resolve queue by URL path to handle hostname mismatch by @sivchari in https://github.com/sivchari/kumo/pull/394
+- fix(docker): run as non-root user by @kahirokunn in https://github.com/sivchari/kumo/pull/398
+- fix(server): use mime.ParseMediaType for Content-Type matching by @kahirokunn in https://github.com/sivchari/kumo/pull/397
+- feat(location): add Amazon Location Service implementation by @sivchari in https://github.com/sivchari/kumo/pull/401
+- feat(macie2): add Amazon Macie2 service implementation by @sivchari in https://github.com/sivchari/kumo/pull/402
+- release v0.8.0 by @sivchari in https://github.com/sivchari/kumo/pull/403
+
 ## [v0.7.0](https://github.com/sivchari/kumo/compare/v0.6.0...v0.7.0) - 2026-03-31
 - feat(s3): add DeleteObjects (multi-object delete) support by @sivchari in https://github.com/sivchari/kumo/pull/388
 - feat(dynamodb): add UpdateTimeToLive and DescribeTimeToLive actions by @sivchari in https://github.com/sivchari/kumo/pull/389
