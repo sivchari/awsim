@@ -19,7 +19,7 @@
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 - **Optional data persistence** - Survive restarts with `KUMO_DATA_DIR`
 
-## Supported Services (72 services)
+## Supported Services (73 services)
 
 ### Storage
 | Service | Description |
@@ -75,6 +75,7 @@
 | Cognito | User authentication |
 | Security Lake | Security data lake |
 | STS | Security token service |
+| Macie | Data security and privacy |
 
 ### Monitoring & Logging
 | Service | Description |

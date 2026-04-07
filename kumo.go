@@ -62,6 +62,7 @@ import (
 	_ "github.com/sivchari/kumo/internal/service/kms"
 	_ "github.com/sivchari/kumo/internal/service/lambda"
 	_ "github.com/sivchari/kumo/internal/service/location"
+	_ "github.com/sivchari/kumo/internal/service/macie2"
 	_ "github.com/sivchari/kumo/internal/service/memorydb"
 	_ "github.com/sivchari/kumo/internal/service/mq"
 	_ "github.com/sivchari/kumo/internal/service/organizations"

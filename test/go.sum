@@ -124,6 +124,8 @@ github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0 h1:u66DMbJWDFXs9458RAHNtq2d0
 github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0/go.mod h1:ogjbkxFgFOjG3dYFQ8irC92gQfpfMDcy1RDKNSZWXNU=
 github.com/aws/aws-sdk-go-v2/service/location v1.50.13 h1:h4N820C0YXBN39lJKUbBiIkZ+o/H7cDVkcrE8XN9jE4=
 github.com/aws/aws-sdk-go-v2/service/location v1.50.13/go.mod h1:/u66MnIsPNujLGdSjkt5l9ArREcsZ1s6hsNLvyJ4ERw=
+github.com/aws/aws-sdk-go-v2/service/macie2 v1.50.13 h1:t1tw8mNtYyxNqovofbXzUWwBc3PY4cceZQC3C+rBrLw=
+github.com/aws/aws-sdk-go-v2/service/macie2 v1.50.13/go.mod h1:OYLO2yEZozmUhAh9vcdtyl8o1b4+/MaGn+mmM81XxCk=
 github.com/aws/aws-sdk-go-v2/service/memorydb v1.33.12 h1:BUd9RyiCSQ3gau/LAh6ZppvuQ1IxjetxpB25pc9YbAg=
 github.com/aws/aws-sdk-go-v2/service/memorydb v1.33.12/go.mod h1:rxCveQsDbPAecIQjIcDlzsH93PrHovX8bz3llcRAgt0=
 github.com/aws/aws-sdk-go-v2/service/mq v1.33.1 h1:fw/32PK9eqPKKotODP5wrN3RtcG8HKbUVoEWK7oUd7s=

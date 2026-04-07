@@ -55,6 +55,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.49.5
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0
 	github.com/aws/aws-sdk-go-v2/service/location v1.50.13
+	github.com/aws/aws-sdk-go-v2/service/macie2 v1.50.13
 	github.com/aws/aws-sdk-go-v2/service/memorydb v1.33.12
 	github.com/aws/aws-sdk-go-v2/service/mq v1.33.1
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3
