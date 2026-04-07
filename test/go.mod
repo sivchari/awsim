@@ -3,7 +3,7 @@ module github.com/sivchari/kumo/test
 go 1.25.0
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.41.4
+	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.7
 	github.com/aws/aws-sdk-go-v2/service/acm v1.37.19
@@ -54,6 +54,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.49.5
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0
+	github.com/aws/aws-sdk-go-v2/service/location v1.50.13
 	github.com/aws/aws-sdk-go-v2/service/memorydb v1.33.12
 	github.com/aws/aws-sdk-go-v2/service/mq v1.33.1
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.50.3
@@ -85,8 +86,8 @@ require (
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.17 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.21 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.21 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.6 // indirect

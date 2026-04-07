@@ -19,7 +19,7 @@
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 - **Optional data persistence** - Survive restarts with `KUMO_DATA_DIR`
 
-## Supported Services (71 services)
+## Supported Services (72 services)
 
 ### Storage
 | Service | Description |
@@ -94,6 +94,7 @@
 | Route 53 Resolver | DNS resolver |
 | ELBv2 | Load balancing |
 | App Mesh | Service mesh |
+| Location | Location-based services |
 
 ### Application Integration
 | Service | Description |
