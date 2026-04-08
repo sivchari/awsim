@@ -34,6 +34,10 @@ type Storage interface {
 	Publish(ctx context.Context, topicARN, message, subject string, attributes map[string]MessageAttribute) (string, error)
 	ListSubscriptions(ctx context.Context, nextToken string) ([]*Subscription, string, error)
 	ListSubscriptionsByTopic(ctx context.Context, topicARN, nextToken string) ([]*Subscription, string, error)
+	GetTopicAttributes(ctx context.Context, topicARN string) (map[string]string, error)
+	SetTopicAttribute(ctx context.Context, topicARN, name, value string) error
+	GetSubscriptionAttributes(ctx context.Context, subscriptionARN string) (map[string]string, error)
+	SetSubscriptionAttribute(ctx context.Context, subscriptionARN, name, value string) error
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -455,6 +459,86 @@ func (m *MemoryStorage) ListSubscriptionsByTopic(_ context.Context, topicARN, ne
 	}
 
 	return result, newNextToken, nil
+}
+
+// GetTopicAttributes returns the attributes of a topic.
+func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (map[string]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	topic, exists := m.Topics[topicARN]
+	if !exists {
+		return nil, &TopicError{Code: "NotFound", Message: fmt.Sprintf("Topic does not exist: %s", topicARN)}
+	}
+
+	attrs := map[string]string{
+		"TopicArn":    topic.ARN,
+		"DisplayName": topic.DisplayName,
+	}
+	for k, v := range topic.Attributes {
+		attrs[k] = v
+	}
+	return attrs, nil
+}
+
+// SetTopicAttribute updates a single attribute on a topic.
+func (m *MemoryStorage) SetTopicAttribute(_ context.Context, topicARN, name, value string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	topic, exists := m.Topics[topicARN]
+	if !exists {
+		return &TopicError{Code: "NotFound", Message: fmt.Sprintf("Topic does not exist: %s", topicARN)}
+	}
+
+	if topic.Attributes == nil {
+		topic.Attributes = make(map[string]string)
+	}
+	topic.Attributes[name] = value
+	if name == "DisplayName" {
+		topic.DisplayName = value
+	}
+	return nil
+}
+
+// GetSubscriptionAttributes returns the attributes of a subscription.
+func (m *MemoryStorage) GetSubscriptionAttributes(_ context.Context, subscriptionARN string) (map[string]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	sub, exists := m.Subscriptions[subscriptionARN]
+	if !exists {
+		return nil, &TopicError{Code: "NotFound", Message: fmt.Sprintf("Subscription does not exist: %s", subscriptionARN)}
+	}
+
+	attrs := map[string]string{
+		"SubscriptionArn": sub.ARN,
+		"TopicArn":        sub.TopicARN,
+		"Protocol":        sub.Protocol,
+		"Endpoint":        sub.Endpoint,
+		"Owner":           sub.Owner,
+	}
+	for k, v := range sub.SubscriptionAttributes {
+		attrs[k] = v
+	}
+	return attrs, nil
+}
+
+// SetSubscriptionAttribute updates a single attribute on a subscription.
+func (m *MemoryStorage) SetSubscriptionAttribute(_ context.Context, subscriptionARN, name, value string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sub, exists := m.Subscriptions[subscriptionARN]
+	if !exists {
+		return &TopicError{Code: "NotFound", Message: fmt.Sprintf("Subscription does not exist: %s", subscriptionARN)}
+	}
+
+	if sub.SubscriptionAttributes == nil {
+		sub.SubscriptionAttributes = make(map[string]string)
+	}
+	sub.SubscriptionAttributes[name] = value
+	return nil
 }
 
 // buildTopicARN builds an ARN for a topic.
