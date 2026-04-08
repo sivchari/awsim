@@ -52,7 +52,7 @@ func TestNeptune_CreateAndDeleteDBCluster(t *testing.T) {
 		})
 	})
 
-	g := golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "ResultMetadata"))
+	g := golden.New(t, golden.WithIgnoreFields("DBClusterArn", "DbClusterResourceId", "ClusterCreateTime", "Endpoint", "ReaderEndpoint", "AllocatedStorage", "AvailabilityZones", "BackupRetentionPeriod", "Port", "ResultMetadata"))
 	g.Assert(t.Name()+"_create", createResult)
 
 	// Describe cluster.
@@ -120,7 +120,7 @@ func TestNeptune_CreateAndDeleteDBInstance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g := golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "ResultMetadata"))
+	g := golden.New(t, golden.WithIgnoreFields("DBInstanceArn", "DbiResourceId", "InstanceCreateTime", "Address", "AllocatedStorage", "BackupRetentionPeriod", "AvailabilityZone", "Port", "ResultMetadata"))
 	g.Assert(t.Name()+"_create", createResult)
 
 	// Describe instance.

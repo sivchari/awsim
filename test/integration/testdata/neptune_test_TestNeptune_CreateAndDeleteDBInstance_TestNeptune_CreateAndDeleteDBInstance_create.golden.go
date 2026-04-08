@@ -22,7 +22,7 @@
     "DomainMemberships": null,
     "EnabledCloudwatchLogsExports": null,
     "Endpoint": {
-      "Address": "test-neptune-instance.29b77f7c.us-east-1.rds.amazonaws.com",
+      "Address": "test-neptune-instance.92a2ace8.us-east-1.rds.amazonaws.com",
       "HostedZoneId": null,
       "Port": 3306
     },
@@ -30,7 +30,7 @@
     "EngineVersion": null,
     "EnhancedMonitoringResourceArn": null,
     "IAMDatabaseAuthenticationEnabled": null,
-    "InstanceCreateTime": "2026-04-07T13:46:34.113Z",
+    "InstanceCreateTime": "2026-04-08T00:57:46.901Z",
     "Iops": null,
     "KmsKeyId": null,
     "LatestRestorableTime": null,
