@@ -396,12 +396,14 @@ func (s *Service) GetTopicAttributes(w http.ResponseWriter, r *http.Request) {
 	var req GetTopicAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
 		writeTopicError(w, errInvalidParameter, "invalid request body", http.StatusBadRequest)
+
 		return
 	}
 
 	attrs, err := s.storage.GetTopicAttributes(r.Context(), req.TopicARN)
 	if err != nil {
 		writeTopicError(w, errNotFound, err.Error(), http.StatusNotFound)
+
 		return
 	}
 
@@ -409,10 +411,11 @@ func (s *Service) GetTopicAttributes(w http.ResponseWriter, r *http.Request) {
 	for k, v := range attrs {
 		entries = append(entries, XMLAttribute{Key: k, Value: v})
 	}
+
 	writeXMLResponse(w, XMLGetTopicAttributesResponse{
-		Xmlns:                   snsXMLNS,
+		Xmlns:                    snsXMLNS,
 		GetTopicAttributesResult: XMLGetTopicAttributesResult{Attributes: entries},
-		ResponseMetadata:        ResponseMetadata{RequestID: uuid.New().String()},
+		ResponseMetadata:         ResponseMetadata{RequestID: uuid.New().String()},
 	})
 }
 
@@ -421,11 +424,13 @@ func (s *Service) SetTopicAttributes(w http.ResponseWriter, r *http.Request) {
 	var req SetTopicAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
 		writeTopicError(w, errInvalidParameter, "invalid request body", http.StatusBadRequest)
+
 		return
 	}
 
 	if err := s.storage.SetTopicAttribute(r.Context(), req.TopicARN, req.AttributeName, req.AttributeValue); err != nil {
 		writeTopicError(w, errNotFound, err.Error(), http.StatusNotFound)
+
 		return
 	}
 
@@ -440,12 +445,14 @@ func (s *Service) GetSubscriptionAttributes(w http.ResponseWriter, r *http.Reque
 	var req GetSubscriptionAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
 		writeTopicError(w, errInvalidParameter, "invalid request body", http.StatusBadRequest)
+
 		return
 	}
 
 	attrs, err := s.storage.GetSubscriptionAttributes(r.Context(), req.SubscriptionARN)
 	if err != nil {
 		writeTopicError(w, errNotFound, err.Error(), http.StatusNotFound)
+
 		return
 	}
 
@@ -453,6 +460,7 @@ func (s *Service) GetSubscriptionAttributes(w http.ResponseWriter, r *http.Reque
 	for k, v := range attrs {
 		entries = append(entries, XMLAttribute{Key: k, Value: v})
 	}
+
 	writeXMLResponse(w, XMLGetSubscriptionAttributesResponse{
 		Xmlns:                           snsXMLNS,
 		GetSubscriptionAttributesResult: XMLGetSubscriptionAttributesResult{Attributes: entries},
@@ -465,11 +473,13 @@ func (s *Service) SetSubscriptionAttributes(w http.ResponseWriter, r *http.Reque
 	var req SetSubscriptionAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
 		writeTopicError(w, errInvalidParameter, "invalid request body", http.StatusBadRequest)
+
 		return
 	}
 
 	if err := s.storage.SetSubscriptionAttribute(r.Context(), req.SubscriptionARN, req.AttributeName, req.AttributeValue); err != nil {
 		writeTopicError(w, errNotFound, err.Error(), http.StatusNotFound)
+
 		return
 	}
 

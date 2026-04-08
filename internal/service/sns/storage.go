@@ -494,10 +494,13 @@ func (m *MemoryStorage) SetTopicAttribute(_ context.Context, topicARN, name, val
 	if topic.Attributes == nil {
 		topic.Attributes = make(map[string]string)
 	}
+
 	topic.Attributes[name] = value
+
 	if name == "DisplayName" {
 		topic.DisplayName = value
 	}
+
 	return nil
 }
 
@@ -537,7 +540,9 @@ func (m *MemoryStorage) SetSubscriptionAttribute(_ context.Context, subscription
 	if sub.SubscriptionAttributes == nil {
 		sub.SubscriptionAttributes = make(map[string]string)
 	}
+
 	sub.SubscriptionAttributes[name] = value
+
 	return nil
 }
 
