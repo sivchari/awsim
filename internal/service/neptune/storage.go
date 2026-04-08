@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	defaultAccountID    = "000000000000"
-	defaultRegion       = "us-east-1"
-	defaultEngine       = "neptune"
-	defaultEngineVer    = "1.3.0.0"
-	defaultNeptunePort  = 8182
+	defaultAccountID   = "000000000000"
+	defaultRegion      = "us-east-1"
+	defaultEngine      = "neptune"
+	defaultEngineVer   = "1.3.0.0"
+	defaultNeptunePort = 8182
 )
 
 // Storage defines the Neptune storage interface.
@@ -48,9 +48,9 @@ var (
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu        sync.RWMutex            `json:"-"`
-	Clusters  map[string]*DBCluster   `json:"clusters"`
-	Instances map[string]*DBInstance  `json:"instances"`
+	mu        sync.RWMutex           `json:"-"`
+	Clusters  map[string]*DBCluster  `json:"clusters"`
+	Instances map[string]*DBInstance `json:"instances"`
 	dataDir   string
 }
 
@@ -282,6 +282,7 @@ func (m *MemoryStorage) DeleteDBInstance(_ context.Context, identifier string, _
 	if instance.DBClusterIdentifier != "" {
 		if cluster, clusterExists := m.Clusters[instance.DBClusterIdentifier]; clusterExists {
 			members := make([]DBClusterMember, 0, len(cluster.DBClusterMembers))
+
 			for _, member := range cluster.DBClusterMembers {
 				if member.DBInstanceIdentifier != identifier {
 					members = append(members, member)

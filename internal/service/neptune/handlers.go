@@ -290,6 +290,7 @@ func handleError(w http.ResponseWriter, err error) {
 func convertToXMLDBCluster(cluster *DBCluster) XMLDBCluster {
 	members := make([]XMLDBClusterMember, 0, len(cluster.DBClusterMembers))
 	for _, m := range cluster.DBClusterMembers {
+		//nolint:staticcheck // Cannot use type conversion due to different struct tags (json vs xml).
 		members = append(members, XMLDBClusterMember{
 			DBInstanceIdentifier:          m.DBInstanceIdentifier,
 			IsClusterWriter:               m.IsClusterWriter,

@@ -286,6 +286,10 @@ linters:
       - path: internal/service/location/types\.go
         linters:
           - tagliatelle
+      # AWS Neptune API requires PascalCase JSON field names.
+      - path: internal/service/neptune/types\.go
+        linters:
+          - tagliatelle
       # kumo.go uses blank imports to register all AWS services via init().
       - path: kumo\.go
         linters:
