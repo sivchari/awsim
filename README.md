@@ -19,7 +19,7 @@
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 - **Optional data persistence** - Survive restarts with `KUMO_DATA_DIR`
 
-## Supported Services (73 services)
+## Supported Services (74 services)
 
 ### Storage
 | Service | Description |
@@ -52,6 +52,7 @@
 | Service | Description |
 |---------|-------------|
 | RDS | Relational database service |
+| Neptune | Graph database |
 
 ### Messaging & Integration
 | Service | Description |
