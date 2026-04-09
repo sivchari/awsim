@@ -478,6 +478,7 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 	for k, v := range topic.Attributes {
 		attrs[k] = v
 	}
+
 	return attrs, nil
 }
 
@@ -524,6 +525,7 @@ func (m *MemoryStorage) GetSubscriptionAttributes(_ context.Context, subscriptio
 	for k, v := range sub.SubscriptionAttributes {
 		attrs[k] = v
 	}
+
 	return attrs, nil
 }
 
