@@ -145,37 +145,41 @@ func (s *Service) PutSnapshotBlockHandler(w http.ResponseWriter, r *http.Request
 
 // GetSnapshotBlockHandler handles GET /snapshots/{snapshotId}/blocks/{blockIndex}.
 func (s *Service) GetSnapshotBlockHandler(w http.ResponseWriter, r *http.Request) {
-    snapshotID := r.PathValue("snapshotId")
-    if snapshotID == "" {
-        writeError(w, errValidation, "SnapshotId is required", http.StatusBadRequest)
-        return
-    }
+	snapshotID := r.PathValue("snapshotId")
+	if snapshotID == "" {
+		writeError(w, errValidation, "SnapshotId is required", http.StatusBadRequest)
 
-    blockIndexStr := r.PathValue("blockIndex")
-    blockIndexInt, err := strconv.ParseInt(blockIndexStr, 10, 32)
-    if err != nil {
-        writeError(w, errValidation, "BlockIndex must be a valid integer", http.StatusBadRequest)
-        return
-    }
-    blockIndex := int32(blockIndexInt)
+		return
+	}
 
-    data, checksum, err := s.storage.GetSnapshotBlock(r.Context(), snapshotID, blockIndex)
-    if err != nil {
-        handleServiceError(w, err)
-        return
-    }
+	blockIndexStr := r.PathValue("blockIndex")
 
-    // Explicitly set content type to avoid XSS risk.
-    w.Header().Set("Content-Type", "application/octet-stream")
-    w.Header().Set("x-amzn-RequestId", uuid.New().String())
-     w.Header().Set("x-amz-Data-Length", strconv.Itoa(len(data)))
-    w.Header().Set("x-amz-Checksum", checksum)
-    w.Header().Set("x-amz-Checksum-Algorithm", "SHA256")
+	blockIndexInt, err := strconv.ParseInt(blockIndexStr, 10, 32)
+	if err != nil {
+		writeError(w, errValidation, "BlockIndex must be a valid integer", http.StatusBadRequest)
 
-    w.WriteHeader(http.StatusOK)
-    _, _ = w.Write(data)
+		return
+	}
+
+	blockIndex := int32(blockIndexInt)
+
+	data, checksum, err := s.storage.GetSnapshotBlock(r.Context(), snapshotID, blockIndex)
+	if err != nil {
+		handleServiceError(w, err)
+
+		return
+	}
+
+	// Explicitly set content type to avoid XSS risk.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("x-amzn-RequestId", uuid.New().String())
+	w.Header().Set("x-amz-Data-Length", strconv.Itoa(len(data)))
+	w.Header().Set("x-amz-Checksum", checksum)
+	w.Header().Set("x-amz-Checksum-Algorithm", "SHA256")
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
-
 
 // ListChangedBlocksHandler handles GET /snapshots/{secondSnapshotId}/changedblocks.
 func (s *Service) ListChangedBlocksHandler(w http.ResponseWriter, r *http.Request) {

@@ -413,7 +413,7 @@ func parseIntParam(s string, result *int32) error {
 		val = val*10 + int(c-'0')
 	}
 
-	*result = int32(val) //nolint:gosec // G115: val is bounded by input string length
+	*result = int32(val)
 
 	return nil
 }
