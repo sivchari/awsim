@@ -3,7 +3,9 @@ package pipes
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -429,7 +431,7 @@ func parseIntParam(s string, result *int32) (int32, error) {
     }
 
     // Check for overflow before casting
-    if val > math.MaxInt32 || val < math.MinInt32 {
+    if val > math.MaxInt32 || val < math.MinInt32 { 
         return 0, fmt.Errorf("value %d out of int32 range", val)
     }
 
