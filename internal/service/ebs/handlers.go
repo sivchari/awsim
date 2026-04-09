@@ -168,7 +168,7 @@ func (s *Service) GetSnapshotBlockHandler(w http.ResponseWriter, r *http.Request
     // Explicitly set content type to avoid XSS risk.
     w.Header().Set("Content-Type", "application/octet-stream")
     w.Header().Set("x-amzn-RequestId", uuid.New().String())
-    w.Header().Set("x-amz-Data-Length", strconv.Itoa(len(data)))
+     w.Header().Set("x-amz-Data-Length", strconv.Itoa(len(data)))
     w.Header().Set("x-amz-Checksum", checksum)
     w.Header().Set("x-amz-Checksum-Algorithm", "SHA256")
 
