@@ -28,6 +28,7 @@ import (
 	_ "github.com/sivchari/kumo/internal/service/configservice"
 	_ "github.com/sivchari/kumo/internal/service/dataexchange"
 	_ "github.com/sivchari/kumo/internal/service/dlm"
+	_ "github.com/sivchari/kumo/internal/service/documentdb"
 	_ "github.com/sivchari/kumo/internal/service/ds"
 	_ "github.com/sivchari/kumo/internal/service/dynamodb"
 	_ "github.com/sivchari/kumo/internal/service/ebs"

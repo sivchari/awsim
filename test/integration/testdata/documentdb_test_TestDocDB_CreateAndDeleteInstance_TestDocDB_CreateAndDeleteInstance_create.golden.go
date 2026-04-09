@@ -1,13 +1,13 @@
 {
   "DBInstance": {
     "AutoMinorVersionUpgrade": null,
-    "AvailabilityZone": "us-east-1a",
-    "BackupRetentionPeriod": 0,
+    "AvailabilityZone": null,
+    "BackupRetentionPeriod": null,
     "CACertificateIdentifier": null,
     "CertificateDetails": null,
     "CopyTagsToSnapshot": null,
-    "DBClusterIdentifier": null,
-    "DBInstanceArn": "arn:aws:rds:us-east-1:000000000000:db:test-docdb-instance",
+    "DBClusterIdentifier": "test-docdb-cluster-for-instance",
+    "DBInstanceArn": "arn:aws:docdb:us-east-1:000000000000:db:test-docdb-instance",
     "DBInstanceClass": "db.r5.large",
     "DBInstanceIdentifier": "test-docdb-instance",
     "DBInstanceStatus": "available",
@@ -15,13 +15,13 @@
     "DbiResourceId": null,
     "EnabledCloudwatchLogsExports": null,
     "Endpoint": {
-      "Address": "test-docdb-instance.ea8dcb1f.us-east-1.rds.amazonaws.com",
+      "Address": "test-docdb-instance.f24dee80.us-east-1.docdb.amazonaws.com",
       "HostedZoneId": null,
-      "Port": 3306
+      "Port": 27017
     },
     "Engine": "docdb",
-    "EngineVersion": null,
-    "InstanceCreateTime": "2026-03-23T07:45:25.339Z",
+    "EngineVersion": "5.0.0",
+    "InstanceCreateTime": "2026-04-09T14:14:58.565Z",
     "KmsKeyId": null,
     "LatestRestorableTime": null,
     "PendingModifiedValues": null,
@@ -30,10 +30,10 @@
     "PreferredBackupWindow": null,
     "PreferredMaintenanceWindow": null,
     "PromotionTier": null,
-    "PubliclyAccessible": false,
+    "PubliclyAccessible": null,
     "StatusInfos": null,
-    "StorageEncrypted": false,
-    "VpcSecurityGroups": []
+    "StorageEncrypted": null,
+    "VpcSecurityGroups": null
   },
   "ResultMetadata": {}
 }
