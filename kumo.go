@@ -70,6 +70,7 @@ import (
 	_ "github.com/sivchari/kumo/internal/service/organizations"
 	_ "github.com/sivchari/kumo/internal/service/pipes"
 	_ "github.com/sivchari/kumo/internal/service/rds"
+	_ "github.com/sivchari/kumo/internal/service/redshift"
 	_ "github.com/sivchari/kumo/internal/service/rekognition"
 	_ "github.com/sivchari/kumo/internal/service/resiliencehub"
 	_ "github.com/sivchari/kumo/internal/service/route53"

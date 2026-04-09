@@ -294,6 +294,10 @@ linters:
       - path: internal/service/documentdb/types\.go
         linters:
           - tagliatelle
+      # AWS Redshift API requires PascalCase JSON field names.
+      - path: internal/service/redshift/types\.go
+        linters:
+          - tagliatelle
       # kumo.go uses blank imports to register all AWS services via init().
       - path: kumo\.go
         linters:
