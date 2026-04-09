@@ -68,7 +68,7 @@ func (s *Service) GetParameter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &GetParameterResponse{
-		Parameter: parameterToValue(param),
+		Parameter: parameterToValue(param, req.WithDecryption),
 	}
 
 	writeJSONResponse(w, resp)
@@ -102,7 +102,7 @@ func (s *Service) GetParameters(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, p := range params {
-		resp.Parameters = append(resp.Parameters, parameterToValue(p))
+		resp.Parameters = append(resp.Parameters, parameterToValue(p, req.WithDecryption))
 	}
 
 	writeJSONResponse(w, resp)
@@ -136,7 +136,7 @@ func (s *Service) GetParametersByPath(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, p := range params {
-		resp.Parameters = append(resp.Parameters, parameterToValue(p))
+		resp.Parameters = append(resp.Parameters, parameterToValue(p, req.WithDecryption))
 	}
 
 	writeJSONResponse(w, resp)
@@ -226,11 +226,17 @@ func (s *Service) DescribeParameters(w http.ResponseWriter, r *http.Request) {
 }
 
 // parameterToValue converts a Parameter to ParameterValue.
-func parameterToValue(p *Parameter) *ParameterValue {
+// For SecureString parameters, the value is masked when withDecryption is false.
+func parameterToValue(p *Parameter, withDecryption bool) *ParameterValue {
+	value := p.Value
+	if p.Type == ParameterTypeSecureString && !withDecryption {
+		value = "kms:alias/aws/ssm:" + value
+	}
+
 	return &ParameterValue{
 		Name:             p.Name,
 		Type:             p.Type,
-		Value:            p.Value,
+		Value:            value,
 		Version:          p.Version,
 		LastModifiedDate: toUnixTimestamp(p.LastModifiedDate),
 		ARN:              p.ARN,

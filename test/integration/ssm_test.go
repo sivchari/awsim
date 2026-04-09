@@ -364,3 +364,53 @@ func TestSSM_GetParameter_NotFound(t *testing.T) {
 		t.Fatal("expected error when getting nonexistent parameter")
 	}
 }
+
+func TestSSM_SecureString_WithDecryptionFalse(t *testing.T) {
+	client := newSSMClient(t)
+	ctx := t.Context()
+
+	paramName := "/test/secure-param"
+	paramValue := "SECURE"
+
+	_, err := client.PutParameter(ctx, &ssm.PutParameterInput{
+		Name:  aws.String(paramName),
+		Value: aws.String(paramValue),
+		Type:  types.ParameterTypeSecureString,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteParameter(context.Background(), &ssm.DeleteParameterInput{
+			Name: aws.String(paramName),
+		})
+	})
+
+	// WithDecryption=false should NOT return the actual value.
+	getOutput, err := client.GetParameter(ctx, &ssm.GetParameterInput{
+		Name:           aws.String(paramName),
+		WithDecryption: aws.Bool(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if aws.ToString(getOutput.Parameter.Value) == paramValue {
+		t.Errorf("expected masked value when WithDecryption=false, got actual value %q", paramValue)
+	}
+
+	// WithDecryption=true should return the actual value.
+	getOutputDecrypted, err := client.GetParameter(ctx, &ssm.GetParameterInput{
+		Name:           aws.String(paramName),
+		WithDecryption: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if aws.ToString(getOutputDecrypted.Parameter.Value) != paramValue {
+		t.Errorf("expected actual value %q when WithDecryption=true, got %q",
+			paramValue, aws.ToString(getOutputDecrypted.Parameter.Value))
+	}
+}
