@@ -60,6 +60,11 @@ func (s *Service) Actions() []string {
 	}
 }
 
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "sts"
+}
+
 // QueryProtocol is a marker method that indicates STS uses AWS Query protocol.
 func (s *Service) QueryProtocol() {}
 

@@ -64,6 +64,11 @@ func (s *Service) Actions() []string {
 	}
 }
 
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "elasticloadbalancingv2"
+}
+
 // QueryProtocol is a marker method that indicates ELB uses AWS Query protocol.
 func (s *Service) QueryProtocol() {}
 

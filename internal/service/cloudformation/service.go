@@ -57,6 +57,11 @@ func (s *Service) Actions() []string {
 	}
 }
 
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "cloudformation"
+}
+
 // QueryProtocol marks this service as using the Query protocol.
 func (s *Service) QueryProtocol() {}
 
