@@ -175,6 +175,135 @@ func TestSQS_SendAndReceiveMessage(t *testing.T) {
 	}
 }
 
+func TestSQS_ChangeMessageVisibility(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-change-visibility"
+
+	// Create queue with short visibility timeout.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+		Attributes: map[string]string{
+			"VisibilityTimeout": "5",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send message.
+	_, err = client.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    createOutput.QueueUrl,
+		MessageBody: aws.String("visibility test"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Receive message.
+	receiveOutput, err := client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            createOutput.QueueUrl,
+		MaxNumberOfMessages: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(receiveOutput.Messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(receiveOutput.Messages))
+	}
+
+	// Extend visibility timeout.
+	_, err = client.ChangeMessageVisibility(ctx, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          createOutput.QueueUrl,
+		ReceiptHandle:     receiveOutput.Messages[0].ReceiptHandle,
+		VisibilityTimeout: 300,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the message.
+	_, err = client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      createOutput.QueueUrl,
+		ReceiptHandle: receiveOutput.Messages[0].ReceiptHandle,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSQS_ChangeMessageVisibilityBatch(t *testing.T) {
+	client := newSQSClient(t)
+	ctx := t.Context()
+	queueName := "test-queue-change-visibility-batch"
+
+	// Create queue.
+	createOutput, err := client.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteQueue(context.Background(), &sqs.DeleteQueueInput{
+			QueueUrl: createOutput.QueueUrl,
+		})
+	})
+
+	// Send 2 messages.
+	for i := range 2 {
+		_, err = client.SendMessage(ctx, &sqs.SendMessageInput{
+			QueueUrl:    createOutput.QueueUrl,
+			MessageBody: aws.String(fmt.Sprintf("batch visibility message %d", i)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Receive messages.
+	receiveOutput, err := client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            createOutput.QueueUrl,
+		MaxNumberOfMessages: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(receiveOutput.Messages) < 2 {
+		t.Fatalf("expected 2 messages, got %d", len(receiveOutput.Messages))
+	}
+
+	// Change visibility batch.
+	batchOutput, err := client.ChangeMessageVisibilityBatch(ctx, &sqs.ChangeMessageVisibilityBatchInput{
+		QueueUrl: createOutput.QueueUrl,
+		Entries: []types.ChangeMessageVisibilityBatchRequestEntry{
+			{
+				Id:                aws.String("msg0"),
+				ReceiptHandle:     receiveOutput.Messages[0].ReceiptHandle,
+				VisibilityTimeout: 120,
+			},
+			{
+				Id:                aws.String("msg1"),
+				ReceiptHandle:     receiveOutput.Messages[1].ReceiptHandle,
+				VisibilityTimeout: 60,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), batchOutput)
+}
+
 func TestSQS_PurgeQueue(t *testing.T) {
 	client := newSQSClient(t)
 	ctx := t.Context()

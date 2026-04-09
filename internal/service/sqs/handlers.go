@@ -541,6 +541,117 @@ func (s *Service) processDeleteBatchEntries(ctx context.Context, queueURL string
 	return resp
 }
 
+// ChangeMessageVisibility handles the ChangeMessageVisibility action.
+func (s *Service) ChangeMessageVisibility(w http.ResponseWriter, r *http.Request) {
+	var req ChangeMessageVisibilityRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.ReceiptHandle == "" {
+		writeSQSError(w, "MissingParameter", "ReceiptHandle is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.ChangeMessageVisibility(r.Context(), req.QueueURL, req.ReceiptHandle, req.VisibilityTimeout); err != nil {
+		var qErr *QueueError
+		if errors.As(err, &qErr) {
+			writeSQSError(w, qErr.Code, qErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeSQSError(w, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, struct{}{})
+}
+
+// ChangeMessageVisibilityBatch handles the ChangeMessageVisibilityBatch action.
+func (s *Service) ChangeMessageVisibilityBatch(w http.ResponseWriter, r *http.Request) {
+	var req ChangeMessageVisibilityBatchRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeSQSError(w, "InvalidParameterValue", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.QueueURL == "" {
+		writeSQSError(w, "MissingParameter", "QueueUrl is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) == 0 {
+		writeSQSError(w, "EmptyBatchRequest", "There should be at least one ChangeMessageVisibilityBatchRequestEntry in the request", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.Entries) > 10 {
+		writeSQSError(w, "TooManyEntriesInBatchRequest", "Maximum number of entries per request are 10", http.StatusBadRequest)
+
+		return
+	}
+
+	// Check for duplicate IDs.
+	seen := make(map[string]struct{}, len(req.Entries))
+	for _, entry := range req.Entries {
+		if _, exists := seen[entry.ID]; exists {
+			writeSQSError(w, "BatchEntryIdsNotDistinct", "Two or more batch entries in the request have the same Id", http.StatusBadRequest)
+
+			return
+		}
+
+		seen[entry.ID] = struct{}{}
+	}
+
+	resp := s.processChangeVisibilityBatchEntries(r.Context(), req.QueueURL, req.Entries)
+
+	writeJSONResponse(w, resp)
+}
+
+// processChangeVisibilityBatchEntries processes individual entries in a ChangeMessageVisibilityBatch request.
+func (s *Service) processChangeVisibilityBatchEntries(ctx context.Context, queueURL string, entries []ChangeMessageVisibilityBatchRequestEntry) ChangeMessageVisibilityBatchResponse {
+	var resp ChangeMessageVisibilityBatchResponse
+
+	for _, entry := range entries {
+		if entry.ReceiptHandle == "" {
+			resp.Failed = append(resp.Failed, BatchResultErrorEntry{
+				ID:          entry.ID,
+				SenderFault: true,
+				Code:        "MissingParameter",
+				Message:     "The request must contain the parameter ReceiptHandle",
+			})
+
+			continue
+		}
+
+		if err := s.storage.ChangeMessageVisibility(ctx, queueURL, entry.ReceiptHandle, entry.VisibilityTimeout); err != nil {
+			resp.Failed = append(resp.Failed, s.batchEntryError(entry.ID, err))
+
+			continue
+		}
+
+		resp.Successful = append(resp.Successful, ChangeMessageVisibilityBatchResultEntry{
+			ID: entry.ID,
+		})
+	}
+
+	return resp
+}
+
 // PurgeQueue handles the PurgeQueue action.
 func (s *Service) PurgeQueue(w http.ResponseWriter, r *http.Request) {
 	var req PurgeQueueRequest
@@ -707,6 +818,10 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.DeleteMessage(w, r)
 	case "DeleteMessageBatch":
 		s.DeleteMessageBatch(w, r)
+	case "ChangeMessageVisibility":
+		s.ChangeMessageVisibility(w, r)
+	case "ChangeMessageVisibilityBatch":
+		s.ChangeMessageVisibilityBatch(w, r)
 	case "PurgeQueue":
 		s.PurgeQueue(w, r)
 	case "GetQueueAttributes":
