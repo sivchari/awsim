@@ -298,3 +298,107 @@ func TestSNS_CreateTopicIdempotent(t *testing.T) {
 			*createOutput1.TopicArn, *createOutput2.TopicArn)
 	}
 }
+
+func TestSNS_GetAndSetTopicAttributes(t *testing.T) {
+	client := newSNSClient(t)
+	ctx := t.Context()
+	topicName := "test-topic-attrs"
+
+	createOutput, err := client.CreateTopic(ctx, &sns.CreateTopicInput{
+		Name: aws.String(topicName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{TopicArn: createOutput.TopicArn})
+	})
+
+	// GetTopicAttributes should include TopicArn.
+	getOutput, err := client.GetTopicAttributes(ctx, &sns.GetTopicAttributesInput{
+		TopicArn: createOutput.TopicArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Attributes", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
+
+	// SetTopicAttributes should update DisplayName.
+	_, err = client.SetTopicAttributes(ctx, &sns.SetTopicAttributesInput{
+		TopicArn:       createOutput.TopicArn,
+		AttributeName:  aws.String("DisplayName"),
+		AttributeValue: aws.String("My Test Topic"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the attribute was updated.
+	getAfterOutput, err := client.GetTopicAttributes(ctx, &sns.GetTopicAttributesInput{
+		TopicArn: createOutput.TopicArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getAfterOutput.Attributes["DisplayName"] != "My Test Topic" {
+		t.Errorf("expected DisplayName=My Test Topic, got %s", getAfterOutput.Attributes["DisplayName"])
+	}
+}
+
+func TestSNS_GetAndSetSubscriptionAttributes(t *testing.T) {
+	client := newSNSClient(t)
+	ctx := t.Context()
+	topicName := "test-topic-sub-attrs"
+
+	createOutput, err := client.CreateTopic(ctx, &sns.CreateTopicInput{
+		Name: aws.String(topicName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = client.DeleteTopic(context.Background(), &sns.DeleteTopicInput{TopicArn: createOutput.TopicArn})
+	})
+
+	subOutput, err := client.Subscribe(ctx, &sns.SubscribeInput{
+		TopicArn: createOutput.TopicArn,
+		Protocol: aws.String("sqs"),
+		Endpoint: aws.String("arn:aws:sqs:us-east-1:000000000000:test-queue"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = client.Unsubscribe(context.Background(), &sns.UnsubscribeInput{SubscriptionArn: subOutput.SubscriptionArn})
+	})
+
+	// GetSubscriptionAttributes should include SubscriptionArn, Protocol, Endpoint.
+	getOutput, err := client.GetSubscriptionAttributes(ctx, &sns.GetSubscriptionAttributesInput{
+		SubscriptionArn: subOutput.SubscriptionArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("Attributes", "ResultMetadata")).Assert(t.Name()+"_get", getOutput)
+
+	// SetSubscriptionAttributes should update FilterPolicy.
+	_, err = client.SetSubscriptionAttributes(ctx, &sns.SetSubscriptionAttributesInput{
+		SubscriptionArn: subOutput.SubscriptionArn,
+		AttributeName:   aws.String("FilterPolicy"),
+		AttributeValue:  aws.String(`{"type": ["order"]}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the attribute was updated.
+	getAfterOutput, err := client.GetSubscriptionAttributes(ctx, &sns.GetSubscriptionAttributesInput{
+		SubscriptionArn: subOutput.SubscriptionArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getAfterOutput.Attributes["FilterPolicy"] != `{"type": ["order"]}` {
+		t.Errorf("expected FilterPolicy set, got %s", getAfterOutput.Attributes["FilterPolicy"])
+	}
+}

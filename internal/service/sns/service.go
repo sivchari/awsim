@@ -60,6 +60,10 @@ func (s *Service) Actions() []string {
 		"Publish",
 		"ListSubscriptions",
 		"ListSubscriptionsByTopic",
+		"GetTopicAttributes",
+		"SetTopicAttributes",
+		"GetSubscriptionAttributes",
+		"SetSubscriptionAttributes",
 	}
 }
 

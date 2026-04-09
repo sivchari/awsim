@@ -128,6 +128,40 @@ type SubscriptionEntry struct {
 	TopicARN        string `json:"TopicArn"`
 }
 
+// GetTopicAttributesRequest is the request for GetTopicAttributes.
+type GetTopicAttributesRequest struct {
+	TopicARN string `json:"TopicArn"`
+}
+
+// GetTopicAttributesResponse is the response for GetTopicAttributes.
+type GetTopicAttributesResponse struct {
+	Attributes map[string]string `json:"Attributes"`
+}
+
+// SetTopicAttributesRequest is the request for SetTopicAttributes.
+type SetTopicAttributesRequest struct {
+	TopicARN       string `json:"TopicArn"`
+	AttributeName  string `json:"AttributeName"`
+	AttributeValue string `json:"AttributeValue"`
+}
+
+// GetSubscriptionAttributesRequest is the request for GetSubscriptionAttributes.
+type GetSubscriptionAttributesRequest struct {
+	SubscriptionARN string `json:"SubscriptionArn"`
+}
+
+// GetSubscriptionAttributesResponse is the response for GetSubscriptionAttributes.
+type GetSubscriptionAttributesResponse struct {
+	Attributes map[string]string `json:"Attributes"`
+}
+
+// SetSubscriptionAttributesRequest is the request for SetSubscriptionAttributes.
+type SetSubscriptionAttributesRequest struct {
+	SubscriptionARN string `json:"SubscriptionArn"`
+	AttributeName   string `json:"AttributeName"`
+	AttributeValue  string `json:"AttributeValue"`
+}
+
 // MessageAttribute represents an SNS message attribute.
 type MessageAttribute struct {
 	DataType    string `json:"DataType"`
@@ -267,6 +301,52 @@ type XMLSubscriptionMember struct {
 	Protocol        string `xml:"Protocol"`
 	Endpoint        string `xml:"Endpoint"`
 	TopicArn        string `xml:"TopicArn"`
+}
+
+// XMLGetTopicAttributesResponse is the XML response for GetTopicAttributes.
+type XMLGetTopicAttributesResponse struct {
+	XMLName                  struct{}                    `xml:"GetTopicAttributesResponse"`
+	Xmlns                    string                      `xml:"xmlns,attr"`
+	GetTopicAttributesResult XMLGetTopicAttributesResult `xml:"GetTopicAttributesResult"`
+	ResponseMetadata         ResponseMetadata            `xml:"ResponseMetadata"`
+}
+
+// XMLGetTopicAttributesResult contains the GetTopicAttributes result.
+type XMLGetTopicAttributesResult struct {
+	Attributes []XMLAttribute `xml:"Attributes>entry"`
+}
+
+// XMLAttribute is a key-value entry used in XML responses.
+type XMLAttribute struct {
+	Key   string `xml:"key"`
+	Value string `xml:"value"`
+}
+
+// XMLSetTopicAttributesResponse is the XML response for SetTopicAttributes.
+type XMLSetTopicAttributesResponse struct {
+	XMLName          struct{}         `xml:"SetTopicAttributesResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
+}
+
+// XMLGetSubscriptionAttributesResponse is the XML response for GetSubscriptionAttributes.
+type XMLGetSubscriptionAttributesResponse struct {
+	XMLName                         struct{}                           `xml:"GetSubscriptionAttributesResponse"`
+	Xmlns                           string                             `xml:"xmlns,attr"`
+	GetSubscriptionAttributesResult XMLGetSubscriptionAttributesResult `xml:"GetSubscriptionAttributesResult"`
+	ResponseMetadata                ResponseMetadata                   `xml:"ResponseMetadata"`
+}
+
+// XMLGetSubscriptionAttributesResult contains the GetSubscriptionAttributes result.
+type XMLGetSubscriptionAttributesResult struct {
+	Attributes []XMLAttribute `xml:"Attributes>entry"`
+}
+
+// XMLSetSubscriptionAttributesResponse is the XML response for SetSubscriptionAttributes.
+type XMLSetSubscriptionAttributesResponse struct {
+	XMLName          struct{}         `xml:"SetSubscriptionAttributesResponse"`
+	Xmlns            string           `xml:"xmlns,attr"`
+	ResponseMetadata ResponseMetadata `xml:"ResponseMetadata"`
 }
 
 // ResponseMetadata contains the response metadata.
