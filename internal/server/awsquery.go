@@ -15,23 +15,28 @@ import (
 // QueryServiceHandler handles Query protocol requests for a specific service.
 type QueryServiceHandler func(w http.ResponseWriter, r *http.Request)
 
+// queryHandlerEntry holds a handler and its associated metadata.
+type queryHandlerEntry struct {
+	handler       QueryServiceHandler
+	servicePrefix string
+}
+
 // QueryProtocolDispatcher routes AWS Query protocol requests to the appropriate service
-// based on the Action parameter.
+// based on the Action parameter and User-Agent header.
+// The User-Agent header must contain an api/{service} token (set by AWS SDK v2)
+// to identify the target service.
 type QueryProtocolDispatcher struct {
 	// handlers maps service prefix to service handler.
 	handlers map[string]QueryServiceHandler
-	// actionHandlers maps action name to service handler.
-	actionHandlers map[string]QueryServiceHandler
-	// actionPrefixes maps action name to service prefix.
-	actionPrefixes map[string]string
+	// actionHandlers maps serviceIdentifier -> action -> handler entry.
+	actionHandlers map[string]map[string]queryHandlerEntry
 }
 
 // NewQueryProtocolDispatcher creates a new Query protocol dispatcher.
 func NewQueryProtocolDispatcher() *QueryProtocolDispatcher {
 	return &QueryProtocolDispatcher{
 		handlers:       make(map[string]QueryServiceHandler),
-		actionHandlers: make(map[string]QueryServiceHandler),
-		actionPrefixes: make(map[string]string),
+		actionHandlers: make(map[string]map[string]queryHandlerEntry),
 	}
 }
 
@@ -40,17 +45,23 @@ func (d *QueryProtocolDispatcher) Register(serviceName string, handler QueryServ
 	d.handlers[serviceName] = handler
 }
 
-// RegisterAction registers a handler for a specific action.
-func (d *QueryProtocolDispatcher) RegisterAction(action, servicePrefix string, handler QueryServiceHandler) {
-	d.actionHandlers[action] = handler
-	d.actionPrefixes[action] = servicePrefix
+// RegisterAction registers a handler for a specific action under a service identifier.
+func (d *QueryProtocolDispatcher) RegisterAction(action, servicePrefix, serviceIdentifier string, handler QueryServiceHandler) {
+	if d.actionHandlers[serviceIdentifier] == nil {
+		d.actionHandlers[serviceIdentifier] = make(map[string]queryHandlerEntry)
+	}
+
+	d.actionHandlers[serviceIdentifier][action] = queryHandlerEntry{
+		handler:       handler,
+		servicePrefix: servicePrefix,
+	}
 }
 
 // ServeHTTP implements http.Handler and dispatches to the appropriate service.
 func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse form data.
 	if err := r.ParseForm(); err != nil {
-		writeQueryError(w, "InvalidParameterValue", "Failed to parse form data", http.StatusBadRequest)
+		writeQueryError(w, "InvalidParameterValue", "Failed to parse form data")
 
 		return
 	}
@@ -58,37 +69,63 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	// Get Action parameter.
 	action := r.FormValue("Action")
 	if action == "" {
-		writeQueryError(w, "MissingAction", "Action parameter is required", http.StatusBadRequest)
+		writeQueryError(w, "MissingAction", "Action parameter is required")
 
 		return
 	}
 
-	// Convert form data to JSON and set X-Amz-Target header for the handler.
+	// Identify the target service from User-Agent header.
+	svcID := parseServiceFromUserAgent(r.Header.Get("User-Agent"))
+	if svcID == "" {
+		writeQueryError(w, "MissingServiceIdentifier",
+			"User-Agent header with api/ identifier is required for Query protocol routing")
+
+		return
+	}
+
+	// Look up handler by service identifier and action.
+	actions, ok := d.actionHandlers[svcID]
+	if !ok {
+		writeQueryError(w, "UnknownService",
+			"Unknown service: "+svcID)
+
+		return
+	}
+
+	entry, ok := actions[action]
+	if !ok {
+		writeQueryError(w, "UnknownAction",
+			"Action "+action+" is not supported for service "+svcID)
+
+		return
+	}
+
+	// Convert form data to JSON and dispatch.
 	jsonBody := formToJSON(r.Form)
 	r.Body = io.NopCloser(bytes.NewReader(jsonBody))
 	r.ContentLength = int64(len(jsonBody))
 	r.Header.Set("Content-Type", "application/x-amz-json-1.0")
+	r.Header.Set("X-Amz-Target", entry.servicePrefix+"."+action)
+	entry.handler(w, r)
+}
 
-	// Dispatch to the appropriate handler based on the action name.
-	if handler, ok := d.actionHandlers[action]; ok {
-		if prefix, ok := d.actionPrefixes[action]; ok {
-			r.Header.Set("X-Amz-Target", prefix+"."+action)
+// parseServiceFromUserAgent extracts the service identifier from the AWS SDK v2 User-Agent header.
+// The User-Agent contains a token like "api/rds#1.5.0"; this function returns "rds".
+// Returns empty string if no api/ token is found.
+func parseServiceFromUserAgent(userAgent string) string {
+	for _, token := range strings.Split(userAgent, " ") {
+		after, found := strings.CutPrefix(token, "api/")
+		if !found {
+			continue
 		}
 
-		handler(w, r)
+		// Strip version suffix: "rds#1.5.0" -> "rds"
+		name, _, _ := strings.Cut(after, "#")
 
-		return
+		return name
 	}
 
-	// Fallback: try dispatching to any handler (backward compatibility).
-	for serviceName, handler := range d.handlers {
-		r.Header.Set("X-Amz-Target", serviceName+"."+action)
-		handler(w, r)
-
-		return
-	}
-
-	writeQueryError(w, "UnknownAction", "Unknown action: "+action, http.StatusBadRequest)
+	return ""
 }
 
 // indexedEntry holds a value with its original index from the query parameter.
@@ -253,10 +290,10 @@ func buildAttributesMap(attrs map[string]string, result map[string]any) {
 }
 
 // writeQueryError writes an AWS Query protocol error response.
-func writeQueryError(w http.ResponseWriter, code, message string, status int) {
+func writeQueryError(w http.ResponseWriter, code, message string) {
 	w.Header().Set("Content-Type", "application/x-amz-json-1.0")
 	w.Header().Set("x-amzn-RequestId", uuid.New().String())
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusBadRequest)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"__type":  code,
 		"message": message,

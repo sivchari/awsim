@@ -46,6 +46,11 @@ func (s *Service) Actions() []string {
 	}
 }
 
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "elasticbeanstalk"
+}
+
 // QueryProtocol marks this service as using AWS Query protocol.
 func (s *Service) QueryProtocol() {}
 

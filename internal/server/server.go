@@ -135,10 +135,14 @@ func (s *Server) RegisterService(svc service.Service) {
 
 		// Register each action for proper routing.
 		for _, action := range querySvc.Actions() {
-			s.queryDispatcher.RegisterAction(action, querySvc.TargetPrefix(), querySvc.DispatchAction)
+			s.queryDispatcher.RegisterAction(action, querySvc.TargetPrefix(), querySvc.ServiceIdentifier(), querySvc.DispatchAction)
 		}
 
-		s.logger.Debug("registered Query protocol service", "name", svc.Name(), "prefix", querySvc.TargetPrefix())
+		s.logger.Debug("registered Query protocol service",
+			"name", svc.Name(),
+			"prefix", querySvc.TargetPrefix(),
+			"identifier", querySvc.ServiceIdentifier(),
+		)
 	}
 
 	// Check if service implements CBOR protocol.

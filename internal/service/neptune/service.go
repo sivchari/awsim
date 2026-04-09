@@ -62,6 +62,11 @@ func (s *Service) Actions() []string {
 	}
 }
 
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "neptune"
+}
+
 // QueryProtocol is a marker method that indicates Neptune uses AWS Query protocol.
 func (s *Service) QueryProtocol() {}
 

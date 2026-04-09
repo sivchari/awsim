@@ -61,6 +61,11 @@ type QueryProtocolService interface {
 	// This is used by the dispatcher to route requests to the correct service.
 	Actions() []string
 
+	// ServiceIdentifier returns the SDK service identifier sent in the User-Agent header.
+	// e.g., "rds", "neptune", "ec2"
+	// This is used to disambiguate actions shared by multiple Query protocol services.
+	ServiceIdentifier() string
+
 	// QueryProtocol is a marker method to distinguish from JSONProtocolService.
 	QueryProtocol()
 }
