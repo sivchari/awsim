@@ -48,9 +48,11 @@ func (d *QueryProtocolDispatcher) RegisterAction(action, servicePrefix string, h
 
 // ServeHTTP implements http.Handler and dispatches to the appropriate service.
 func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Parse form data.
-	if err := r.ParseForm(); err != nil {
-		writeQueryError(w, "InvalidParameterValue", "Failed to parse form data", http.StatusBadRequest)
+	  // limit request body to 1MB to prevent memory exhaustion (DoS).
+    r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		// here parse form data
+		if err := r.ParseForm(); err != nil {
+      writeQueryError(w, "InvalidParameterValue", "Failed to parse form data", http.StatusBadRequest)
 
 		return
 	}
