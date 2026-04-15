@@ -8,8 +8,11 @@ import (
 	"github.com/sivchari/kumo/internal/service"
 )
 
-// Compile-time check that Service implements io.Closer.
-var _ io.Closer = (*Service)(nil)
+// Compile-time interface checks.
+var (
+	_ io.Closer                    = (*Service)(nil)
+	_ service.QueryProtocolService = (*Service)(nil)
+)
 
 func init() {
 	var opts []Option
@@ -61,6 +64,11 @@ func (s *Service) Actions() []string {
 		"DeleteClusterSnapshot",
 		"DescribeClusterSnapshots",
 	}
+}
+
+// ServiceIdentifier returns the SDK service identifier for User-Agent disambiguation.
+func (s *Service) ServiceIdentifier() string {
+	return "redshift"
 }
 
 // QueryProtocol is a marker method that indicates Redshift uses AWS Query protocol.
