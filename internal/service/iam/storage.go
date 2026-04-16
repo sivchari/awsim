@@ -527,13 +527,9 @@ func (s *MemoryStorage) GetPolicyVersion(_ context.Context, policyArn, versionID
 }
 
 // ListPolicyVersions lists all versions of an IAM policy.
-func (s *MemoryStorage) ListPolicyVersions (_ context.Context, policyArn string, maxItems int) ([]PolicyVersion, error) {
+func (s *MemoryStorage) ListPolicyVersions (_ context.Context, policyArn string, _ int) ([]PolicyVersion, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if maxItems <= 0 {
-		maxItems = defaultMaxItems
-	}
 
 	policy, exists := s.Policies[policyArn]
 	if !exists {
