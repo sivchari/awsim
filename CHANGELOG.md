@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.9.0](https://github.com/sivchari/kumo/compare/v0.8.0...v0.9.0) - 2026-04-16
+- feat(sqs): add ListQueueTags, TagQueue, and UntagQueue actions by @kahirokunn in https://github.com/sivchari/kumo/pull/400
+- feat(neptune): add Amazon Neptune service implementation by @sivchari in https://github.com/sivchari/kumo/pull/417
+- fix(server): disambiguate Query protocol actions via User-Agent header by @sivchari in https://github.com/sivchari/kumo/pull/422
+- fix(neptune): regenerate golden files after Query protocol routing fix by @sivchari in https://github.com/sivchari/kumo/pull/423
+- feat(documentdb): add Amazon DocumentDB service implementation by @sivchari in https://github.com/sivchari/kumo/pull/424
+- fix(ssm): return masked value for SecureString when WithDecryption is false by @sivchari in https://github.com/sivchari/kumo/pull/425
+- ci: pin GitHub Actions with pinact by @sivchari in https://github.com/sivchari/kumo/pull/426
+- feat(redshift): add Amazon Redshift service implementation by @sivchari in https://github.com/sivchari/kumo/pull/421
+- feat(chart): add Helm chart for kumo by @kahirokunn in https://github.com/sivchari/kumo/pull/399
+- release v0.9.0 by @sivchari in https://github.com/sivchari/kumo/pull/427
+- Update chart by @sivchari in https://github.com/sivchari/kumo/pull/428
+
 ## [v0.8.0](https://github.com/sivchari/kumo/compare/v0.7.0...v0.8.0) - 2026-04-07
 - feat(sqs): add DeleteMessageBatch action by @sivchari in https://github.com/sivchari/kumo/pull/395
 - fix(sqs): resolve queue by URL path to handle hostname mismatch by @sivchari in https://github.com/sivchari/kumo/pull/394
