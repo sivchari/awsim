@@ -327,6 +327,129 @@ func TestIAM_GetPolicy(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("ResultMetadata", "PolicyId", "Arn", "CreateDate", "UpdateDate")).Assert(t.Name()+"_get", getResult)
 }
 
+func TestIAM_GetPolicyVersion(t *testing.T) {
+	client := newIAMClient(t)
+	ctx := t.Context()
+	policyName := "test-get-policy-version"
+
+	policyDocument := `{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Action": "s3:GetObject",
+			"Resource": "*"
+		}]
+	}`
+
+	// Create policy
+	createResult, err := client.CreatePolicy(ctx, &iam.CreatePolicyInput{
+		PolicyName:     aws.String(policyName),
+		PolicyDocument: aws.String(policyDocument),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	policyArn := createResult.Policy.Arn
+
+	t.Cleanup(func() {
+		_, _ = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
+			PolicyArn: policyArn,
+		})
+	})
+
+	// Get policy version
+	getResult, err := client.GetPolicyVersion(ctx, &iam.GetPolicyVersionInput{
+		PolicyArn: policyArn,
+		VersionId: aws.String("v1"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if getResult.PolicyVersion == nil {
+		t.Fatal("expected policy version, got nil")
+	}
+
+	if !getResult.PolicyVersion.IsDefaultVersion {
+		t.Error("expected version id v1, got %s", aws.ToString(getResult.PolicyVersion.VersionId))
+	}
+
+	if aws.ToString(getResult.PolicyVersion.VersionId) != "v1" {
+		t.Errorf("expected version id v1, got %s", aws.ToString(getResult.PolicyVersion.VersionId))
+	}
+
+	if getResult.PolicyVersion.Document == nil {
+		t.Error("expected policy document, got nil")
+	}
+}
+
+func TestIAM_ListPolicyVersions(t *testing.T) {
+	client := newIAMClient(t)
+	ctx := t.Context()
+	policyName := "test-list-policy-versions"
+
+	policyDocument := `{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Action": "logs:*",
+			"Resource": "*"
+		}]
+	}`
+
+	// Create policy
+	createResult, err := client.CreatePolicy(ctx, &iam.CreatePolicyInput{
+		PolicyName:     aws.String(policyName),
+		PolicyDocument: aws.String(policyDocument),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	policyArn := createResult.Policy.Arn
+
+	t.Cleanup(func() {
+		_, _ = client.DeletePolicy(context.Background(), &iam.DeletePolicyInput{
+			PolicyArn: policyArn,
+		})
+	})
+
+	// List policy versions
+	listResult, err := client.ListPolicyVersions(ctx, &iam.ListPolicyVersionsInput{
+		PolicyArn: policyArn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(listResult.Versions) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(listResult.Versions))
+	}
+
+	if !listResult.Versions[0].IsDefaultVersion {
+		t.Error("expected default version")
+	}
+
+	if aws.ToString(listResult.Versions[0].VersionId) != "v1" {
+		t.Errof("expected version id v1, got %s", aws.ToString(listResult.Versions[0].VersionId))
+	}
+}
+
+func TestIAM_GetPolicyVersion_NotFound(t *testing.T) {
+	client := newIAMClient(t)
+	ctx := t.Context()
+
+	// Try to get version of non-existent policy
+	_, err := client.GetPolicyVersion(ctx, &iam.GetPolicyVersionInput{
+		PolicyArn: aws.String("arn:aws:iam::123456789012:policy/non-existent"),
+		VersionId: aws.String("v1"),
+	})
+	if err == nil {
+		t.Fatal("expected error for non-existent policy")
+	}
+}
+
 func TestIAM_AttachAndDetachUserPolicy(t *testing.T) {
 	client := newIAMClient(t)
 	ctx := t.Context()

@@ -44,7 +44,9 @@ type Storage interface {
 	CreatePolicy(ctx context.Context, req *CreatePolicyRequest) (*Policy, error)
 	DeletePolicy(ctx context.Context, policyArn string) error
 	GetPolicy(ctx context.Context, policyArn string) (*Policy, error)
+	GetPolicyVersion(ctx context.Context, policyArn string, versionID string) (*Policy, error)
 	ListPolicies(ctx context.Context, pathPrefix string, maxItems int, onlyAttached bool) ([]Policy, error)
+	ListPolicyVersions(ctx context.Context, policyArn string, maxItems int) ([]Policy, error)
 
 	AttachUserPolicy(ctx context.Context, userName, policyArn string) error
 	DetachUserPolicy(ctx context.Context, userName, policyArn string) error
@@ -494,6 +496,61 @@ func (s *MemoryStorage) ListPolicies(_ context.Context, pathPrefix string, maxIt
 	}
 
 	return policies, nil
+}
+
+// GetPolicyVersion gets a specific version of an IAM policy.
+func (s *MemoryStorage) GetPolicyVersion(_ context.Context, policyArn, versionID string) (*PolicyVersion, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	policy, exists := s.Policies[policyArn]
+	if !exists {
+		return nil, &Error{
+			Code:    errNoSuchEntity,
+			Message: fmt.Sprintf("Policy %s does not exist.", policyArn),
+		}
+	}
+
+	if versionID != policy.DefaultVersionID {
+		return nil, &Error{
+			Code:    errNoSuchEntity,
+			Message: fmt.Sprintf("Policy version %s does not exist.", versionID),
+		}
+	}
+
+	return &PolicyVersion{
+		Document:         policy.PolicyDocument,
+		VersionID:        policy.DefaultVersionID,
+		IsDefaultVersion: true,
+		CreateDate:       policy.CreateDate,
+	}, nil
+}
+
+// ListPolicyVersions lists all versions of an IAM policy.
+func (s *MemoryStorage) ListPolicyVersions (_ context.Context, policyArn string, maxItems int) ([]PolicyVersion, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if maxItems <= 0 {
+		maxItems = defaultMaxItems
+	}
+
+	policy, exists := s.Policies[policyArn]
+	if !exists {
+		return nil, &Error{
+			Code:    errNoSuchEntity,
+			Message: fmt.Sprintf("Policy %s does not exist.", policyArn),
+		}
+	}
+
+	return []PolicyVersion{
+		{
+			Document:         policy.PolicyDocument,
+			VersionID:        policy.DefaultVersionID,
+			IsDefaultVersion: true,
+			CreateDate:       policy.CreateDate,
+		},
+	}, nil
 }
 
 // AttachUserPolicy attaches a policy to a user.

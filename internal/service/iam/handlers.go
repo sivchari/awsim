@@ -285,6 +285,58 @@ func (s *Service) GetPolicy(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetPolicyVersion handles the GetPolicyVersion action.
+func (s *Service) GetPolicyVersion(w http.ResponseWriter, r *http.Request) {
+	policyArn := getFormValue(r, "PolicyArn")
+	if policyArn == "" {
+		writeIAMError(w, errInvalidParameter, "PolicyArn is required", http.StatusBadRequest)
+
+		return
+	}
+
+	versionID := getFormValue(r, "VersionId")
+	if versionID == "" {
+		writeIAMError(w, errInvalidParameter, "VersionId is required", http.StatusBadRequest)
+
+		return
+	}
+
+	policyVersion, err := s.storage.GetPolicyVersion(r.Context(), policyArn, versionID)
+	if err != nil {
+		handleIAMError(w, err)
+
+		return
+	}
+
+	writeIAMXMLResponse(w, GetPolicyVersionResponse{
+		GetPolicyVersionResult: GetPolicyVersionResult{PolicyVersion: *policyVersion},
+		ResponseMetadata:       ResponseMetadata{RequestID: uuid.New().String()},
+	})
+}
+
+func (s *Service) ListPolicyVersions(w http.ResponseWriter, r *http.Request) {
+	policyArn := getFormValue(r, "PolicyArn")
+	if policyArn == "" {
+		writeIAMError(w, errInvalidParameter, "PolicyArn is required", http.StatusBadRequest)
+
+		return
+	}
+
+	maxItems := parseMaxItems(r)
+
+	versions, err := s.storage.ListPolicyVersions(r.Context(), policyArn, maxItems)
+	if err != nil {
+		handleIAMError(w, err)
+
+		return
+	}
+
+	writeIAMXMLResponse(w, ListPolicyVersionsResponse{
+		ListPolicyVersionsResult: ListPolicyVersionsResult{Versions: versions, IsTruncated: false},
+		ResponseMetadata:         ResponseMetadata{RequestID: uuid.New().String()},
+	})
+}
+
 // ListPolicies handles the ListPolicies action.
 func (s *Service) ListPolicies(w http.ResponseWriter, r *http.Request) {
 	pathPrefix := getFormValue(r, "PathPrefix")

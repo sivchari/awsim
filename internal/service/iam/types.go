@@ -44,6 +44,14 @@ type Policy struct {
 	PolicyDocument   string    `xml:"-"`
 }
 
+// PolicyVersion represents a version of an IAM policy.
+type PolicyVersion struct {
+	Document         string    `xml:"Document"`
+	VersionID        string    `xml:"VersionId"`
+	IsDefaultVersion bool      `xml:"IsDefaultVersion"`
+	CreateDate       time.Time `xml:"CreateDate"`
+}
+
 // AttachedPolicy represents a policy attached to a user or role.
 type AttachedPolicy struct {
 	PolicyName string `xml:"PolicyName"`
@@ -143,6 +151,19 @@ type DeletePolicyRequest struct {
 // GetPolicyRequest represents a GetPolicy request.
 type GetPolicyRequest struct {
 	PolicyArn string `xml:"PolicyArn"`
+}
+
+// GetPolicyVersionRequest represents a GetPolicyVersion request.
+type GetPolicyVersionRequest struct {
+	PolicyArn string `xml:"PolicyArn"`
+	VersionID string `xml:"VersionID"`
+}
+
+// ListPolicyVersionsRequest represents a ListPolicyVersions request.
+type ListPolicyVersionsRequest struct {
+	PolicyArn string `xml:"PolicyArn"`
+	Marker string `xml:"Marker"`
+	MaxItems int `xml:"MaxItems"`
 }
 
 // ListPoliciesRequest represents a ListPolicies request.
@@ -317,6 +338,30 @@ type ListPoliciesResult struct {
 	Policies    []Policy `xml:"Policies>member"`
 	IsTruncated bool     `xml:"IsTruncated"`
 	Marker      string   `xml:"Marker,omitempty"`
+}
+
+// GetPolicyVersionResponse represents a GetPolicyVersion response.
+type GetPolicyVersionResponse struct {
+	GetPolicyVersionResult GetPolicyVersionResult `xml:"GetPolicyVersionResult"`
+	ResponseMetadata       ResponseMetadata       `xml:"ResponseMetadata"`
+}
+
+// GetPolicyVersionResult contains the result of GetPolicyVersion.
+type GetPolicyVersionResult struct {
+	PolicyVersion PolicyVersion `xml:"PolicyVersion"`
+}
+
+// ListPolicyVersionsResponse represents a ListPolicyVersions response.
+type ListPolicyVersionsResponse struct {
+	ListPolicyVersionsResult ListPolicyVersionsResult `xml:"ListPolicyVersionsResult"`
+	ResponseMetadata         ResponseMetadata         `xml:"ResponseMetadata"`
+}
+
+// ListPolicyVersionsResult contains the result of ListPolicyVersions.
+type ListPolicyVersionsResult struct {
+	Versions    []PolicyVersion `xml:"Versions>member"`
+	IsTruncated bool            `xml:"IsTruncated"`
+	Marker      string          `xml:"Marker,omitempty"`
 }
 
 // AttachUserPolicyResponse represents an AttachUserPolicy response.

@@ -52,10 +52,12 @@ func (s *Service) initActionHandlers() {
 		"GetRole":    s.GetRole,
 		"ListRoles":  s.ListRoles,
 		// Policy management
-		"CreatePolicy": s.CreatePolicy,
-		"DeletePolicy": s.DeletePolicy,
-		"GetPolicy":    s.GetPolicy,
-		"ListPolicies": s.ListPolicies,
+		"CreatePolicy":       s.CreatePolicy,
+		"DeletePolicy":       s.DeletePolicy,
+		"GetPolicy":          s.GetPolicy,
+		"GetPolicyVersion":   s.GetPolicyVersion,
+		"ListPolicies":       s.ListPolicies,
+		"ListPolicyVersions": s.ListPolicyVersions,
 		// Policy attachments
 		"AttachUserPolicy": s.AttachUserPolicy,
 		"DetachUserPolicy": s.DetachUserPolicy,
