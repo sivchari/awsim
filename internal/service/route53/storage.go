@@ -284,9 +284,7 @@ func (s *MemoryStorage) GetChange(id string) (*ChangeInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := strings.TrimPrefix(id, "/change/")
-
-	c, ok := s.Changes[key]
+	c, ok := s.Changes[id]
 	if !ok {
 		return nil, ErrChangeNotFound
 	}
