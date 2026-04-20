@@ -460,8 +460,8 @@ func TestRoute53_UpsertResourceRecordSet(t *testing.T) {
 }
 
 func TestRoute53_ListHostedZones_Pagination(t *testing.T) {
-	t.Parallel()
-
+	// Not parallel: pagination assertions require a stable view of the
+	// hosted zones list, which other parallel tests mutate.
 	client := newRoute53Client(t)
 	ctx := t.Context()
 
