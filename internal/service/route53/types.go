@@ -128,6 +128,13 @@ type ChangeResourceRecordSetsResponse struct {
 	ChangeInfo ChangeInfo `xml:"ChangeInfo"`
 }
 
+// GetChangeResponse represents a response to get change.
+type GetChangeResponse struct {
+	XMLName    xml.Name   `xml:"GetChangeResponse"`
+	XMLNS      string     `xml:"xmlns,attr"`
+	ChangeInfo ChangeInfo `xml:"ChangeInfo"`
+}
+
 // ListResourceRecordSetsResponse represents a response to list record sets.
 type ListResourceRecordSetsResponse struct {
 	XMLName              xml.Name            `xml:"ListResourceRecordSetsResponse"`

@@ -72,14 +72,21 @@ func (s *Service) CreateHostedZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ci := ChangeInfo{
+		ID:          "/change/" + uuid.New().String(),
+		Status:      "INSYNC",
+		SubmittedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := s.storage.PutChange(&ci); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
+		return
+	}
+
 	resp := CreateHostedZoneResponse{
 		XMLNS:      xmlns,
 		HostedZone: *zone,
-		ChangeInfo: ChangeInfo{
-			ID:          "/change/" + uuid.New().String(),
-			Status:      "INSYNC",
-			SubmittedAt: time.Now().UTC().Format(time.RFC3339),
-		},
+		ChangeInfo: ci,
 		DelegationSet: DelegationSet{
 			NameServers: []string{
 				"ns-1.kumo.local",
@@ -242,13 +249,20 @@ func (s *Service) DeleteHostedZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ci := ChangeInfo{
+		ID:          "/change/" + uuid.New().String(),
+		Status:      "INSYNC",
+		SubmittedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := s.storage.PutChange(&ci); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
+		return
+	}
+
 	resp := DeleteHostedZoneResponse{
-		XMLNS: xmlns,
-		ChangeInfo: ChangeInfo{
-			ID:          "/change/" + uuid.New().String(),
-			Status:      "INSYNC",
-			SubmittedAt: time.Now().UTC().Format(time.RFC3339),
-		},
+		XMLNS:      xmlns,
+		ChangeInfo: ci,
 	}
 
 	writeXMLResponse(w, http.StatusOK, resp)
@@ -317,14 +331,21 @@ func (s *Service) ChangeResourceRecordSets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	ci := ChangeInfo{
+		ID:          "/change/" + uuid.New().String(),
+		Status:      "INSYNC",
+		SubmittedAt: time.Now().UTC().Format(time.RFC3339),
+		Comment:     req.ChangeBatch.Comment,
+	}
+	if err := s.storage.PutChange(&ci); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
+		return
+	}
+
 	resp := ChangeResourceRecordSetsResponse{
-		XMLNS: xmlns,
-		ChangeInfo: ChangeInfo{
-			ID:          "/change/" + uuid.New().String(),
-			Status:      "INSYNC",
-			SubmittedAt: time.Now().UTC().Format(time.RFC3339),
-			Comment:     req.ChangeBatch.Comment,
-		},
+		XMLNS:      xmlns,
+		ChangeInfo: ci,
 	}
 
 	writeXMLResponse(w, http.StatusOK, resp)
@@ -361,6 +382,32 @@ func (s *Service) ListResourceRecordSets(w http.ResponseWriter, r *http.Request)
 		MaxItems:           "100",
 	}
 
+	writeXMLResponse(w, http.StatusOK, resp)
+}
+
+// GetChange handles the GetChange API.
+func (s *Service) GetChange(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "InvalidInput", "Change ID is required")
+
+		return
+	}
+
+	change, err := s.storage.GetChange(id)
+	if err != nil {
+		if errors.Is(err, ErrChangeNotFound) {
+			writeErrorResponse(w, http.StatusNotFound, "NoSuchChange", "Change not found")
+
+			return
+		}
+
+		writeErrorResponse(w, http.StatusInternalServerError, "InternalError", err.Error())
+
+		return
+	}
+
+	resp := GetChangeResponse{XMLNS: xmlns, ChangeInfo: *change}
 	writeXMLResponse(w, http.StatusOK, resp)
 }
 

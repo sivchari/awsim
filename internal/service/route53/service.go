@@ -47,6 +47,9 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	// Resource Record Sets
 	r.Handle("POST", "/2013-04-01/hostedzone/{id}/rrset", s.ChangeResourceRecordSets)
 	r.Handle("GET", "/2013-04-01/hostedzone/{id}/rrset", s.ListResourceRecordSets)
+
+	// Changes
+	r.Handle("GET", "/2013-04-01/change/{id}", s.GetChange)
 }
 
 // Close saves the storage state if persistence is enabled.

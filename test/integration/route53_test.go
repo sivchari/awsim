@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -524,5 +525,64 @@ func TestRoute53_ListHostedZones_Pagination(t *testing.T) {
 		if *firstPage.HostedZones[0].Id == *secondPage.HostedZones[0].Id {
 			t.Error("expected different hosted zone IDs on different pages")
 		}
+	}
+}
+
+func TestRoute53_GetChange(t *testing.T) {
+	t.Parallel()
+
+	client := newRoute53Client(t)
+	ctx := t.Context()
+
+	createResult, err := client.CreateHostedZone(ctx, &route53.CreateHostedZoneInput{
+		Name:            aws.String("getchange-test.example.com"),
+		CallerReference: aws.String("test-get-change"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteHostedZone(context.Background(), &route53.DeleteHostedZoneInput{
+			Id: createResult.HostedZone.Id,
+		})
+	})
+
+	getResult, err := client.GetChange(ctx, &route53.GetChangeInput{
+		Id: createResult.ChangeInfo.Id,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if getResult.ChangeInfo == nil || getResult.ChangeInfo.Id == nil {
+		t.Fatalf("expected ChangeInfo with Id, got %+v", getResult.ChangeInfo)
+	}
+
+	if *getResult.ChangeInfo.Id != *createResult.ChangeInfo.Id {
+		t.Errorf("expected change Id %s, got %s", *createResult.ChangeInfo.Id, *getResult.ChangeInfo.Id)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"Id", "SubmittedAt", "ResultMetadata",
+	)).Assert(t.Name(), getResult)
+}
+
+func TestRoute53_GetChange_NotFound(t *testing.T) {
+	t.Parallel()
+
+	client := newRoute53Client(t)
+	ctx := t.Context()
+
+	_, err := client.GetChange(ctx, &route53.GetChangeInput{
+		Id: aws.String("nonexistent-change-id"),
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent change, got nil")
+	}
+
+	var nfe *types.NoSuchChange
+	if !errors.As(err, &nfe) {
+		t.Fatalf("expected NoSuchChange error, got %T: %v", err, err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/sivchari/kumo/internal/storage"
@@ -22,6 +23,8 @@ var (
 	ErrRecordSetAlreadyExists = errors.New("record set already exists")
 	// ErrInvalidInput is returned when input is invalid.
 	ErrInvalidInput = errors.New("invalid input")
+	// ErrChangeNotFound is returned when a change is not found.
+	ErrChangeNotFound = errors.New("change not found")
 )
 
 // Storage defines the interface for Route 53 storage operations.
@@ -32,6 +35,8 @@ type Storage interface {
 	DeleteHostedZone(id string) error
 	GetRecordSets(hostedZoneID string) ([]ResourceRecordSet, error)
 	ChangeRecordSets(hostedZoneID string, changes []Change) error
+	PutChange(change *ChangeInfo) error
+	GetChange(id string) (*ChangeInfo, error)
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -55,6 +60,7 @@ type MemoryStorage struct {
 	mu          sync.RWMutex                   `json:"-"`
 	HostedZones map[string]*HostedZone         `json:"hostedZones"`
 	RecordSets  map[string][]ResourceRecordSet `json:"recordSets"` // key: hostedZoneID
+	Changes     map[string]*ChangeInfo         `json:"changes"`    // key: bare change ID
 	dataDir     string
 }
 
@@ -63,6 +69,7 @@ func NewMemoryStorage(opts ...Option) *MemoryStorage {
 	s := &MemoryStorage{
 		HostedZones: make(map[string]*HostedZone),
 		RecordSets:  make(map[string][]ResourceRecordSet),
+		Changes:     make(map[string]*ChangeInfo),
 	}
 	for _, o := range opts {
 		o(s)
@@ -109,6 +116,10 @@ func (s *MemoryStorage) UnmarshalJSON(data []byte) error {
 
 	if s.RecordSets == nil {
 		s.RecordSets = make(map[string][]ResourceRecordSet)
+	}
+
+	if s.Changes == nil {
+		s.Changes = make(map[string]*ChangeInfo)
 	}
 
 	return nil
@@ -255,6 +266,32 @@ func (s *MemoryStorage) ChangeRecordSets(hostedZoneID string, changes []Change) 
 	}
 
 	return nil
+}
+
+// PutChange stores a change.
+func (s *MemoryStorage) PutChange(change *ChangeInfo) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := strings.TrimPrefix(change.ID, "/change/")
+	s.Changes[id] = change
+
+	return nil
+}
+
+// GetChange retrieves a change by ID.
+func (s *MemoryStorage) GetChange(id string) (*ChangeInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	key := strings.TrimPrefix(id, "/change/")
+
+	c, ok := s.Changes[key]
+	if !ok {
+		return nil, ErrChangeNotFound
+	}
+
+	return c, nil
 }
 
 // findRecordIndex finds the index of a record set by name and type.
