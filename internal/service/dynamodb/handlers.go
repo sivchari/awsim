@@ -587,6 +587,99 @@ func (s *Service) DescribeTimeToLive(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// TransactWriteItems handles the TransactWriteItems action.
+func (s *Service) TransactWriteItems(w http.ResponseWriter, r *http.Request) {
+	var req TransactWriteItemsRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.TransactItems) == 0 {
+		writeDynamoDBError(w, "ValidationException", "TransactItems is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.TransactItems) > 100 {
+		writeDynamoDBError(w, "ValidationException", "Member must have length less than or equal to 100", http.StatusBadRequest)
+
+		return
+	}
+
+	reasons, err := s.storage.TransactWriteItems(r.Context(), req.TransactItems)
+	if err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			if tErr.Code == "TransactionCanceledException" && reasons != nil {
+				w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(TransactionCanceledResponse{
+					Type:                "TransactionCanceledException",
+					Message:             tErr.Message,
+					CancellationReasons: reasons,
+				})
+
+				return
+			}
+
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, TransactWriteItemsResponse{})
+}
+
+// TransactGetItems handles the TransactGetItems action.
+func (s *Service) TransactGetItems(w http.ResponseWriter, r *http.Request) {
+	var req TransactGetItemsRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.TransactItems) == 0 {
+		writeDynamoDBError(w, "ValidationException", "TransactItems is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.TransactItems) > 100 {
+		writeDynamoDBError(w, "ValidationException", "Member must have length less than or equal to 100", http.StatusBadRequest)
+
+		return
+	}
+
+	items, err := s.storage.TransactGetItems(r.Context(), req.TransactItems)
+	if err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	responses := make([]TransactGetItemResponse, len(items))
+	for i, item := range items {
+		responses[i] = TransactGetItemResponse{Item: item}
+	}
+
+	writeJSONResponse(w, TransactGetItemsResponse{Responses: responses})
+}
+
 // DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
 // This method implements the JSONProtocolService interface.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
@@ -618,6 +711,10 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.UpdateTimeToLive(w, r)
 	case "DescribeTimeToLive":
 		s.DescribeTimeToLive(w, r)
+	case "TransactWriteItems":
+		s.TransactWriteItems(w, r)
+	case "TransactGetItems":
+		s.TransactGetItems(w, r)
 	default:
 		writeDynamoDBError(w, "UnknownOperationException", "The action "+action+" is not valid", http.StatusBadRequest)
 	}

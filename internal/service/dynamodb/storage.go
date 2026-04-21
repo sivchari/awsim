@@ -31,6 +31,8 @@ type Storage interface {
 	UpdateItem(ctx context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string, cond ConditionInput) (Item, error)
 	Query(ctx context.Context, tableName string, keyCondExpr string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error)
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
+	TransactWriteItems(ctx context.Context, items []TransactWriteItem) ([]CancellationReason, error)
+	TransactGetItems(ctx context.Context, items []TransactGetItem) ([]Item, error)
 	UpdateTimeToLive(ctx context.Context, tableName, attributeName string, enabled bool) error
 	DescribeTimeToLive(ctx context.Context, tableName string) (string, bool, error)
 }
@@ -839,6 +841,193 @@ func (m *MemoryStorage) applyUpdateExpression(item Item, updateExpr string, expr
 	}
 
 	return item
+}
+
+// TransactWriteItems executes a transactional write with all-or-nothing semantics.
+//
+//nolint:cyclop,funlen // Transaction processing requires validating all items before applying.
+func (m *MemoryStorage) TransactWriteItems(_ context.Context, items []TransactWriteItem) ([]CancellationReason, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	reasons := make([]CancellationReason, len(items))
+	hasFailure := false
+
+	// Phase 1: Validate all conditions without modifying state.
+	for i, twi := range items {
+		reason, err := m.validateTransactWriteItem(twi)
+		if err != nil {
+			return nil, err
+		}
+
+		if reason != nil {
+			reasons[i] = *reason
+			hasFailure = true
+		}
+	}
+
+	if hasFailure {
+		return reasons, &TableError{
+			Code:    "TransactionCanceledException",
+			Message: "Transaction cancelled, please refer cancellation reasons for specific reasons [CancellationReason]",
+		}
+	}
+
+	// Phase 2: Apply all mutations atomically.
+	for _, twi := range items {
+		m.applyTransactWriteItem(twi)
+	}
+
+	return nil, nil
+}
+
+// validateTransactWriteItem validates a single write item's condition without applying changes.
+func (m *MemoryStorage) validateTransactWriteItem(twi TransactWriteItem) (*CancellationReason, error) {
+	switch {
+	case twi.Put != nil:
+		td, exists := m.Tables[twi.Put.TableName]
+		if !exists {
+			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Put.TableName)}
+		}
+
+		key := m.serializeKey(td.Table, twi.Put.Item)
+		var existing Item
+		if e, ok := td.Items[key]; ok {
+			existing = e
+		}
+
+		if ok, err := evaluateCondition(existing, ConditionInput{
+			Expression: twi.Put.ConditionExpression, ExprNames: twi.Put.ExpressionAttributeNames, ExprValues: twi.Put.ExpressionAttributeValues,
+		}); err != nil {
+			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+		} else if !ok {
+			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
+		}
+
+	case twi.Delete != nil:
+		td, exists := m.Tables[twi.Delete.TableName]
+		if !exists {
+			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Delete.TableName)}
+		}
+
+		key := m.serializeKey(td.Table, twi.Delete.Key)
+		var existing Item
+		if e, ok := td.Items[key]; ok {
+			existing = e
+		}
+
+		if ok, err := evaluateCondition(existing, ConditionInput{
+			Expression: twi.Delete.ConditionExpression, ExprNames: twi.Delete.ExpressionAttributeNames, ExprValues: twi.Delete.ExpressionAttributeValues,
+		}); err != nil {
+			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+		} else if !ok {
+			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
+		}
+
+	case twi.Update != nil:
+		td, exists := m.Tables[twi.Update.TableName]
+		if !exists {
+			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Update.TableName)}
+		}
+
+		key := m.serializeKey(td.Table, twi.Update.Key)
+		var existing Item
+		if e, ok := td.Items[key]; ok {
+			existing = e
+		}
+
+		if ok, err := evaluateCondition(existing, ConditionInput{
+			Expression: twi.Update.ConditionExpression, ExprNames: twi.Update.ExpressionAttributeNames, ExprValues: twi.Update.ExpressionAttributeValues,
+		}); err != nil {
+			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+		} else if !ok {
+			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
+		}
+
+	case twi.ConditionCheck != nil:
+		td, exists := m.Tables[twi.ConditionCheck.TableName]
+		if !exists {
+			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.ConditionCheck.TableName)}
+		}
+
+		key := m.serializeKey(td.Table, twi.ConditionCheck.Key)
+		var existing Item
+		if e, ok := td.Items[key]; ok {
+			existing = e
+		}
+
+		if ok, err := evaluateCondition(existing, ConditionInput{
+			Expression: twi.ConditionCheck.ConditionExpression, ExprNames: twi.ConditionCheck.ExpressionAttributeNames, ExprValues: twi.ConditionCheck.ExpressionAttributeValues,
+		}); err != nil {
+			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+		} else if !ok {
+			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// applyTransactWriteItem applies a single write item mutation. Must be called under lock.
+func (m *MemoryStorage) applyTransactWriteItem(twi TransactWriteItem) {
+	switch {
+	case twi.Put != nil:
+		td := m.Tables[twi.Put.TableName]
+		key := m.serializeKey(td.Table, twi.Put.Item)
+		td.Items[key] = m.copyItem(twi.Put.Item)
+
+	case twi.Delete != nil:
+		td := m.Tables[twi.Delete.TableName]
+		key := m.serializeKey(td.Table, twi.Delete.Key)
+		delete(td.Items, key)
+
+	case twi.Update != nil:
+		td := m.Tables[twi.Update.TableName]
+		key := m.serializeKey(td.Table, twi.Update.Key)
+
+		item, ok := td.Items[key]
+		if !ok {
+			item = m.copyItem(twi.Update.Key)
+		}
+
+		if twi.Update.UpdateExpression != "" {
+			item = m.applyUpdateExpression(item, twi.Update.UpdateExpression, twi.Update.ExpressionAttributeNames, twi.Update.ExpressionAttributeValues)
+		}
+
+		td.Items[key] = item
+
+	case twi.ConditionCheck != nil:
+		// No mutation needed.
+	}
+}
+
+// TransactGetItems retrieves multiple items transactionally.
+func (m *MemoryStorage) TransactGetItems(_ context.Context, items []TransactGetItem) ([]Item, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	results := make([]Item, len(items))
+
+	for i, tgi := range items {
+		if tgi.Get == nil {
+			continue
+		}
+
+		td, exists := m.Tables[tgi.Get.TableName]
+		if !exists {
+			return nil, &TableError{
+				Code:    "ResourceNotFoundException",
+				Message: fmt.Sprintf("Requested resource not found: Table: %s not found", tgi.Get.TableName),
+			}
+		}
+
+		key := m.serializeKey(td.Table, tgi.Get.Key)
+		if item, ok := td.Items[key]; ok {
+			results[i] = m.copyItem(item)
+		}
+	}
+
+	return results, nil
 }
 
 // UpdateTimeToLive updates the TTL configuration for a table.
