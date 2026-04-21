@@ -25,10 +25,10 @@ type Storage interface {
 	DeleteTable(ctx context.Context, tableName string) (*Table, error)
 	ListTables(ctx context.Context, exclusiveStartTableName string, limit int) ([]string, string, error)
 	DescribeTable(ctx context.Context, tableName string) (*Table, error)
-	PutItem(ctx context.Context, tableName string, item Item, returnOld bool) (Item, error)
+	PutItem(ctx context.Context, tableName string, item Item, returnOld bool, cond ConditionInput) (Item, error)
 	GetItem(ctx context.Context, tableName string, key Item) (Item, error)
-	DeleteItem(ctx context.Context, tableName string, key Item, returnOld bool) (Item, error)
-	UpdateItem(ctx context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string) (Item, error)
+	DeleteItem(ctx context.Context, tableName string, key Item, returnOld bool, cond ConditionInput) (Item, error)
+	UpdateItem(ctx context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string, cond ConditionInput) (Item, error)
 	Query(ctx context.Context, tableName string, keyCondExpr string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error)
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
 	UpdateTimeToLive(ctx context.Context, tableName, attributeName string, enabled bool) error
@@ -254,7 +254,7 @@ func (m *MemoryStorage) DescribeTable(_ context.Context, tableName string) (*Tab
 }
 
 // PutItem puts an item into a table.
-func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, returnOld bool) (Item, error) {
+func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, returnOld bool, cond ConditionInput) (Item, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -268,12 +268,28 @@ func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, 
 
 	key := m.serializeKey(td.Table, item)
 
+	// Evaluate condition against existing item (nil if not exists).
+	var existingItem Item
+	if existing, ok := td.Items[key]; ok {
+		existingItem = existing
+	}
+
+	if ok, err := evaluateCondition(existingItem, cond); err != nil {
+		return nil, &TableError{
+			Code:    "ValidationException",
+			Message: fmt.Sprintf("Invalid ConditionExpression: %s", err),
+		}
+	} else if !ok {
+		return nil, &TableError{
+			Code:    "ConditionalCheckFailedException",
+			Message: "The conditional request failed",
+		}
+	}
+
 	var oldItem Item
 
-	if returnOld {
-		if existing, ok := td.Items[key]; ok {
-			oldItem = m.copyItem(existing)
-		}
+	if returnOld && existingItem != nil {
+		oldItem = m.copyItem(existingItem)
 	}
 
 	td.Items[key] = m.copyItem(item)
@@ -304,7 +320,7 @@ func (m *MemoryStorage) GetItem(_ context.Context, tableName string, key Item) (
 }
 
 // DeleteItem deletes an item from a table.
-func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item, returnOld bool) (Item, error) {
+func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item, returnOld bool, cond ConditionInput) (Item, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -318,11 +334,29 @@ func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item
 
 	keyStr := m.serializeKey(td.Table, key)
 
+	// Evaluate condition against existing item.
+	var existingItem Item
+	if existing, ok := td.Items[keyStr]; ok {
+		existingItem = existing
+	}
+
+	if ok, err := evaluateCondition(existingItem, cond); err != nil {
+		return nil, &TableError{
+			Code:    "ValidationException",
+			Message: fmt.Sprintf("Invalid ConditionExpression: %s", err),
+		}
+	} else if !ok {
+		return nil, &TableError{
+			Code:    "ConditionalCheckFailedException",
+			Message: "The conditional request failed",
+		}
+	}
+
 	var oldItem Item
 
-	if existing, ok := td.Items[keyStr]; ok {
+	if existingItem != nil {
 		if returnOld {
-			oldItem = m.copyItem(existing)
+			oldItem = m.copyItem(existingItem)
 		}
 
 		delete(td.Items, keyStr)
@@ -332,7 +366,7 @@ func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item
 }
 
 // UpdateItem updates an item in a table.
-func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string) (Item, error) {
+func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string, cond ConditionInput) (Item, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -346,6 +380,24 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 
 	keyStr := m.serializeKey(td.Table, key)
 	item, itemExists := td.Items[keyStr]
+
+	// Evaluate condition against existing item.
+	var condItem Item
+	if itemExists {
+		condItem = item
+	}
+
+	if ok, err := evaluateCondition(condItem, cond); err != nil {
+		return nil, &TableError{
+			Code:    "ValidationException",
+			Message: fmt.Sprintf("Invalid ConditionExpression: %s", err),
+		}
+	} else if !ok {
+		return nil, &TableError{
+			Code:    "ConditionalCheckFailedException",
+			Message: "The conditional request failed",
+		}
+	}
 
 	var oldItem Item
 	if itemExists {
@@ -725,39 +777,18 @@ func (m *MemoryStorage) extractPartitionKeyValue(keyCondExpr, partitionKeyName s
 	return nil
 }
 
-// evaluateFilterExpression evaluates a simple filter expression against an item.
+// evaluateFilterExpression evaluates a filter expression against an item.
 func (m *MemoryStorage) evaluateFilterExpression(item Item, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue) bool {
-	if filterExpr == "" {
+	result, err := evaluateCondition(item, ConditionInput{
+		Expression: filterExpr,
+		ExprNames:  exprNames,
+		ExprValues: exprValues,
+	})
+	if err != nil {
 		return true
 	}
 
-	// Very simplified filter expression evaluation.
-	// Only supports simple equality checks.
-	expr := filterExpr
-	for placeholder, name := range exprNames {
-		expr = strings.ReplaceAll(expr, placeholder, name)
-	}
-
-	// Handle simple equality: "attr = :val".
-	if strings.Contains(expr, "=") && !strings.Contains(expr, "<>") {
-		parts := strings.SplitN(expr, "=", 2)
-		if len(parts) == 2 {
-			attrName := strings.TrimSpace(parts[0])
-			valuePlaceholder := strings.TrimSpace(parts[1])
-
-			itemVal, hasAttr := item[attrName]
-			exprVal, hasExpr := exprValues[valuePlaceholder]
-
-			if !hasAttr || !hasExpr {
-				return false
-			}
-
-			return m.attributeValuesEqual(itemVal, exprVal)
-		}
-	}
-
-	// Default to true for unsupported expressions.
-	return true
+	return result
 }
 
 // attributeValuesEqual compares two attribute values for equality.

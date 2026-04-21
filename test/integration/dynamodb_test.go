@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -602,4 +603,311 @@ func TestDynamoDB_UpdateTimeToLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_describe", describeOutput)
+}
+
+func TestDynamoDB_PutItem_ConditionExpression_AttributeNotExists(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-condition-put"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// First put should succeed (item does not exist).
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":   &types.AttributeValueMemberS{Value: "id-1"},
+			"data": &types.AttributeValueMemberS{Value: "first"},
+		},
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
+	})
+	if err != nil {
+		t.Fatalf("first PutItem should succeed: %v", err)
+	}
+
+	// Second put with same key should fail (item exists).
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":   &types.AttributeValueMemberS{Value: "id-1"},
+			"data": &types.AttributeValueMemberS{Value: "second"},
+		},
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
+	})
+	if err == nil {
+		t.Fatal("second PutItem should fail with ConditionalCheckFailedException")
+	}
+
+	var ccfe *types.ConditionalCheckFailedException
+	if !errors.As(err, &ccfe) {
+		t.Fatalf("expected ConditionalCheckFailedException, got: %T: %v", err, err)
+	}
+
+	// Verify original item is preserved.
+	getOutput, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: "id-1"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get", getOutput)
+}
+
+func TestDynamoDB_PutItem_ConditionExpression_Equality(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-condition-equality"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Put initial item.
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":     &types.AttributeValueMemberS{Value: "id-1"},
+			"status": &types.AttributeValueMemberS{Value: "active"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update with correct condition should succeed.
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":     &types.AttributeValueMemberS{Value: "id-1"},
+			"status": &types.AttributeValueMemberS{Value: "inactive"},
+		},
+		ConditionExpression: aws.String("#s = :expected"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":expected": &types.AttributeValueMemberS{Value: "active"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("conditional put with matching status should succeed: %v", err)
+	}
+
+	// Update with wrong condition should fail.
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":     &types.AttributeValueMemberS{Value: "id-1"},
+			"status": &types.AttributeValueMemberS{Value: "deleted"},
+		},
+		ConditionExpression: aws.String("#s = :expected"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":expected": &types.AttributeValueMemberS{Value: "active"},
+		},
+	})
+	if err == nil {
+		t.Fatal("conditional put with wrong status should fail")
+	}
+
+	var ccfe *types.ConditionalCheckFailedException
+	if !errors.As(err, &ccfe) {
+		t.Fatalf("expected ConditionalCheckFailedException, got: %T: %v", err, err)
+	}
+}
+
+func TestDynamoDB_DeleteItem_ConditionExpression(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-condition-delete"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Put item.
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":     &types.AttributeValueMemberS{Value: "id-1"},
+			"status": &types.AttributeValueMemberS{Value: "active"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete with wrong condition should fail.
+	_, err = client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: "id-1"},
+		},
+		ConditionExpression: aws.String("#s = :expected"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":expected": &types.AttributeValueMemberS{Value: "inactive"},
+		},
+	})
+	if err == nil {
+		t.Fatal("delete with wrong condition should fail")
+	}
+
+	var ccfe *types.ConditionalCheckFailedException
+	if !errors.As(err, &ccfe) {
+		t.Fatalf("expected ConditionalCheckFailedException, got: %T: %v", err, err)
+	}
+
+	// Delete with correct condition should succeed.
+	_, err = client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: "id-1"},
+		},
+		ConditionExpression: aws.String("#s = :expected"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":expected": &types.AttributeValueMemberS{Value: "active"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("delete with correct condition should succeed: %v", err)
+	}
+}
+
+func TestDynamoDB_UpdateItem_ConditionExpression(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-condition-update"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Put initial item.
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]types.AttributeValue{
+			"pk":      &types.AttributeValueMemberS{Value: "id-1"},
+			"version": &types.AttributeValueMemberN{Value: "1"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update with correct version (optimistic locking).
+	_, err = client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: "id-1"},
+		},
+		UpdateExpression:    aws.String("SET version = :newver"),
+		ConditionExpression: aws.String("version = :curver"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":curver": &types.AttributeValueMemberN{Value: "1"},
+			":newver": &types.AttributeValueMemberN{Value: "2"},
+		},
+		ReturnValues: types.ReturnValueAllNew,
+	})
+	if err != nil {
+		t.Fatalf("update with correct version should succeed: %v", err)
+	}
+
+	// Update with stale version should fail.
+	_, err = client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(tableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: "id-1"},
+		},
+		UpdateExpression:    aws.String("SET version = :newver"),
+		ConditionExpression: aws.String("version = :curver"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":curver": &types.AttributeValueMemberN{Value: "1"},
+			":newver": &types.AttributeValueMemberN{Value: "3"},
+		},
+	})
+	if err == nil {
+		t.Fatal("update with stale version should fail")
+	}
+
+	var ccfe *types.ConditionalCheckFailedException
+	if !errors.As(err, &ccfe) {
+		t.Fatalf("expected ConditionalCheckFailedException, got: %T: %v", err, err)
+	}
 }
