@@ -450,6 +450,39 @@ $KUMO_DATA_DIR/
   ...
 ```
 
+## kumo-specific Endpoints
+
+kumo provides additional endpoints under the `/kumo/` prefix for testing purposes. These are not part of any AWS API but are useful for verifying application behavior in tests.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/kumo/ses/v2/sent-emails` | Retrieve a list of emails sent via the SES v2 `SendEmail` API |
+
+### Example: Retrieving sent emails
+
+```bash
+curl http://localhost:4566/kumo/ses/v2/sent-emails
+```
+
+Response:
+
+```json
+{
+  "SentEmails": [
+    {
+      "MessageId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "FromEmailAddress": "sender@example.com",
+      "Destination": {
+        "ToAddresses": ["recipient@example.com"]
+      },
+      "Subject": "Hello",
+      "Body": "Hello, World!",
+      "SentAt": "2025-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
 ## Development
 
 ```bash
