@@ -13,6 +13,11 @@ const (
 	ReturnValuesUpdatedNew = "UPDATED_NEW"
 )
 
+// Error code constants.
+const (
+	ErrCodeConditionalCheckFailed = "ConditionalCheckFailedException"
+)
+
 // AttributeValue represents a DynamoDB attribute value.
 // Only one field should be set at a time.
 type AttributeValue struct {
