@@ -844,8 +844,6 @@ func (m *MemoryStorage) applyUpdateExpression(item Item, updateExpr string, expr
 }
 
 // TransactWriteItems executes a transactional write with all-or-nothing semantics.
-//
-//nolint:cyclop,funlen // Transaction processing requires validating all items before applying.
 func (m *MemoryStorage) TransactWriteItems(_ context.Context, items []TransactWriteItem) ([]CancellationReason, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -885,87 +883,52 @@ func (m *MemoryStorage) TransactWriteItems(_ context.Context, items []TransactWr
 func (m *MemoryStorage) validateTransactWriteItem(twi TransactWriteItem) (*CancellationReason, error) {
 	switch {
 	case twi.Put != nil:
-		td, exists := m.Tables[twi.Put.TableName]
-		if !exists {
-			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Put.TableName)}
-		}
-
-		key := m.serializeKey(td.Table, twi.Put.Item)
-		var existing Item
-		if e, ok := td.Items[key]; ok {
-			existing = e
-		}
-
-		if ok, err := evaluateCondition(existing, ConditionInput{
+		return m.checkTransactCondition(twi.Put.TableName, twi.Put.Item, ConditionInput{
 			Expression: twi.Put.ConditionExpression, ExprNames: twi.Put.ExpressionAttributeNames, ExprValues: twi.Put.ExpressionAttributeValues,
-		}); err != nil {
-			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
-		} else if !ok {
-			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
-		}
-
+		})
 	case twi.Delete != nil:
-		td, exists := m.Tables[twi.Delete.TableName]
-		if !exists {
-			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Delete.TableName)}
-		}
-
-		key := m.serializeKey(td.Table, twi.Delete.Key)
-		var existing Item
-		if e, ok := td.Items[key]; ok {
-			existing = e
-		}
-
-		if ok, err := evaluateCondition(existing, ConditionInput{
+		return m.checkTransactCondition(twi.Delete.TableName, twi.Delete.Key, ConditionInput{
 			Expression: twi.Delete.ConditionExpression, ExprNames: twi.Delete.ExpressionAttributeNames, ExprValues: twi.Delete.ExpressionAttributeValues,
-		}); err != nil {
-			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
-		} else if !ok {
-			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
-		}
-
+		})
 	case twi.Update != nil:
-		td, exists := m.Tables[twi.Update.TableName]
-		if !exists {
-			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.Update.TableName)}
-		}
-
-		key := m.serializeKey(td.Table, twi.Update.Key)
-		var existing Item
-		if e, ok := td.Items[key]; ok {
-			existing = e
-		}
-
-		if ok, err := evaluateCondition(existing, ConditionInput{
+		return m.checkTransactCondition(twi.Update.TableName, twi.Update.Key, ConditionInput{
 			Expression: twi.Update.ConditionExpression, ExprNames: twi.Update.ExpressionAttributeNames, ExprValues: twi.Update.ExpressionAttributeValues,
-		}); err != nil {
-			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
-		} else if !ok {
-			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
-		}
-
+		})
 	case twi.ConditionCheck != nil:
-		td, exists := m.Tables[twi.ConditionCheck.TableName]
-		if !exists {
-			return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", twi.ConditionCheck.TableName)}
-		}
-
-		key := m.serializeKey(td.Table, twi.ConditionCheck.Key)
-		var existing Item
-		if e, ok := td.Items[key]; ok {
-			existing = e
-		}
-
-		if ok, err := evaluateCondition(existing, ConditionInput{
+		return m.checkTransactCondition(twi.ConditionCheck.TableName, twi.ConditionCheck.Key, ConditionInput{
 			Expression: twi.ConditionCheck.ConditionExpression, ExprNames: twi.ConditionCheck.ExpressionAttributeNames, ExprValues: twi.ConditionCheck.ExpressionAttributeValues,
-		}); err != nil {
-			return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
-		} else if !ok {
-			return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
-		}
+		})
 	}
 
+	//nolint:nilnil // No action specified is valid (returns success).
 	return nil, nil
+}
+
+// checkTransactCondition checks a condition against the existing item in a table.
+// Must be called under lock.
+func (m *MemoryStorage) checkTransactCondition(tableName string, keyOrItem Item, cond ConditionInput) (*CancellationReason, error) {
+	td, exists := m.Tables[tableName]
+	if !exists {
+		return nil, &TableError{Code: "ResourceNotFoundException", Message: fmt.Sprintf("Table: %s not found", tableName)}
+	}
+
+	key := m.serializeKey(td.Table, keyOrItem)
+
+	var existing Item
+	if e, ok := td.Items[key]; ok {
+		existing = e
+	}
+
+	ok, err := evaluateCondition(existing, cond)
+	if err != nil {
+		return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+	}
+
+	if !ok {
+		return &CancellationReason{Code: "ConditionalCheckFailed"}, nil
+	}
+
+	return nil, nil //nolint:nilnil // Condition passed, no cancellation reason.
 }
 
 // applyTransactWriteItem applies a single write item mutation. Must be called under lock.
