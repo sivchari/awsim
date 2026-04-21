@@ -33,6 +33,8 @@ type Storage interface {
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
 	TransactWriteItems(ctx context.Context, items []TransactWriteItem) ([]CancellationReason, error)
 	TransactGetItems(ctx context.Context, items []TransactGetItem) ([]Item, error)
+	BatchWriteItem(ctx context.Context, requestItems map[string][]WriteRequest) (map[string][]WriteRequest, error)
+	BatchGetItem(ctx context.Context, requestItems map[string]KeysAndAttributes) (map[string][]Item, error)
 	UpdateTimeToLive(ctx context.Context, tableName, attributeName string, enabled bool) error
 	DescribeTimeToLive(ctx context.Context, tableName string) (string, bool, error)
 }
@@ -989,6 +991,69 @@ func (m *MemoryStorage) TransactGetItems(_ context.Context, items []TransactGetI
 	}
 
 	return results, nil
+}
+
+// BatchWriteItem writes/deletes multiple items across tables.
+func (m *MemoryStorage) BatchWriteItem(_ context.Context, requestItems map[string][]WriteRequest) (map[string][]WriteRequest, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for tableName, requests := range requestItems {
+		td, exists := m.Tables[tableName]
+		if !exists {
+			return nil, &TableError{
+				Code:    "ResourceNotFoundException",
+				Message: fmt.Sprintf("Requested resource not found: Table: %s not found", tableName),
+			}
+		}
+
+		for _, req := range requests {
+			switch {
+			case req.PutRequest != nil:
+				key := m.serializeKey(td.Table, req.PutRequest.Item)
+				td.Items[key] = m.copyItem(req.PutRequest.Item)
+			case req.DeleteRequest != nil:
+				key := m.serializeKey(td.Table, req.DeleteRequest.Key)
+				delete(td.Items, key)
+			}
+		}
+	}
+
+	// kumo processes all items; never returns UnprocessedItems.
+	return nil, nil
+}
+
+// BatchGetItem retrieves multiple items across tables.
+func (m *MemoryStorage) BatchGetItem(_ context.Context, requestItems map[string]KeysAndAttributes) (map[string][]Item, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	responses := make(map[string][]Item)
+
+	for tableName, ka := range requestItems {
+		td, exists := m.Tables[tableName]
+		if !exists {
+			return nil, &TableError{
+				Code:    "ResourceNotFoundException",
+				Message: fmt.Sprintf("Requested resource not found: Table: %s not found", tableName),
+			}
+		}
+
+		var items []Item
+
+		for _, key := range ka.Keys {
+			keyStr := m.serializeKey(td.Table, key)
+			if item, ok := td.Items[keyStr]; ok {
+				items = append(items, m.copyItem(item))
+			}
+		}
+
+		if len(items) > 0 {
+			responses[tableName] = items
+		}
+	}
+
+	return responses, nil
 }
 
 // UpdateTimeToLive updates the TTL configuration for a table.
