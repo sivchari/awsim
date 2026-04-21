@@ -19,7 +19,7 @@
 - **AWS SDK v2 compatible** - Works seamlessly with Go AWS SDK v2
 - **Optional data persistence** - Survive restarts with `KUMO_DATA_DIR`
 
-## Supported Services (75 services)
+## Supported Services (76 services)
 
 ### Storage
 | Service | Description |
@@ -105,6 +105,7 @@
 | Step Functions | Workflow orchestration |
 | AppSync | GraphQL API |
 | SES v2 | Email service |
+| Pinpoint SMS Voice v2 | SMS messaging |
 | Scheduler | Task scheduling |
 | Amplify | Full-stack application hosting |
 
@@ -457,6 +458,7 @@ kumo provides additional endpoints under the `/kumo/` prefix for testing purpose
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/kumo/ses/v2/sent-emails` | Retrieve a list of emails sent via the SES v2 `SendEmail` API |
+| GET | `/kumo/pinpointsmsvoicev2/sent-messages` | Retrieve a list of SMS messages sent via the Pinpoint SMS Voice v2 `SendTextMessage` API |
 
 ### Example: Retrieving sent emails
 
@@ -477,6 +479,28 @@ Response:
       },
       "Subject": "Hello",
       "Body": "Hello, World!",
+      "SentAt": "2025-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+### Example: Retrieving sent SMS messages
+
+```bash
+curl http://localhost:4566/kumo/pinpointsmsvoicev2/sent-messages
+```
+
+Response:
+
+```json
+{
+  "SentTextMessages": [
+    {
+      "MessageId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "DestinationPhoneNumber": "+1234567890",
+      "OriginationIdentity": "+0987654321",
+      "MessageBody": "Hello!",
       "SentAt": "2025-01-01T00:00:00Z"
     }
   ]

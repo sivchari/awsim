@@ -1,0 +1,122 @@
+package pinpointsmsvoicev2
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+// DispatchAction routes requests based on the X-Amz-Target header.
+func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
+	target := r.Header.Get("X-Amz-Target")
+	if target == "" {
+		writeError(w, errInvalidParameter, "Missing X-Amz-Target header", http.StatusBadRequest)
+
+		return
+	}
+
+	parts := strings.Split(target, ".")
+	if len(parts) != 2 {
+		writeError(w, errInvalidParameter, "Invalid X-Amz-Target header", http.StatusBadRequest)
+
+		return
+	}
+
+	operation := parts[1]
+
+	switch operation {
+	case "SendTextMessage":
+		s.SendTextMessage(w, r)
+	default:
+		writeError(w, errInvalidParameter, fmt.Sprintf("Unknown operation: %s", operation), http.StatusBadRequest)
+	}
+}
+
+// SendTextMessage handles the SendTextMessage operation.
+func (s *Service) SendTextMessage(w http.ResponseWriter, r *http.Request) {
+	var req SendTextMessageInput
+	if err := readJSONRequest(r, &req); err != nil {
+		writeError(w, errInvalidParameter, "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	messageID, err := s.storage.SendTextMessage(r.Context(), &req)
+	if err != nil {
+		var sErr *Error
+		if errors.As(err, &sErr) {
+			writeError(w, sErr.Code, sErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, SendTextMessageOutput{
+		MessageID: messageID,
+	})
+}
+
+// GetSentTextMessages handles the GetSentTextMessages operation.
+func (s *Service) GetSentTextMessages(w http.ResponseWriter, r *http.Request) {
+	messages, err := s.storage.GetSentTextMessages(r.Context())
+	if err != nil {
+		writeError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, GetSentTextMessagesResponse{
+		SentTextMessages: messages,
+	})
+}
+
+// Helper functions.
+
+// readJSONRequest reads and decodes JSON request body.
+func readJSONRequest(r *http.Request, v any) error {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil
+	}
+
+	if err := json.Unmarshal(body, v); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return nil
+}
+
+// writeJSONResponse writes a JSON response with HTTP 200 OK.
+func writeJSONResponse(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("x-amzn-RequestId", uuid.New().String())
+	w.WriteHeader(http.StatusOK)
+
+	if v != nil {
+		_ = json.NewEncoder(w).Encode(v)
+	}
+}
+
+// writeError writes an error response.
+func writeError(w http.ResponseWriter, code, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("x-amzn-RequestId", uuid.New().String())
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(ErrorResponse{
+		Type:    code,
+		Message: message,
+	})
+}

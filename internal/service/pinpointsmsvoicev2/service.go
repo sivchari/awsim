@@ -1,0 +1,63 @@
+package pinpointsmsvoicev2
+
+import (
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/sivchari/kumo/internal/service"
+)
+
+// Compile-time check that Service implements io.Closer.
+var _ io.Closer = (*Service)(nil)
+
+func init() {
+	var opts []Option
+	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
+		opts = append(opts, WithDataDir(dir))
+	}
+
+	service.Register(New(NewMemoryStorage(opts...)))
+}
+
+// Service implements the Pinpoint SMS Voice v2 service.
+type Service struct {
+	storage Storage
+}
+
+// New creates a new Pinpoint SMS Voice v2 service.
+func New(storage Storage) *Service {
+	return &Service{
+		storage: storage,
+	}
+}
+
+// Name returns the service name.
+func (s *Service) Name() string {
+	return "pinpointsmsvoicev2"
+}
+
+// RegisterRoutes registers the Pinpoint SMS Voice v2 routes.
+func (s *Service) RegisterRoutes(r service.Router) {
+	// kumo-specific endpoint for testing.
+	r.HandleFunc("GET", "/kumo/pinpointsmsvoicev2/sent-messages", s.GetSentTextMessages)
+}
+
+// TargetPrefix returns the X-Amz-Target header prefix.
+func (s *Service) TargetPrefix() string {
+	return "PinpointSMSVoiceV2"
+}
+
+// JSONProtocol is a marker method that indicates this service uses AWS JSON 1.0 protocol.
+func (s *Service) JSONProtocol() {}
+
+// Close saves the storage state if persistence is enabled.
+func (s *Service) Close() error {
+	if c, ok := s.storage.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("failed to close storage: %w", err)
+		}
+	}
+
+	return nil
+}
