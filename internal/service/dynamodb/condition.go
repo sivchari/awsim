@@ -107,8 +107,6 @@ func parseNotExpr(expr string, item Item, values map[string]AttributeValue) (boo
 }
 
 // parsePrimary parses a primary expression: parenthesized, function call, or comparison.
-//
-//nolint:cyclop,funlen // Expression parsing inherently requires many branches.
 func parsePrimary(expr string, item Item, values map[string]AttributeValue) (bool, string, error) {
 	trimmed := strings.TrimSpace(expr)
 
@@ -262,9 +260,10 @@ func parseSizeComparison(expr string, item Item, values map[string]AttributeValu
 	idx := 0
 
 	for idx < len(inner) && parenDepth > 0 {
-		if inner[idx] == '(' {
+		switch inner[idx] {
+		case '(':
 			parenDepth++
-		} else if inner[idx] == ')' {
+		case ')':
 			parenDepth--
 		}
 
@@ -421,7 +420,7 @@ func nextToken(s string) (string, string) {
 
 // isOperatorStart checks if the string starts with a comparison operator or keyword.
 func isOperatorStart(s string) bool {
-	if len(s) == 0 {
+	if s == "" {
 		return false
 	}
 
@@ -435,8 +434,6 @@ func isOperatorStart(s string) bool {
 
 // resolveOperand resolves an operand token to an AttributeValue.
 // It can be a value placeholder (:val), or an attribute path.
-//
-//nolint:gocritic // hugeParam: AttributeValue returned by value.
 func resolveOperand(token string, item Item, values map[string]AttributeValue) AttributeValue {
 	if strings.HasPrefix(token, ":") {
 		if val, ok := values[token]; ok {
@@ -452,8 +449,6 @@ func resolveOperand(token string, item Item, values map[string]AttributeValue) A
 }
 
 // resolveItemPath resolves a dotted path on an item, returning the value and whether it exists.
-//
-//nolint:gocritic // hugeParam: AttributeValue returned by value.
 func resolveItemPath(item Item, path string) (AttributeValue, bool) {
 	parts := strings.Split(path, ".")
 

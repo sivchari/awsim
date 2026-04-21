@@ -47,7 +47,7 @@ func TestConditionThroughStorage(t *testing.T) {
 	}
 
 	var tErr *TableError
-	if !errors.As(err, &tErr) || tErr.Code != "ConditionalCheckFailedException" {
+	if !errors.As(err, &tErr) || tErr.Code != ErrCodeConditionalCheckFailed {
 		t.Fatalf("expected ConditionalCheckFailedException, got: %v", err)
 	}
 

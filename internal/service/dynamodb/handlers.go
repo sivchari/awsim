@@ -175,7 +175,7 @@ func (s *Service) PutItem(w http.ResponseWriter, r *http.Request) {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
 			status := http.StatusBadRequest
-			if tErr.Code == "ConditionalCheckFailedException" {
+			if tErr.Code == ErrCodeConditionalCheckFailed {
 				status = http.StatusConflict
 			}
 
@@ -268,7 +268,7 @@ func (s *Service) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
 			status := http.StatusBadRequest
-			if tErr.Code == "ConditionalCheckFailedException" {
+			if tErr.Code == ErrCodeConditionalCheckFailed {
 				status = http.StatusConflict
 			}
 
@@ -328,7 +328,7 @@ func (s *Service) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
 			status := http.StatusBadRequest
-			if tErr.Code == "ConditionalCheckFailedException" {
+			if tErr.Code == ErrCodeConditionalCheckFailed {
 				status = http.StatusConflict
 			}
 

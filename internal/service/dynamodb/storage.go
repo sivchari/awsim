@@ -281,7 +281,7 @@ func (m *MemoryStorage) PutItem(_ context.Context, tableName string, item Item, 
 		}
 	} else if !ok {
 		return nil, &TableError{
-			Code:    "ConditionalCheckFailedException",
+			Code:    ErrCodeConditionalCheckFailed,
 			Message: "The conditional request failed",
 		}
 	}
@@ -347,7 +347,7 @@ func (m *MemoryStorage) DeleteItem(_ context.Context, tableName string, key Item
 		}
 	} else if !ok {
 		return nil, &TableError{
-			Code:    "ConditionalCheckFailedException",
+			Code:    ErrCodeConditionalCheckFailed,
 			Message: "The conditional request failed",
 		}
 	}
@@ -394,7 +394,7 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 		}
 	} else if !ok {
 		return nil, &TableError{
-			Code:    "ConditionalCheckFailedException",
+			Code:    ErrCodeConditionalCheckFailed,
 			Message: "The conditional request failed",
 		}
 	}
