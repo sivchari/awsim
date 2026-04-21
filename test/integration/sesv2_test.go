@@ -348,17 +348,23 @@ func TestSESv2_GetSentEmails(t *testing.T) {
 		t.Fatal("no sent emails found")
 	}
 
-	// Verify first email
-	firstEmail, ok := emails[0].(map[string]interface{})
-	if !ok {
-		t.Fatal("email is not an object")
+	// Find our email (other tests may have sent emails too).
+	var found bool
+
+	for _, e := range emails {
+		email, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if email["FromEmailAddress"] == fromEmail && email["Subject"] == "Test Subject" {
+			found = true
+
+			break
+		}
 	}
 
-	if fromAddr, ok := firstEmail["FromEmailAddress"]; !ok || fromAddr != fromEmail {
-		t.Errorf("FromEmailAddress mismatch: got %v, want %s", fromAddr, fromEmail)
-	}
-
-	if subject, ok := firstEmail["Subject"]; !ok || subject != "Test Subject" {
-		t.Errorf("Subject mismatch: got %v, want 'Test Subject'", subject)
+	if !found {
+		t.Errorf("sent email from %s with subject 'Test Subject' not found", fromEmail)
 	}
 }
