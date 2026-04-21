@@ -8,6 +8,7 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+//nolint:cyclop // Test function exercises multiple storage operations sequentially.
 func TestConditionThroughStorage(t *testing.T) {
 	t.Parallel()
 
@@ -172,6 +173,7 @@ func TestConditionThroughStorage(t *testing.T) {
 	}
 }
 
+//nolint:funlen // Table-driven test with comprehensive condition expression coverage.
 func TestEvaluateCondition(t *testing.T) {
 	t.Parallel()
 
