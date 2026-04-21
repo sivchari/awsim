@@ -164,11 +164,22 @@ func (s *Service) PutItem(w http.ResponseWriter, r *http.Request) {
 
 	returnOld := req.ReturnValues == "ReturnValuesAllOld"
 
-	oldItem, err := s.storage.PutItem(r.Context(), req.TableName, req.Item, returnOld)
+	cond := ConditionInput{
+		Expression: req.ConditionExpression,
+		ExprNames:  req.ExpressionAttributeNames,
+		ExprValues: req.ExpressionAttributeValues,
+	}
+
+	oldItem, err := s.storage.PutItem(r.Context(), req.TableName, req.Item, returnOld, cond)
 	if err != nil {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
-			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if tErr.Code == "ConditionalCheckFailedException" {
+				status = http.StatusConflict
+			}
+
+			writeDynamoDBError(w, tErr.Code, tErr.Message, status)
 
 			return
 		}
@@ -246,11 +257,22 @@ func (s *Service) DeleteItem(w http.ResponseWriter, r *http.Request) {
 
 	returnOld := req.ReturnValues == "ReturnValuesAllOld"
 
-	oldItem, err := s.storage.DeleteItem(r.Context(), req.TableName, req.Key, returnOld)
+	cond := ConditionInput{
+		Expression: req.ConditionExpression,
+		ExprNames:  req.ExpressionAttributeNames,
+		ExprValues: req.ExpressionAttributeValues,
+	}
+
+	oldItem, err := s.storage.DeleteItem(r.Context(), req.TableName, req.Key, returnOld, cond)
 	if err != nil {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
-			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if tErr.Code == "ConditionalCheckFailedException" {
+				status = http.StatusConflict
+			}
+
+			writeDynamoDBError(w, tErr.Code, tErr.Message, status)
 
 			return
 		}
@@ -286,6 +308,12 @@ func (s *Service) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cond := ConditionInput{
+		Expression: req.ConditionExpression,
+		ExprNames:  req.ExpressionAttributeNames,
+		ExprValues: req.ExpressionAttributeValues,
+	}
+
 	result, err := s.storage.UpdateItem(
 		r.Context(),
 		req.TableName,
@@ -294,11 +322,17 @@ func (s *Service) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		req.ExpressionAttributeNames,
 		req.ExpressionAttributeValues,
 		req.ReturnValues,
+		cond,
 	)
 	if err != nil {
 		var tErr *TableError
 		if errors.As(err, &tErr) {
-			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if tErr.Code == "ConditionalCheckFailedException" {
+				status = http.StatusConflict
+			}
+
+			writeDynamoDBError(w, tErr.Code, tErr.Message, status)
 
 			return
 		}
