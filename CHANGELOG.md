@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.10.0](https://github.com/sivchari/kumo/compare/v0.9.0...v0.10.0) - 2026-04-21
+- feat(route53): add GetChange API by @apenney in https://github.com/sivchari/kumo/pull/430
+- feat(sesv2): add kumo-specific endpoint to retrieve sent emails by @sivchari in https://github.com/sivchari/kumo/pull/432
+- feat: add Pinpoint SMS Voice v2 service with SendTextMessage by @sivchari in https://github.com/sivchari/kumo/pull/434
+- release v0.10.0 by @sivchari in https://github.com/sivchari/kumo/pull/435
+
 ## [v0.9.0](https://github.com/sivchari/kumo/compare/v0.8.0...v0.9.0) - 2026-04-16
 - feat(sqs): add ListQueueTags, TagQueue, and UntagQueue actions by @kahirokunn in https://github.com/sivchari/kumo/pull/400
 - feat(neptune): add Amazon Neptune service implementation by @sivchari in https://github.com/sivchari/kumo/pull/417
