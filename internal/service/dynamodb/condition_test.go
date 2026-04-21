@@ -173,6 +173,178 @@ func TestConditionThroughStorage(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // Test function exercises multiple transaction operations sequentially.
+func TestTransactWriteItems(t *testing.T) {
+	t.Parallel()
+
+	s := NewMemoryStorage("http://localhost:4566")
+	ctx := context.Background()
+
+	_, err := s.CreateTable(ctx, &CreateTableRequest{
+		TableName:            "accounts",
+		KeySchema:            []KeySchemaElement{{AttributeName: "id", KeyType: "HASH"}},
+		AttributeDefinitions: []AttributeDefinition{{AttributeName: "id", AttributeType: "S"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Successful transaction: put two items atomically.
+	reasons, err := s.TransactWriteItems(ctx, []TransactWriteItem{
+		{Put: &TransactPut{
+			TableName:           "accounts",
+			Item:                Item{"id": {S: ptr("acc-1")}, "balance": {N: ptr("100")}},
+			ConditionExpression: "attribute_not_exists(id)",
+		}},
+		{Put: &TransactPut{
+			TableName:           "accounts",
+			Item:                Item{"id": {S: ptr("acc-2")}, "balance": {N: ptr("200")}},
+			ConditionExpression: "attribute_not_exists(id)",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("transaction should succeed: %v", err)
+	}
+
+	if reasons != nil {
+		t.Fatalf("expected no cancellation reasons, got: %v", reasons)
+	}
+
+	// Verify both items exist.
+	item1, _ := s.GetItem(ctx, "accounts", Item{"id": {S: ptr("acc-1")}})
+	item2, _ := s.GetItem(ctx, "accounts", Item{"id": {S: ptr("acc-2")}})
+
+	if item1 == nil || item2 == nil {
+		t.Fatal("both items should exist after transaction")
+	}
+
+	// Failed transaction: second put has condition that fails.
+	reasons, err = s.TransactWriteItems(ctx, []TransactWriteItem{
+		{Put: &TransactPut{
+			TableName:           "accounts",
+			Item:                Item{"id": {S: ptr("acc-3")}, "balance": {N: ptr("300")}},
+			ConditionExpression: "attribute_not_exists(id)",
+		}},
+		{Put: &TransactPut{
+			TableName:           "accounts",
+			Item:                Item{"id": {S: ptr("acc-1")}, "balance": {N: ptr("999")}},
+			ConditionExpression: "attribute_not_exists(id)", // Fails: acc-1 already exists.
+		}},
+	})
+
+	var tErr *TableError
+	if !errors.As(err, &tErr) || tErr.Code != "TransactionCanceledException" {
+		t.Fatalf("expected TransactionCanceledException, got: %v", err)
+	}
+
+	// Verify reasons: first should be empty, second should be ConditionalCheckFailed.
+	if reasons[0].Code != "" {
+		t.Fatalf("first reason should be empty, got: %s", reasons[0].Code)
+	}
+
+	if reasons[1].Code != "ConditionalCheckFailed" {
+		t.Fatalf("second reason should be ConditionalCheckFailed, got: %s", reasons[1].Code)
+	}
+
+	// Verify acc-3 was NOT created (all-or-nothing).
+	item3, _ := s.GetItem(ctx, "accounts", Item{"id": {S: ptr("acc-3")}})
+	if item3 != nil {
+		t.Fatal("acc-3 should not exist after failed transaction")
+	}
+
+	// Transaction with Update and ConditionCheck.
+	reasons, err = s.TransactWriteItems(ctx, []TransactWriteItem{
+		{Update: &TransactUpdate{
+			TableName:        "accounts",
+			Key:              Item{"id": {S: ptr("acc-1")}},
+			UpdateExpression: "SET balance = :new",
+			ExpressionAttributeValues: map[string]AttributeValue{
+				":new": {N: ptr("150")},
+			},
+		}},
+		{ConditionCheck: &TransactConditionCheck{
+			TableName:           "accounts",
+			Key:                 Item{"id": {S: ptr("acc-2")}},
+			ConditionExpression: "attribute_exists(id)",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("update+conditioncheck transaction should succeed: %v", err)
+	}
+
+	// Verify acc-1 balance updated.
+	item1, _ = s.GetItem(ctx, "accounts", Item{"id": {S: ptr("acc-1")}})
+	if item1["balance"].N == nil || *item1["balance"].N != "150" {
+		t.Fatalf("acc-1 balance should be 150, got: %v", item1["balance"])
+	}
+
+	// Transaction with Delete.
+	reasons, err = s.TransactWriteItems(ctx, []TransactWriteItem{
+		{Delete: &TransactDelete{
+			TableName: "accounts",
+			Key:       Item{"id": {S: ptr("acc-2")}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("delete transaction should succeed: %v", err)
+	}
+
+	item2, _ = s.GetItem(ctx, "accounts", Item{"id": {S: ptr("acc-2")}})
+	if item2 != nil {
+		t.Fatal("acc-2 should be deleted")
+	}
+}
+
+func TestTransactGetItems(t *testing.T) {
+	t.Parallel()
+
+	s := NewMemoryStorage("http://localhost:4566")
+	ctx := context.Background()
+
+	_, err := s.CreateTable(ctx, &CreateTableRequest{
+		TableName:            "users",
+		KeySchema:            []KeySchemaElement{{AttributeName: "pk", KeyType: "HASH"}},
+		AttributeDefinitions: []AttributeDefinition{{AttributeName: "pk", AttributeType: "S"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert items.
+	for _, id := range []string{"u1", "u2", "u3"} {
+		_, err = s.PutItem(ctx, "users", Item{"pk": {S: ptr(id)}, "name": {S: ptr("User-" + id)}}, false, ConditionInput{})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// TransactGetItems: get u1 and u3 (skip u2).
+	items, err := s.TransactGetItems(ctx, []TransactGetItem{
+		{Get: &TransactGet{TableName: "users", Key: Item{"pk": {S: ptr("u1")}}}},
+		{Get: &TransactGet{TableName: "users", Key: Item{"pk": {S: ptr("u3")}}}},
+		{Get: &TransactGet{TableName: "users", Key: Item{"pk": {S: ptr("missing")}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(items) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(items))
+	}
+
+	if items[0] == nil || *items[0]["name"].S != "User-u1" {
+		t.Fatalf("first item should be u1, got: %v", items[0])
+	}
+
+	if items[1] == nil || *items[1]["name"].S != "User-u3" {
+		t.Fatalf("second item should be u3, got: %v", items[1])
+	}
+
+	if items[2] != nil {
+		t.Fatalf("third item should be nil (not found), got: %v", items[2])
+	}
+}
+
 //nolint:funlen // Table-driven test with comprehensive condition expression coverage.
 func TestEvaluateCondition(t *testing.T) {
 	t.Parallel()

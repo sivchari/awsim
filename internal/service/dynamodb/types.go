@@ -290,6 +290,106 @@ type DescribeTimeToLiveResponse struct {
 	TimeToLiveDescription TimeToLiveDescription `json:"TimeToLiveDescription"`
 }
 
+// TransactWriteItemsRequest is the request for TransactWriteItems.
+type TransactWriteItemsRequest struct {
+	TransactItems               []TransactWriteItem `json:"TransactItems"`
+	ClientRequestToken          string              `json:"ClientRequestToken,omitempty"`
+	ReturnConsumedCapacity      string              `json:"ReturnConsumedCapacity,omitempty"`
+	ReturnItemCollectionMetrics string              `json:"ReturnItemCollectionMetrics,omitempty"`
+}
+
+// TransactWriteItem represents a single item in a TransactWriteItems request.
+type TransactWriteItem struct {
+	ConditionCheck *TransactConditionCheck `json:"ConditionCheck,omitempty"`
+	Delete         *TransactDelete         `json:"Delete,omitempty"`
+	Put            *TransactPut            `json:"Put,omitempty"`
+	Update         *TransactUpdate         `json:"Update,omitempty"`
+}
+
+// TransactConditionCheck represents a ConditionCheck action in a transaction.
+type TransactConditionCheck struct {
+	TableName                 string                    `json:"TableName"`
+	Key                       Item                      `json:"Key"`
+	ConditionExpression       string                    `json:"ConditionExpression"`
+	ExpressionAttributeNames  map[string]string         `json:"ExpressionAttributeNames,omitempty"`
+	ExpressionAttributeValues map[string]AttributeValue `json:"ExpressionAttributeValues,omitempty"`
+}
+
+// TransactDelete represents a Delete action in a transaction.
+type TransactDelete struct {
+	TableName                 string                    `json:"TableName"`
+	Key                       Item                      `json:"Key"`
+	ConditionExpression       string                    `json:"ConditionExpression,omitempty"`
+	ExpressionAttributeNames  map[string]string         `json:"ExpressionAttributeNames,omitempty"`
+	ExpressionAttributeValues map[string]AttributeValue `json:"ExpressionAttributeValues,omitempty"`
+}
+
+// TransactPut represents a Put action in a transaction.
+type TransactPut struct {
+	TableName                 string                    `json:"TableName"`
+	Item                      Item                      `json:"Item"`
+	ConditionExpression       string                    `json:"ConditionExpression,omitempty"`
+	ExpressionAttributeNames  map[string]string         `json:"ExpressionAttributeNames,omitempty"`
+	ExpressionAttributeValues map[string]AttributeValue `json:"ExpressionAttributeValues,omitempty"`
+}
+
+// TransactUpdate represents an Update action in a transaction.
+type TransactUpdate struct {
+	TableName                 string                    `json:"TableName"`
+	Key                       Item                      `json:"Key"`
+	UpdateExpression          string                    `json:"UpdateExpression"`
+	ConditionExpression       string                    `json:"ConditionExpression,omitempty"`
+	ExpressionAttributeNames  map[string]string         `json:"ExpressionAttributeNames,omitempty"`
+	ExpressionAttributeValues map[string]AttributeValue `json:"ExpressionAttributeValues,omitempty"`
+}
+
+// TransactWriteItemsResponse is the response for TransactWriteItems.
+type TransactWriteItemsResponse struct {
+	// Empty on success - DynamoDB returns minimal response.
+}
+
+// TransactGetItemsRequest is the request for TransactGetItems.
+type TransactGetItemsRequest struct {
+	TransactItems          []TransactGetItem `json:"TransactItems"`
+	ReturnConsumedCapacity string            `json:"ReturnConsumedCapacity,omitempty"`
+}
+
+// TransactGetItem represents a single item in a TransactGetItems request.
+type TransactGetItem struct {
+	Get *TransactGet `json:"Get"`
+}
+
+// TransactGet represents a Get action in a transaction.
+type TransactGet struct {
+	TableName                string            `json:"TableName"`
+	Key                      Item              `json:"Key"`
+	ProjectionExpression     string            `json:"ProjectionExpression,omitempty"`
+	ExpressionAttributeNames map[string]string `json:"ExpressionAttributeNames,omitempty"`
+}
+
+// TransactGetItemsResponse is the response for TransactGetItems.
+type TransactGetItemsResponse struct {
+	Responses []TransactGetItemResponse `json:"Responses"`
+}
+
+// TransactGetItemResponse wraps a single item in the TransactGetItems response.
+type TransactGetItemResponse struct {
+	Item Item `json:"Item,omitempty"`
+}
+
+// CancellationReason represents a reason for transaction cancellation.
+type CancellationReason struct {
+	Code    string `json:"Code"`
+	Message string `json:"Message,omitempty"`
+}
+
+// TransactionCanceledResponse represents the error response for canceled transactions.
+type TransactionCanceledResponse struct {
+	Type                string               `json:"__type"`
+	Message             string               `json:"message"`
+	CancellationReasons []CancellationReason `json:"CancellationReasons"`
+}
+
 // ErrorResponse represents a DynamoDB error response in JSON format.
 type ErrorResponse struct {
 	Type    string `json:"__type"`
