@@ -906,8 +906,169 @@ func TestDynamoDB_UpdateItem_ConditionExpression(t *testing.T) {
 		t.Fatal("update with stale version should fail")
 	}
 
-	var ccfe *types.ConditionalCheckFailedException
-	if !errors.As(err, &ccfe) {
+	var ccfe2 *types.ConditionalCheckFailedException
+	if !errors.As(err, &ccfe2) {
 		t.Fatalf("expected ConditionalCheckFailedException, got: %T: %v", err, err)
 	}
+}
+
+func TestDynamoDB_TransactWriteItems(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-transact-write"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Successful transaction: put two items.
+	_, err = client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		TransactItems: []types.TransactWriteItem{
+			{Put: &types.Put{
+				TableName:           aws.String(tableName),
+				Item:                map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-1"}, "data": &types.AttributeValueMemberS{Value: "first"}},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+			{Put: &types.Put{
+				TableName:           aws.String(tableName),
+				Item:                map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-2"}, "data": &types.AttributeValueMemberS{Value: "second"}},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("transaction should succeed: %v", err)
+	}
+
+	// Verify both items exist.
+	get1, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get_tx1", get1)
+
+	get2, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-2"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get_tx2", get2)
+
+	// Failed transaction: one condition fails, nothing should be written.
+	_, err = client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		TransactItems: []types.TransactWriteItem{
+			{Put: &types.Put{
+				TableName:           aws.String(tableName),
+				Item:                map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-3"}, "data": &types.AttributeValueMemberS{Value: "third"}},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+			{Put: &types.Put{
+				TableName:           aws.String(tableName),
+				Item:                map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-1"}, "data": &types.AttributeValueMemberS{Value: "overwrite"}},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+		},
+	})
+	if err == nil {
+		t.Fatal("transaction should fail because tx-1 already exists")
+	}
+
+	var txErr *types.TransactionCanceledException
+	if !errors.As(err, &txErr) {
+		t.Fatalf("expected TransactionCanceledException, got: %T: %v", err, err)
+	}
+
+	// Verify tx-3 was NOT created (all-or-nothing).
+	get3, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "tx-3"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_get_tx3_not_exists", get3)
+}
+
+func TestDynamoDB_TransactGetItems(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-transact-get"
+
+	_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Put items.
+	for _, id := range []string{"g1", "g2"} {
+		_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(tableName),
+			Item: map[string]types.AttributeValue{
+				"pk":   &types.AttributeValueMemberS{Value: id},
+				"data": &types.AttributeValueMemberS{Value: "data-" + id},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// TransactGetItems.
+	result, err := client.TransactGetItems(ctx, &dynamodb.TransactGetItemsInput{
+		TransactItems: []types.TransactGetItem{
+			{Get: &types.Get{
+				TableName: aws.String(tableName),
+				Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "g1"}},
+			}},
+			{Get: &types.Get{
+				TableName: aws.String(tableName),
+				Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "g2"}},
+			}},
+			{Get: &types.Get{
+				TableName: aws.String(tableName),
+				Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "missing"}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 }
