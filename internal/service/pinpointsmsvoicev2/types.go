@@ -1,4 +1,4 @@
-// Package pinpointsmsvoicev2 provides Pinpoint SMS Voice v2 service emulation for kumo.
+//nolint:tagliatelle // AWS Pinpoint SMS Voice v2 API uses PascalCase for JSON tags
 package pinpointsmsvoicev2
 
 import "time"
