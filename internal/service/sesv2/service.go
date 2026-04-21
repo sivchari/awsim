@@ -54,6 +54,9 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 	// Send Email route.
 	r.HandleFunc("POST", "/ses/v2/email/outbound-emails", s.SendEmail)
+
+	// kumo-specific endpoint for testing.
+	r.HandleFunc("GET", "/kumo/ses/v2/sent-emails", s.GetSentEmails)
 }
 
 // Close saves the storage state if persistence is enabled.

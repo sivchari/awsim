@@ -54,13 +54,13 @@ type TrackingOptions struct {
 
 // SentEmail represents a sent email for debugging purposes.
 type SentEmail struct {
-	MessageID            string
-	FromEmailAddress     string
-	Destination          *Destination
-	Subject              string
-	Body                 string
-	ConfigurationSetName string
-	SentAt               time.Time
+	MessageID            string       `json:"MessageId"`
+	FromEmailAddress     string       `json:"FromEmailAddress"`
+	Destination          *Destination `json:"Destination,omitempty"`
+	Subject              string       `json:"Subject,omitempty"`
+	Body                 string       `json:"Body,omitempty"`
+	ConfigurationSetName string       `json:"ConfigurationSetName,omitempty"`
+	SentAt               time.Time    `json:"SentAt"`
 }
 
 // Destination represents email destinations.
@@ -217,6 +217,11 @@ type MessageTag struct {
 // SendEmailResponse is the response for SendEmail.
 type SendEmailResponse struct {
 	MessageID string `json:"MessageId,omitempty"`
+}
+
+// GetSentEmailsResponse is the response for GetSentEmails.
+type GetSentEmailsResponse struct {
+	SentEmails []*SentEmail `json:"SentEmails"`
 }
 
 // ErrorResponse represents an SES error response.

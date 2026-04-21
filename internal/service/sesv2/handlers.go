@@ -285,6 +285,20 @@ func (s *Service) SendEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetSentEmails handles the GetSentEmails operation.
+func (s *Service) GetSentEmails(w http.ResponseWriter, r *http.Request) {
+	emails, err := s.storage.GetSentEmails(r.Context())
+	if err != nil {
+		writeError(w, "InternalServiceError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, GetSentEmailsResponse{
+		SentEmails: emails,
+	})
+}
+
 // Helper functions.
 
 // readJSONRequest reads and decodes JSON request body.
