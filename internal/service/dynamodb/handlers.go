@@ -697,7 +697,95 @@ func (s *Service) actionHandlers() map[string]func(http.ResponseWriter, *http.Re
 		"DescribeTimeToLive": s.DescribeTimeToLive,
 		"TransactWriteItems": s.TransactWriteItems,
 		"TransactGetItems":   s.TransactGetItems,
+		"BatchWriteItem":     s.BatchWriteItem,
+		"BatchGetItem":       s.BatchGetItem,
 	}
+}
+
+// BatchWriteItem handles the BatchWriteItem action.
+func (s *Service) BatchWriteItem(w http.ResponseWriter, r *http.Request) {
+	var req BatchWriteItemRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.RequestItems) == 0 {
+		writeDynamoDBError(w, "ValidationException", "RequestItems is required", http.StatusBadRequest)
+
+		return
+	}
+
+	totalItems := 0
+	for _, reqs := range req.RequestItems {
+		totalItems += len(reqs)
+	}
+
+	if totalItems > 25 {
+		writeDynamoDBError(w, "ValidationException", "Too many items requested for the BatchWriteItem call", http.StatusBadRequest)
+
+		return
+	}
+
+	unprocessed, err := s.storage.BatchWriteItem(r.Context(), req.RequestItems)
+	if err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, BatchWriteItemResponse{UnprocessedItems: unprocessed})
+}
+
+// BatchGetItem handles the BatchGetItem action.
+func (s *Service) BatchGetItem(w http.ResponseWriter, r *http.Request) {
+	var req BatchGetItemRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeDynamoDBError(w, "SerializationException", "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if len(req.RequestItems) == 0 {
+		writeDynamoDBError(w, "ValidationException", "RequestItems is required", http.StatusBadRequest)
+
+		return
+	}
+
+	totalKeys := 0
+	for _, ka := range req.RequestItems {
+		totalKeys += len(ka.Keys)
+	}
+
+	if totalKeys > 100 {
+		writeDynamoDBError(w, "ValidationException", "Too many items requested for the BatchGetItem call", http.StatusBadRequest)
+
+		return
+	}
+
+	responses, err := s.storage.BatchGetItem(r.Context(), req.RequestItems)
+	if err != nil {
+		var tErr *TableError
+		if errors.As(err, &tErr) {
+			writeDynamoDBError(w, tErr.Code, tErr.Message, http.StatusBadRequest)
+
+			return
+		}
+
+		writeDynamoDBError(w, "InternalServerError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSONResponse(w, BatchGetItemResponse{Responses: responses})
 }
 
 // DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.

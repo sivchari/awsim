@@ -390,6 +390,51 @@ type TransactionCanceledResponse struct {
 	CancellationReasons []CancellationReason `json:"CancellationReasons"`
 }
 
+// BatchWriteItemRequest is the request for BatchWriteItem.
+type BatchWriteItemRequest struct {
+	RequestItems map[string][]WriteRequest `json:"RequestItems"`
+}
+
+// WriteRequest represents a single write request in a batch.
+type WriteRequest struct {
+	PutRequest    *BatchPutRequest    `json:"PutRequest,omitempty"`
+	DeleteRequest *BatchDeleteRequest `json:"DeleteRequest,omitempty"`
+}
+
+// BatchPutRequest represents a put request in a batch write.
+type BatchPutRequest struct {
+	Item Item `json:"Item"`
+}
+
+// BatchDeleteRequest represents a delete request in a batch write.
+type BatchDeleteRequest struct {
+	Key Item `json:"Key"`
+}
+
+// BatchWriteItemResponse is the response for BatchWriteItem.
+type BatchWriteItemResponse struct {
+	UnprocessedItems map[string][]WriteRequest `json:"UnprocessedItems,omitempty"`
+}
+
+// BatchGetItemRequest is the request for BatchGetItem.
+type BatchGetItemRequest struct {
+	RequestItems map[string]KeysAndAttributes `json:"RequestItems"`
+}
+
+// KeysAndAttributes represents keys and optional projection for batch get.
+type KeysAndAttributes struct {
+	Keys                     []Item            `json:"Keys"`
+	ProjectionExpression     string            `json:"ProjectionExpression,omitempty"`
+	ExpressionAttributeNames map[string]string `json:"ExpressionAttributeNames,omitempty"`
+	ConsistentRead           bool              `json:"ConsistentRead,omitempty"`
+}
+
+// BatchGetItemResponse is the response for BatchGetItem.
+type BatchGetItemResponse struct {
+	Responses       map[string][]Item            `json:"Responses,omitempty"`
+	UnprocessedKeys map[string]KeysAndAttributes `json:"UnprocessedKeys,omitempty"`
+}
+
 // ErrorResponse represents a DynamoDB error response in JSON format.
 type ErrorResponse struct {
 	Type    string `json:"__type"`
