@@ -440,7 +440,7 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 
 // Query queries items from a table.
 //
-//nolint:cyclop,funlen // Query has inherent complexity from DynamoDB protocol requirements.
+//nolint:cyclop,funlen,gocognit // Query has inherent complexity from DynamoDB protocol requirements.
 func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondExpr, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -902,7 +902,7 @@ func (m *MemoryStorage) TransactWriteItems(_ context.Context, items []TransactWr
 		m.applyTransactWriteItem(twi)
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // Success: nil CancellationReasons means no failures.
 }
 
 // validateTransactWriteItem validates a single write item's condition without applying changes.
