@@ -268,6 +268,81 @@ func TestSESv2_SendEmail(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("MessageId", "ResultMetadata")).Assert(t.Name(), sendOutput)
 }
 
+func TestSESv2_SendRawEmail(t *testing.T) {
+	client := newSESv2Client(t)
+	ctx := t.Context()
+
+	// Create email identity first.
+	emailIdentity := "raw-sender@example.com"
+	_, _ = client.CreateEmailIdentity(ctx, &sesv2.CreateEmailIdentityInput{
+		EmailIdentity: aws.String(emailIdentity),
+	})
+
+	// Build raw MIME message.
+	rawMessage := "From: raw-sender@example.com\r\n" +
+		"To: recipient@example.com\r\n" +
+		"Subject: Raw Test Subject\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"Raw test body content"
+
+	// Send raw email.
+	sendOutput, err := client.SendEmail(ctx, &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(emailIdentity),
+		Destination: &types.Destination{
+			ToAddresses: []string{"recipient@example.com"},
+		},
+		Content: &types.EmailContent{
+			Raw: &types.RawMessage{
+				Data: []byte(rawMessage),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("MessageId", "ResultMetadata")).Assert(t.Name()+"_send", sendOutput)
+
+	// Verify sent email via kumo-specific endpoint.
+	resp, err := http.Get("http://localhost:4566/kumo/ses/v2/sent-emails")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	emails, ok := result["SentEmails"].([]interface{})
+	if !ok {
+		t.Fatal("SentEmails is not an array")
+	}
+
+	var found bool
+	for _, e := range emails {
+		email, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if email["FromEmailAddress"] == emailIdentity && email["Subject"] == "Raw Test Subject" {
+			if email["Body"] != "Raw test body content" {
+				t.Errorf("expected body %q, got %q", "Raw test body content", email["Body"])
+			}
+			if email["RawData"] == nil {
+				t.Error("expected RawData to be present")
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("sent raw email from %s with subject 'Raw Test Subject' not found", emailIdentity)
+	}
+}
+
 func TestSESv2_EmailIdentityNotFound(t *testing.T) {
 	client := newSESv2Client(t)
 	ctx := t.Context()

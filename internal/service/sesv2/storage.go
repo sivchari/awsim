@@ -1,9 +1,14 @@
 package sesv2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"sync"
 	"time"
@@ -352,8 +357,17 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	// Generate message ID.
 	messageID := uuid.New().String()
 
-	// Extract subject and body from simple email content.
-	subject, body := extractSimpleEmailContent(req.Content.Simple)
+	// Extract content based on email type.
+	var subject, body string
+	var rawData []byte
+
+	switch {
+	case req.Content.Raw != nil:
+		rawData = req.Content.Raw.Data
+		subject, body = extractRawEmailContent(rawData)
+	case req.Content.Simple != nil:
+		subject, body = extractSimpleEmailContent(req.Content.Simple)
+	}
 
 	// Store the sent email.
 	sentEmail := &SentEmail{
@@ -362,6 +376,7 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 		Destination:          req.Destination,
 		Subject:              subject,
 		Body:                 body,
+		RawData:              rawData,
 		ConfigurationSetName: req.ConfigurationSetName,
 		SentAt:               time.Now(),
 	}
@@ -377,6 +392,45 @@ func (s *MemoryStorage) GetSentEmails(_ context.Context) ([]*SentEmail, error) {
 	defer s.mu.RUnlock()
 
 	return s.SentEmails, nil
+}
+
+// extractRawEmailContent parses an RFC 2822 MIME message and extracts subject and body.
+func extractRawEmailContent(data []byte) (subject, body string) {
+	msg, err := mail.ReadMessage(bytes.NewReader(data))
+	if err != nil {
+		return "", ""
+	}
+
+	subject = msg.Header.Get("Subject")
+
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
+		// Not multipart; read body directly.
+		b, err := io.ReadAll(msg.Body)
+		if err != nil {
+			return subject, ""
+		}
+		return subject, string(b)
+	}
+
+	// Multipart message: find text/plain or text/html part.
+	reader := multipart.NewReader(msg.Body, params["boundary"])
+	for {
+		part, err := reader.NextPart()
+		if err != nil {
+			break
+		}
+		partType, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		if partType == "text/plain" || partType == "text/html" {
+			b, err := io.ReadAll(part)
+			if err != nil {
+				continue
+			}
+			return subject, string(b)
+		}
+	}
+
+	return subject, ""
 }
 
 // extractSimpleEmailContent extracts subject and body from a SimpleEmail.
