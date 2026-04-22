@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.11.0](https://github.com/sivchari/kumo/compare/v0.10.0...v0.11.0) - 2026-04-22
+- feat: add DynamoDB ConditionExpression support by @sivchari in https://github.com/sivchari/kumo/pull/442
+- feat: add EventBridge event pattern matching and delivery tracking by @sivchari in https://github.com/sivchari/kumo/pull/445
+- feat: add DynamoDB TransactWriteItems/TransactGetItems support by @sivchari in https://github.com/sivchari/kumo/pull/448
+- feat: add DynamoDB BatchWriteItem/BatchGetItem support by @sivchari in https://github.com/sivchari/kumo/pull/444
+- feat: add DynamoDB Global Secondary Index (GSI) support by @sivchari in https://github.com/sivchari/kumo/pull/446
+- release v0.11.0 by @sivchari in https://github.com/sivchari/kumo/pull/449
+
 ## [v0.10.0](https://github.com/sivchari/kumo/compare/v0.9.0...v0.10.0) - 2026-04-21
 - feat(route53): add GetChange API by @apenney in https://github.com/sivchari/kumo/pull/430
 - feat(sesv2): add kumo-specific endpoint to retrieve sent emails by @sivchari in https://github.com/sivchari/kumo/pull/432
