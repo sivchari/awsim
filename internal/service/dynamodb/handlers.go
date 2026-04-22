@@ -680,42 +680,38 @@ func (s *Service) TransactGetItems(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, TransactGetItemsResponse{Responses: responses})
 }
 
+// actionHandlers returns a map of action names to handler functions.
+func (s *Service) actionHandlers() map[string]func(http.ResponseWriter, *http.Request) {
+	return map[string]func(http.ResponseWriter, *http.Request){
+		"CreateTable":        s.CreateTable,
+		"DeleteTable":        s.DeleteTable,
+		"ListTables":         s.ListTables,
+		"DescribeTable":      s.DescribeTable,
+		"PutItem":            s.PutItem,
+		"GetItem":            s.GetItem,
+		"DeleteItem":         s.DeleteItem,
+		"UpdateItem":         s.UpdateItem,
+		"Query":              s.Query,
+		"Scan":               s.Scan,
+		"UpdateTimeToLive":   s.UpdateTimeToLive,
+		"DescribeTimeToLive": s.DescribeTimeToLive,
+		"TransactWriteItems": s.TransactWriteItems,
+		"TransactGetItems":   s.TransactGetItems,
+	}
+}
+
 // DispatchAction routes the request to the appropriate handler based on X-Amz-Target header.
 // This method implements the JSONProtocolService interface.
 func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	target := r.Header.Get("X-Amz-Target")
 	action := strings.TrimPrefix(target, "DynamoDB_20120810.")
 
-	switch action {
-	case "CreateTable":
-		s.CreateTable(w, r)
-	case "DeleteTable":
-		s.DeleteTable(w, r)
-	case "ListTables":
-		s.ListTables(w, r)
-	case "DescribeTable":
-		s.DescribeTable(w, r)
-	case "PutItem":
-		s.PutItem(w, r)
-	case "GetItem":
-		s.GetItem(w, r)
-	case "DeleteItem":
-		s.DeleteItem(w, r)
-	case "UpdateItem":
-		s.UpdateItem(w, r)
-	case "Query":
-		s.Query(w, r)
-	case "Scan":
-		s.Scan(w, r)
-	case "UpdateTimeToLive":
-		s.UpdateTimeToLive(w, r)
-	case "DescribeTimeToLive":
-		s.DescribeTimeToLive(w, r)
-	case "TransactWriteItems":
-		s.TransactWriteItems(w, r)
-	case "TransactGetItems":
-		s.TransactGetItems(w, r)
-	default:
+	handler, ok := s.actionHandlers()[action]
+	if !ok {
 		writeDynamoDBError(w, "UnknownOperationException", "The action "+action+" is not valid", http.StatusBadRequest)
+
+		return
 	}
+
+	handler(w, r)
 }
