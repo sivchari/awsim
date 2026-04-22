@@ -1073,6 +1073,95 @@ func TestDynamoDB_TransactGetItems(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name(), result)
 }
 
+func TestDynamoDB_GlobalSecondaryIndex(t *testing.T) {
+	client := newDynamoDBClient(t)
+	ctx := t.Context()
+	tableName := "test-table-gsi"
+
+	// Create table with GSI.
+	createOutput, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String(tableName),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+			{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange},
+		},
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("gsi_pk"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		GlobalSecondaryIndexes: []types.GlobalSecondaryIndex{
+			{
+				IndexName: aws.String("gsi-index"),
+				KeySchema: []types.KeySchemaElement{
+					{AttributeName: aws.String("gsi_pk"), KeyType: types.KeyTypeHash},
+				},
+				Projection: &types.Projection{
+					ProjectionType: types.ProjectionTypeAll,
+				},
+			},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("TableArn", "TableId", "CreationDateTime", "ResultMetadata", "IndexArn")).Assert(t.Name()+"_create", createOutput)
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{
+			TableName: aws.String(tableName),
+		})
+	})
+
+	// Put items with GSI key.
+	for _, item := range []struct{ pk, sk, gsiPK, data string }{
+		{"user-1", "order-1", "region-east", "data1"},
+		{"user-1", "order-2", "region-west", "data2"},
+		{"user-2", "order-3", "region-east", "data3"},
+	} {
+		_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(tableName),
+			Item: map[string]types.AttributeValue{
+				"pk":     &types.AttributeValueMemberS{Value: item.pk},
+				"sk":     &types.AttributeValueMemberS{Value: item.sk},
+				"gsi_pk": &types.AttributeValueMemberS{Value: item.gsiPK},
+				"data":   &types.AttributeValueMemberS{Value: item.data},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Query via GSI.
+	queryOutput, err := client.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(tableName),
+		IndexName:              aws.String("gsi-index"),
+		KeyConditionExpression: aws.String("gsi_pk = :val"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":val": &types.AttributeValueMemberS{Value: "region-east"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_query_gsi", queryOutput)
+
+	// Query via table primary key still works.
+	queryTableOutput, err := client.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(tableName),
+		KeyConditionExpression: aws.String("pk = :val"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":val": &types.AttributeValueMemberS{Value: "user-1"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_query_table", queryTableOutput)
+}
+
 func TestDynamoDB_BatchWriteItem(t *testing.T) {
 	client := newDynamoDBClient(t)
 	ctx := t.Context()

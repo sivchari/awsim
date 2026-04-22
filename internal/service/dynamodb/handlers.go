@@ -370,6 +370,7 @@ func (s *Service) Query(w http.ResponseWriter, r *http.Request) {
 	items, lastKey, scannedCount, err := s.storage.Query(
 		r.Context(),
 		req.TableName,
+		req.IndexName,
 		req.KeyConditionExpression,
 		req.FilterExpression,
 		req.ExpressionAttributeNames,
@@ -470,6 +471,27 @@ func tableToDescription(table *Table) TableDescription {
 		desc.BillingModeSummary = &BillingModeSummary{
 			BillingMode: table.BillingMode,
 		}
+	}
+
+	for _, gsi := range table.GlobalSecondaryIndexes {
+		gsiDesc := GlobalSecondaryIndexDescription{
+			IndexName:      gsi.IndexName,
+			KeySchema:      gsi.KeySchema,
+			Projection:     gsi.Projection,
+			IndexStatus:    "ACTIVE",
+			IndexArn:       fmt.Sprintf("%s/index/%s", table.TableARN, gsi.IndexName),
+			ItemCount:      table.ItemCount,
+			IndexSizeBytes: table.TableSizeBytes,
+		}
+
+		if gsi.ProvisionedThroughput != nil {
+			gsiDesc.ProvisionedThroughput = &ProvisionedThroughputDescription{
+				ReadCapacityUnits:  gsi.ProvisionedThroughput.ReadCapacityUnits,
+				WriteCapacityUnits: gsi.ProvisionedThroughput.WriteCapacityUnits,
+			}
+		}
+
+		desc.GlobalSecondaryIndexes = append(desc.GlobalSecondaryIndexes, gsiDesc)
 	}
 
 	return desc

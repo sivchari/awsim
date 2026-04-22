@@ -29,7 +29,7 @@ type Storage interface {
 	GetItem(ctx context.Context, tableName string, key Item) (Item, error)
 	DeleteItem(ctx context.Context, tableName string, key Item, returnOld bool, cond ConditionInput) (Item, error)
 	UpdateItem(ctx context.Context, tableName string, key Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, returnValues string, cond ConditionInput) (Item, error)
-	Query(ctx context.Context, tableName string, keyCondExpr string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error)
+	Query(ctx context.Context, tableName, indexName string, keyCondExpr string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error)
 	Scan(ctx context.Context, tableName string, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item) ([]Item, Item, int, error)
 	TransactWriteItems(ctx context.Context, items []TransactWriteItem) ([]CancellationReason, error)
 	TransactGetItems(ctx context.Context, items []TransactGetItem) ([]Item, error)
@@ -151,17 +151,18 @@ func (m *MemoryStorage) CreateTable(_ context.Context, req *CreateTableRequest) 
 	}
 
 	table := &Table{
-		Name:                  req.TableName,
-		KeySchema:             req.KeySchema,
-		AttributeDefinitions:  req.AttributeDefinitions,
-		ProvisionedThroughput: req.ProvisionedThroughput,
-		CreationDateTime:      time.Now(),
-		TableStatus:           "ACTIVE",
-		ItemCount:             0,
-		TableSizeBytes:        0,
-		TableARN:              fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", defaultRegion, defaultAccountID, req.TableName),
-		BillingMode:           billingMode,
-		DeletionProtection:    req.DeletionProtectionEnabled,
+		Name:                   req.TableName,
+		KeySchema:              req.KeySchema,
+		AttributeDefinitions:   req.AttributeDefinitions,
+		ProvisionedThroughput:  req.ProvisionedThroughput,
+		GlobalSecondaryIndexes: req.GlobalSecondaryIndexes,
+		CreationDateTime:       time.Now(),
+		TableStatus:            "ACTIVE",
+		ItemCount:              0,
+		TableSizeBytes:         0,
+		TableARN:               fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", defaultRegion, defaultAccountID, req.TableName),
+		BillingMode:            billingMode,
+		DeletionProtection:     req.DeletionProtectionEnabled,
 	}
 
 	m.Tables[req.TableName] = &tableData{
@@ -440,7 +441,7 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 // Query queries items from a table.
 //
 //nolint:cyclop,funlen // Query has inherent complexity from DynamoDB protocol requirements.
-func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error) {
+func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondExpr, filterExpr string, exprNames map[string]string, exprValues map[string]AttributeValue, limit int, exclusiveStartKey Item, scanForward bool) ([]Item, Item, int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -452,10 +453,33 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, keyCondExpr, filterE
 		}
 	}
 
-	// Get partition key attribute name.
+	// Determine key schema to use (table or GSI).
+	keySchema := td.Table.KeySchema
+
+	if indexName != "" {
+		found := false
+
+		for _, gsi := range td.Table.GlobalSecondaryIndexes {
+			if gsi.IndexName == indexName {
+				keySchema = gsi.KeySchema
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			return nil, nil, 0, &TableError{
+				Code:    "ValidationException",
+				Message: fmt.Sprintf("The table does not have the specified index: %s", indexName),
+			}
+		}
+	}
+
+	// Get partition key attribute name from the resolved key schema.
 	var partitionKeyName string
 
-	for _, ks := range td.Table.KeySchema {
+	for _, ks := range keySchema {
 		if ks.KeyType == "HASH" {
 			partitionKeyName = ks.AttributeName
 
