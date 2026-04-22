@@ -287,7 +287,7 @@ func TestSESv2_SendRawEmail(t *testing.T) {
 		"Raw test body content"
 
 	// Send raw email.
-	sendOutput, err := client.SendEmail(ctx, &sesv2.SendEmailInput{
+	_, err := client.SendEmail(ctx, &sesv2.SendEmailInput{
 		FromEmailAddress: aws.String(emailIdentity),
 		Destination: &types.Destination{
 			ToAddresses: []string{"recipient@example.com"},
@@ -301,7 +301,6 @@ func TestSESv2_SendRawEmail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	golden.New(t, golden.WithIgnoreFields("MessageId", "ResultMetadata")).Assert(t.Name()+"_send", sendOutput)
 
 	// Verify sent email via kumo-specific endpoint.
 	resp, err := http.Get("http://localhost:4566/kumo/ses/v2/sent-emails")
@@ -310,37 +309,16 @@ func TestSESv2_SendRawEmail(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result struct {
+		SentEmails []json.RawMessage `json:"SentEmails"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
 
-	emails, ok := result["SentEmails"].([]interface{})
-	if !ok {
-		t.Fatal("SentEmails is not an array")
-	}
-
-	var found bool
-	for _, e := range emails {
-		email, ok := e.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if email["FromEmailAddress"] == emailIdentity && email["Subject"] == "Raw Test Subject" {
-			if email["Body"] != "Raw test body content" {
-				t.Errorf("expected body %q, got %q", "Raw test body content", email["Body"])
-			}
-			if email["RawData"] == nil {
-				t.Error("expected RawData to be present")
-			}
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("sent raw email from %s with subject 'Raw Test Subject' not found", emailIdentity)
-	}
+	// Find the raw email sent in this test (other tests may have sent emails too).
+	raw := findSentEmail(t, result.SentEmails, emailIdentity, "Raw Test Subject")
+	golden.New(t, golden.WithIgnoreFields("MessageId", "SentAt")).Assert(t.Name(), raw)
 }
 
 func TestSESv2_EmailIdentityNotFound(t *testing.T) {
@@ -442,4 +420,23 @@ func TestSESv2_GetSentEmails(t *testing.T) {
 	if !found {
 		t.Errorf("sent email from %s with subject 'Test Subject' not found", fromEmail)
 	}
+}
+
+func findSentEmail(t *testing.T, emails []json.RawMessage, from, subject string) json.RawMessage {
+	t.Helper()
+
+	for _, raw := range emails {
+		var email map[string]interface{}
+		if err := json.Unmarshal(raw, &email); err != nil {
+			continue
+		}
+
+		if email["FromEmailAddress"] == from && email["Subject"] == subject {
+			return raw
+		}
+	}
+
+	t.Fatalf("sent email from %s with subject %q not found", from, subject)
+
+	return nil
 }
