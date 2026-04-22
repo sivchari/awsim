@@ -36,8 +36,9 @@ func (s *Service) TargetPrefix() string {
 func (s *Service) JSONProtocol() {}
 
 // RegisterRoutes registers the service routes.
-func (s *Service) RegisterRoutes(_ service.Router) {
-	// Routes are handled via X-Amz-Target header dispatching.
+func (s *Service) RegisterRoutes(r service.Router) {
+	// kumo-specific endpoint for testing.
+	r.HandleFunc("GET", "/kumo/eventbridge/delivered-events", s.GetDeliveredEvents)
 }
 
 func init() {

@@ -3,6 +3,9 @@
 package integration
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -323,6 +326,102 @@ func TestEventBridge_DeleteEventBus(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for deleted event bus")
+	}
+}
+
+func TestEventBridge_PutEvents_Delivery(t *testing.T) {
+	client := newEventBridgeClient(t)
+	ctx := t.Context()
+
+	// Create rule with event pattern.
+	_, err := client.PutRule(ctx, &eventbridge.PutRuleInput{
+		Name:         aws.String("delivery-test-rule"),
+		EventPattern: aws.String(`{"source": ["order.service"], "detail-type": ["OrderCreated"]}`),
+		State:        types.RuleStateEnabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add target to rule.
+	_, err = client.PutTargets(ctx, &eventbridge.PutTargetsInput{
+		Rule: aws.String("delivery-test-rule"),
+		Targets: []types.Target{
+			{
+				Id:  aws.String("sqs-target"),
+				Arn: aws.String("arn:aws:sqs:us-east-1:000000000000:order-queue"),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put matching event.
+	_, err = client.PutEvents(ctx, &eventbridge.PutEventsInput{
+		Entries: []types.PutEventsRequestEntry{
+			{
+				Source:     aws.String("order.service"),
+				DetailType: aws.String("OrderCreated"),
+				Detail:     aws.String(`{"orderId": "123"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put non-matching event.
+	_, err = client.PutEvents(ctx, &eventbridge.PutEventsInput{
+		Entries: []types.PutEventsRequestEntry{
+			{
+				Source:     aws.String("other.service"),
+				DetailType: aws.String("SomethingElse"),
+				Detail:     aws.String(`{"data": "ignored"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check delivered events via kumo endpoint.
+	resp, err := http.Get("http://localhost:4566/kumo/eventbridge/delivered-events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var delivered []struct {
+		Source     string `json:"Source"`
+		DetailType string `json:"DetailType"`
+		RuleName   string `json:"RuleName"`
+		TargetID   string `json:"TargetId"`
+		TargetArn  string `json:"TargetArn"`
+	}
+
+	if err := json.Unmarshal(body, &delivered); err != nil {
+		t.Fatal(err)
+	}
+
+	// Find our delivery.
+	found := false
+
+	for _, d := range delivered {
+		if d.Source == "order.service" && d.RuleName == "delivery-test-rule" && d.TargetID == "sqs-target" {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected matching event to be delivered to sqs-target, got: %s", string(body))
 	}
 }
 

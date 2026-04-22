@@ -45,6 +45,7 @@ type Storage interface {
 
 	// Event operations.
 	PutEvents(ctx context.Context, entries []PutEventsRequestEntry) ([]PutEventsResultEntry, error)
+	GetDeliveredEvents(ctx context.Context) []DeliveredEvent
 
 	// DispatchAction dispatches the request to the appropriate handler.
 	DispatchAction(action string) bool
@@ -68,13 +69,14 @@ var (
 
 // MemoryStorage implements Storage with in-memory data.
 type MemoryStorage struct {
-	mu         sync.RWMutex                    `json:"-"`
-	EventBuses map[string]*EventBus            `json:"eventBuses"`
-	Rules      map[string]map[string]*Rule     `json:"rules"`
-	Targets    map[string]map[string][]*Target `json:"targets"`
-	region     string
-	accountID  string
-	dataDir    string
+	mu              sync.RWMutex                    `json:"-"`
+	EventBuses      map[string]*EventBus            `json:"eventBuses"`
+	Rules           map[string]map[string]*Rule     `json:"rules"`
+	Targets         map[string]map[string][]*Target `json:"targets"`
+	DeliveredEvents []DeliveredEvent                `json:"deliveredEvents"`
+	region          string
+	accountID       string
+	dataDir         string
 }
 
 // NewMemoryStorage creates a new in-memory storage.
@@ -502,18 +504,77 @@ func (s *MemoryStorage) ListTargetsByRule(_ context.Context, eventBusName, ruleN
 	return targets, "", nil
 }
 
-// PutEvents puts events to the event bus.
+// PutEvents puts events to the event bus, matches against rules, and records deliveries.
 func (s *MemoryStorage) PutEvents(_ context.Context, entries []PutEventsRequestEntry) ([]PutEventsResultEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	results := make([]PutEventsResultEntry, len(entries))
 
-	for i := range entries {
-		// Generate event ID for successful entries.
-		results[i] = PutEventsResultEntry{
-			EventID: uuid.New().String(),
+	for i, entry := range entries {
+		eventID := uuid.New().String()
+		results[i] = PutEventsResultEntry{EventID: eventID}
+
+		eventBusName := entry.EventBusName
+		if eventBusName == "" {
+			eventBusName = defaultEventBusName
 		}
+
+		s.matchAndDeliver(eventID, eventBusName, entry)
 	}
 
 	return results, nil
+}
+
+// matchAndDeliver matches an event against rules and records deliveries. Must be called under lock.
+func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry PutEventsRequestEntry) {
+	rules, exists := s.Rules[eventBusName]
+	if !exists {
+		return
+	}
+
+	for _, rule := range rules {
+		if rule.State != RuleStateEnabled {
+			continue
+		}
+
+		if !matchEventPattern(rule.EventPattern, entry) {
+			continue
+		}
+
+		targetKey := eventBusName + ":" + rule.Name
+		ruleTargets := s.Targets[targetKey][rule.Name]
+
+		var eventTime string
+		if entry.Time != nil {
+			eventTime = entry.Time.Format(time.RFC3339)
+		}
+
+		for _, target := range ruleTargets {
+			s.DeliveredEvents = append(s.DeliveredEvents, DeliveredEvent{
+				EventID:      eventID,
+				Source:       entry.Source,
+				DetailType:   entry.DetailType,
+				Detail:       entry.Detail,
+				EventBusName: eventBusName,
+				RuleName:     rule.Name,
+				TargetID:     target.ID,
+				TargetArn:    target.Arn,
+				Time:         eventTime,
+			})
+		}
+	}
+}
+
+// GetDeliveredEvents returns all delivered events.
+func (s *MemoryStorage) GetDeliveredEvents(_ context.Context) []DeliveredEvent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]DeliveredEvent, len(s.DeliveredEvents))
+	copy(result, s.DeliveredEvents)
+
+	return result
 }
 
 // DispatchAction checks if the action is valid.

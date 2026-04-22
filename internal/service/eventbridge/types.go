@@ -284,6 +284,19 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// DeliveredEvent represents an event that was matched to a rule and delivered to a target.
+type DeliveredEvent struct {
+	EventID      string `json:"EventId"`
+	Source       string `json:"Source"`
+	DetailType   string `json:"DetailType"`
+	Detail       string `json:"Detail,omitempty"`
+	EventBusName string `json:"EventBusName"`
+	RuleName     string `json:"RuleName"`
+	TargetID     string `json:"TargetId"`
+	TargetArn    string `json:"TargetArn"`
+	Time         string `json:"Time,omitempty"`
+}
+
 // ServiceError represents a service-level error.
 type ServiceError struct {
 	Code    string
