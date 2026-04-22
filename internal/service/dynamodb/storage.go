@@ -1020,7 +1020,7 @@ func (m *MemoryStorage) BatchWriteItem(_ context.Context, requestItems map[strin
 	}
 
 	// kumo processes all items; never returns UnprocessedItems.
-	return nil, nil
+	return nil, nil //nolint:nilnil // Intentional: nil UnprocessedItems means all items were processed.
 }
 
 // BatchGetItem retrieves multiple items across tables.
