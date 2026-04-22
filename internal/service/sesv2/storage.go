@@ -358,8 +358,10 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	messageID := uuid.New().String()
 
 	// Extract content based on email type.
-	var subject, body string
-	var rawData []byte
+	var (
+		subject, body string
+		rawData       []byte
+	)
 
 	switch {
 	case req.Content.Raw != nil:
@@ -410,22 +412,27 @@ func extractRawEmailContent(data []byte) (subject, body string) {
 		if err != nil {
 			return subject, ""
 		}
+
 		return subject, string(b)
 	}
 
 	// Multipart message: find text/plain or text/html part.
 	reader := multipart.NewReader(msg.Body, params["boundary"])
+
 	for {
 		part, err := reader.NextPart()
 		if err != nil {
 			break
 		}
+
 		partType, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+
 		if partType == "text/plain" || partType == "text/html" {
 			b, err := io.ReadAll(part)
 			if err != nil {
 				continue
 			}
+
 			return subject, string(b)
 		}
 	}
