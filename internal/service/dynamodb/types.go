@@ -60,21 +60,48 @@ type ProvisionedThroughputDescription struct {
 	NumberOfDecreasesToday int64  `json:"NumberOfDecreasesToday"`
 }
 
+// Projection represents a GSI projection.
+type Projection struct {
+	ProjectionType   string   `json:"ProjectionType"`
+	NonKeyAttributes []string `json:"NonKeyAttributes,omitempty"`
+}
+
+// GlobalSecondaryIndex represents a GSI definition in CreateTable requests.
+type GlobalSecondaryIndex struct {
+	IndexName             string                 `json:"IndexName"`
+	KeySchema             []KeySchemaElement     `json:"KeySchema"`
+	Projection            Projection             `json:"Projection"`
+	ProvisionedThroughput *ProvisionedThroughput `json:"ProvisionedThroughput,omitempty"`
+}
+
+// GlobalSecondaryIndexDescription represents a GSI in DescribeTable responses.
+type GlobalSecondaryIndexDescription struct {
+	IndexName             string                            `json:"IndexName"`
+	KeySchema             []KeySchemaElement                `json:"KeySchema"`
+	Projection            Projection                        `json:"Projection"`
+	IndexStatus           string                            `json:"IndexStatus"`
+	IndexArn              string                            `json:"IndexArn"`
+	ItemCount             int64                             `json:"ItemCount"`
+	IndexSizeBytes        int64                             `json:"IndexSizeBytes"`
+	ProvisionedThroughput *ProvisionedThroughputDescription `json:"ProvisionedThroughput,omitempty"`
+}
+
 // Table represents a DynamoDB table.
 type Table struct {
-	Name                  string
-	KeySchema             []KeySchemaElement
-	AttributeDefinitions  []AttributeDefinition
-	ProvisionedThroughput *ProvisionedThroughput
-	CreationDateTime      time.Time
-	TableStatus           string
-	ItemCount             int64
-	TableSizeBytes        int64
-	TableARN              string
-	BillingMode           string
-	DeletionProtection    bool
-	TTLAttributeName      string
-	TTLEnabled            bool
+	Name                   string
+	KeySchema              []KeySchemaElement
+	AttributeDefinitions   []AttributeDefinition
+	ProvisionedThroughput  *ProvisionedThroughput
+	GlobalSecondaryIndexes []GlobalSecondaryIndex
+	CreationDateTime       time.Time
+	TableStatus            string
+	ItemCount              int64
+	TableSizeBytes         int64
+	TableARN               string
+	BillingMode            string
+	DeletionProtection     bool
+	TTLAttributeName       string
+	TTLEnabled             bool
 }
 
 // TableDescription represents a table description in responses.
@@ -87,6 +114,7 @@ type TableDescription struct {
 	KeySchema                 []KeySchemaElement                `json:"KeySchema"`
 	AttributeDefinitions      []AttributeDefinition             `json:"AttributeDefinitions"`
 	ProvisionedThroughput     *ProvisionedThroughputDescription `json:"ProvisionedThroughput,omitempty"`
+	GlobalSecondaryIndexes    []GlobalSecondaryIndexDescription `json:"GlobalSecondaryIndexes,omitempty"`
 	ItemCount                 int64                             `json:"ItemCount"`
 	TableSizeBytes            int64                             `json:"TableSizeBytes"`
 	BillingModeSummary        *BillingModeSummary               `json:"BillingModeSummary,omitempty"`
@@ -110,6 +138,7 @@ type CreateTableRequest struct {
 	KeySchema                 []KeySchemaElement     `json:"KeySchema"`
 	AttributeDefinitions      []AttributeDefinition  `json:"AttributeDefinitions"`
 	ProvisionedThroughput     *ProvisionedThroughput `json:"ProvisionedThroughput,omitempty"`
+	GlobalSecondaryIndexes    []GlobalSecondaryIndex `json:"GlobalSecondaryIndexes,omitempty"`
 	BillingMode               string                 `json:"BillingMode,omitempty"`
 	DeletionProtectionEnabled bool                   `json:"DeletionProtectionEnabled,omitempty"`
 }
@@ -214,6 +243,7 @@ type UpdateItemResponse struct {
 // QueryRequest is the request for Query.
 type QueryRequest struct {
 	TableName                 string                    `json:"TableName"`
+	IndexName                 string                    `json:"IndexName,omitempty"`
 	KeyConditionExpression    string                    `json:"KeyConditionExpression,omitempty"`
 	FilterExpression          string                    `json:"FilterExpression,omitempty"`
 	ProjectionExpression      string                    `json:"ProjectionExpression,omitempty"`
