@@ -959,7 +959,6 @@ func (m *MemoryStorage) applyTransactWriteItem(twi TransactWriteItem) {
 
 		td.Items[key] = item
 	case twi.ConditionCheck != nil:
-		// No mutation needed.
 	}
 }
 
