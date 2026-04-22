@@ -921,7 +921,7 @@ func (m *MemoryStorage) checkTransactCondition(tableName string, keyOrItem Item,
 
 	ok, err := evaluateCondition(existing, cond)
 	if err != nil {
-		return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil
+		return &CancellationReason{Code: "ValidationError", Message: err.Error()}, nil //nolint:nilerr // Condition error is returned as cancellation reason, not as error.
 	}
 
 	if !ok {
@@ -958,7 +958,6 @@ func (m *MemoryStorage) applyTransactWriteItem(twi TransactWriteItem) {
 		}
 
 		td.Items[key] = item
-
 	case twi.ConditionCheck != nil:
 		// No mutation needed.
 	}

@@ -173,7 +173,7 @@ func TestConditionThroughStorage(t *testing.T) {
 	}
 }
 
-//nolint:cyclop // Test function exercises multiple transaction operations sequentially.
+//nolint:cyclop,funlen // Test function exercises multiple transaction operations sequentially.
 func TestTransactWriteItems(t *testing.T) {
 	t.Parallel()
 
@@ -253,7 +253,7 @@ func TestTransactWriteItems(t *testing.T) {
 	}
 
 	// Transaction with Update and ConditionCheck.
-	reasons, err = s.TransactWriteItems(ctx, []TransactWriteItem{
+	_, err = s.TransactWriteItems(ctx, []TransactWriteItem{
 		{Update: &TransactUpdate{
 			TableName:        "accounts",
 			Key:              Item{"id": {S: ptr("acc-1")}},
@@ -279,7 +279,7 @@ func TestTransactWriteItems(t *testing.T) {
 	}
 
 	// Transaction with Delete.
-	reasons, err = s.TransactWriteItems(ctx, []TransactWriteItem{
+	_, err = s.TransactWriteItems(ctx, []TransactWriteItem{
 		{Delete: &TransactDelete{
 			TableName: "accounts",
 			Key:       Item{"id": {S: ptr("acc-2")}},
