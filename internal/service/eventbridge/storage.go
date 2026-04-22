@@ -520,14 +520,14 @@ func (s *MemoryStorage) PutEvents(_ context.Context, entries []PutEventsRequestE
 			eventBusName = defaultEventBusName
 		}
 
-		s.matchAndDeliver(eventID, eventBusName, entry)
+		s.matchAndDeliver(eventID, eventBusName, &entry)
 	}
 
 	return results, nil
 }
 
 // matchAndDeliver matches an event against rules and records deliveries. Must be called under lock.
-func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry PutEventsRequestEntry) {
+func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry *PutEventsRequestEntry) {
 	rules, exists := s.Rules[eventBusName]
 	if !exists {
 		return

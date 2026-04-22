@@ -376,6 +376,7 @@ func (s *Service) PutEvents(w http.ResponseWriter, r *http.Request) {
 // This is a kumo-specific endpoint for test verification.
 func (s *Service) GetDeliveredEvents(w http.ResponseWriter, r *http.Request) {
 	events := s.storage.GetDeliveredEvents(r.Context())
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(events)
