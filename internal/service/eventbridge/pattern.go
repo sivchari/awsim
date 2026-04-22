@@ -9,7 +9,7 @@ import (
 // EventPattern is a JSON object where each key maps to an array of acceptable values.
 // An event matches if ALL keys in the pattern match.
 // For each key, the event's value must match at least one value in the pattern array.
-func matchEventPattern(patternJSON string, event PutEventsRequestEntry) bool {
+func matchEventPattern(patternJSON string, event *PutEventsRequestEntry) bool {
 	if patternJSON == "" {
 		return true
 	}

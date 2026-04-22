@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+//nolint:funlen // Table-driven test with comprehensive pattern matching coverage.
 func TestMatchEventPattern(t *testing.T) {
 	t.Parallel()
 
@@ -97,7 +98,7 @@ func TestMatchEventPattern(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := matchEventPattern(tt.pattern, tt.event)
+			got := matchEventPattern(tt.pattern, &tt.event)
 			if got != tt.want {
 				t.Errorf("matchEventPattern() = %v, want %v", got, tt.want)
 			}
