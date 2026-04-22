@@ -902,7 +902,7 @@ func (m *MemoryStorage) TransactWriteItems(_ context.Context, items []TransactWr
 		m.applyTransactWriteItem(twi)
 	}
 
-	return nil, nil //nolint:nilnil // Success: nil CancellationReasons means no failures.
+	return nil, nil // Success: nil CancellationReasons means no failures.
 }
 
 // validateTransactWriteItem validates a single write item's condition without applying changes.
