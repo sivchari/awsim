@@ -446,6 +446,8 @@ func (s *Service) Scan(w http.ResponseWriter, r *http.Request) {
 }
 
 // tableToDescription converts a Table to TableDescription.
+//
+//nolint:funlen // Struct initialization with GSI/LSI conversion requires many statements.
 func tableToDescription(table *Table) TableDescription {
 	desc := TableDescription{
 		TableName:                 table.Name,
@@ -492,6 +494,19 @@ func tableToDescription(table *Table) TableDescription {
 		}
 
 		desc.GlobalSecondaryIndexes = append(desc.GlobalSecondaryIndexes, gsiDesc)
+	}
+
+	for _, lsi := range table.LocalSecondaryIndexes {
+		lsiDesc := LocalSecondaryIndexDescription{
+			IndexName:      lsi.IndexName,
+			KeySchema:      lsi.KeySchema,
+			Projection:     lsi.Projection,
+			IndexArn:       fmt.Sprintf("%s/index/%s", table.TableARN, lsi.IndexName),
+			ItemCount:      table.ItemCount,
+			IndexSizeBytes: table.TableSizeBytes,
+		}
+
+		desc.LocalSecondaryIndexes = append(desc.LocalSecondaryIndexes, lsiDesc)
 	}
 
 	return desc

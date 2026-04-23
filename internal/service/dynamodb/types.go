@@ -74,6 +74,23 @@ type GlobalSecondaryIndex struct {
 	ProvisionedThroughput *ProvisionedThroughput `json:"ProvisionedThroughput,omitempty"`
 }
 
+// LocalSecondaryIndex represents an LSI definition in CreateTable requests.
+type LocalSecondaryIndex struct {
+	IndexName  string             `json:"IndexName"`
+	KeySchema  []KeySchemaElement `json:"KeySchema"`
+	Projection Projection         `json:"Projection"`
+}
+
+// LocalSecondaryIndexDescription represents an LSI in DescribeTable responses.
+type LocalSecondaryIndexDescription struct {
+	IndexName      string             `json:"IndexName"`
+	KeySchema      []KeySchemaElement `json:"KeySchema"`
+	Projection     Projection         `json:"Projection"`
+	IndexArn       string             `json:"IndexArn"`
+	ItemCount      int64              `json:"ItemCount"`
+	IndexSizeBytes int64              `json:"IndexSizeBytes"`
+}
+
 // GlobalSecondaryIndexDescription represents a GSI in DescribeTable responses.
 type GlobalSecondaryIndexDescription struct {
 	IndexName             string                            `json:"IndexName"`
@@ -93,6 +110,7 @@ type Table struct {
 	AttributeDefinitions   []AttributeDefinition
 	ProvisionedThroughput  *ProvisionedThroughput
 	GlobalSecondaryIndexes []GlobalSecondaryIndex
+	LocalSecondaryIndexes  []LocalSecondaryIndex
 	CreationDateTime       time.Time
 	TableStatus            string
 	ItemCount              int64
@@ -115,6 +133,7 @@ type TableDescription struct {
 	AttributeDefinitions      []AttributeDefinition             `json:"AttributeDefinitions"`
 	ProvisionedThroughput     *ProvisionedThroughputDescription `json:"ProvisionedThroughput,omitempty"`
 	GlobalSecondaryIndexes    []GlobalSecondaryIndexDescription `json:"GlobalSecondaryIndexes,omitempty"`
+	LocalSecondaryIndexes     []LocalSecondaryIndexDescription  `json:"LocalSecondaryIndexes,omitempty"`
 	ItemCount                 int64                             `json:"ItemCount"`
 	TableSizeBytes            int64                             `json:"TableSizeBytes"`
 	BillingModeSummary        *BillingModeSummary               `json:"BillingModeSummary,omitempty"`
@@ -139,6 +158,7 @@ type CreateTableRequest struct {
 	AttributeDefinitions      []AttributeDefinition  `json:"AttributeDefinitions"`
 	ProvisionedThroughput     *ProvisionedThroughput `json:"ProvisionedThroughput,omitempty"`
 	GlobalSecondaryIndexes    []GlobalSecondaryIndex `json:"GlobalSecondaryIndexes,omitempty"`
+	LocalSecondaryIndexes     []LocalSecondaryIndex  `json:"LocalSecondaryIndexes,omitempty"`
 	BillingMode               string                 `json:"BillingMode,omitempty"`
 	DeletionProtectionEnabled bool                   `json:"DeletionProtectionEnabled,omitempty"`
 }

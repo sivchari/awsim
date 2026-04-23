@@ -156,6 +156,7 @@ func (m *MemoryStorage) CreateTable(_ context.Context, req *CreateTableRequest) 
 		AttributeDefinitions:   req.AttributeDefinitions,
 		ProvisionedThroughput:  req.ProvisionedThroughput,
 		GlobalSecondaryIndexes: req.GlobalSecondaryIndexes,
+		LocalSecondaryIndexes:  req.LocalSecondaryIndexes,
 		CreationDateTime:       time.Now(),
 		TableStatus:            "ACTIVE",
 		ItemCount:              0,
@@ -438,6 +439,32 @@ func (m *MemoryStorage) UpdateItem(_ context.Context, tableName string, key Item
 	}
 }
 
+// resolveKeySchema returns the key schema for the given index name.
+// If indexName is empty, the table's key schema is returned.
+// It searches both GSIs and LSIs.
+func resolveKeySchema(table *Table, indexName string) ([]KeySchemaElement, error) {
+	if indexName == "" {
+		return table.KeySchema, nil
+	}
+
+	for _, gsi := range table.GlobalSecondaryIndexes {
+		if gsi.IndexName == indexName {
+			return gsi.KeySchema, nil
+		}
+	}
+
+	for _, lsi := range table.LocalSecondaryIndexes {
+		if lsi.IndexName == indexName {
+			return lsi.KeySchema, nil
+		}
+	}
+
+	return nil, &TableError{
+		Code:    "ValidationException",
+		Message: fmt.Sprintf("The table does not have the specified index: %s", indexName),
+	}
+}
+
 // Query queries items from a table.
 //
 //nolint:cyclop,funlen,gocognit // Query has inherent complexity from DynamoDB protocol requirements.
@@ -453,27 +480,10 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 		}
 	}
 
-	// Determine key schema to use (table or GSI).
-	keySchema := td.Table.KeySchema
-
-	if indexName != "" {
-		found := false
-
-		for _, gsi := range td.Table.GlobalSecondaryIndexes {
-			if gsi.IndexName == indexName {
-				keySchema = gsi.KeySchema
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
-			return nil, nil, 0, &TableError{
-				Code:    "ValidationException",
-				Message: fmt.Sprintf("The table does not have the specified index: %s", indexName),
-			}
-		}
+	// Determine key schema to use (table, GSI, or LSI).
+	keySchema, err := resolveKeySchema(td.Table, indexName)
+	if err != nil {
+		return nil, nil, 0, err
 	}
 
 	// Get partition key attribute name from the resolved key schema.
