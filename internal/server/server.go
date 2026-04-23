@@ -8,12 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/sivchari/kumo/internal/initdir"
 	"github.com/sivchari/kumo/internal/service"
 )
 
@@ -22,6 +24,7 @@ type Config struct {
 	Host     string
 	Port     int
 	LogLevel slog.Level
+	InitDir  string // Directory containing init scripts to execute on startup
 }
 
 // DefaultConfig returns the default server configuration.
@@ -30,6 +33,7 @@ func DefaultConfig() Config {
 		Host:     "0.0.0.0",
 		Port:     4566,
 		LogLevel: slog.LevelInfo,
+		InitDir:  os.Getenv("KUMO_INIT_DIR"),
 	}
 }
 
@@ -165,10 +169,10 @@ func (s *Server) Handler() http.Handler {
 	return s.router
 }
 
-// Start starts the HTTP server.
-func (s *Server) Start() error {
+// Start starts the HTTP server. It accepts an optional readyCh channel that will be
+// closed once the server is listening and ready to accept connections.
+func (s *Server) Start(readyCh ...chan struct{}) error {
 	s.server = &http.Server{
-		Addr:              s.Addr(),
 		Handler:           s.router,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -180,7 +184,17 @@ func (s *Server) Start() error {
 		s.logger.Info("service available", "name", name)
 	}
 
-	if err := s.server.ListenAndServe(); err != nil {
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", s.Addr())
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", s.Addr(), err)
+	}
+
+	// Signal that the server is ready to accept connections.
+	if len(readyCh) > 0 && readyCh[0] != nil {
+		close(readyCh[0])
+	}
+
+	if err := s.server.Serve(ln); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
@@ -216,12 +230,23 @@ func (s *Server) Run() error {
 	// Channel to receive server errors
 	errChan := make(chan error, 1)
 
+	// Channel to signal server readiness
+	readyCh := make(chan struct{})
+
 	// Start server in a goroutine
 	go func() {
-		if err := s.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.Start(readyCh); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errChan <- err
 		}
 	}()
+
+	// Wait for server to be ready, then execute init scripts
+	select {
+	case <-readyCh:
+		s.runInitScripts()
+	case err := <-errChan:
+		return fmt.Errorf("server error: %w", err)
+	}
 
 	// Wait for signal or error
 	select {
@@ -236,4 +261,20 @@ func (s *Server) Run() error {
 	defer cancel()
 
 	return s.Shutdown(ctx)
+}
+
+// runInitScripts executes init scripts from the configured directory.
+func (s *Server) runInitScripts() {
+	if s.config.InitDir == "" {
+		return
+	}
+
+	s.logger.Info("running init scripts", "dir", s.config.InitDir)
+
+	go func() {
+		ctx := context.Background()
+		if err := initdir.Run(ctx, s.config.InitDir, s.logger); err != nil {
+			s.logger.Error("failed to run init scripts", "error", err)
+		}
+	}()
 }
