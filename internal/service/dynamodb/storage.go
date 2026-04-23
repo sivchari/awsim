@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,7 @@ type MemoryStorage struct {
 	Tables  map[string]*tableData `json:"tables"`
 	baseURL string
 	dataDir string
+	stopTTL chan struct{}
 }
 
 type tableData struct {
@@ -73,6 +75,7 @@ func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
 	s := &MemoryStorage{
 		Tables:  make(map[string]*tableData),
 		baseURL: baseURL,
+		stopTTL: make(chan struct{}),
 	}
 	for _, o := range opts {
 		o(s)
@@ -82,7 +85,62 @@ func NewMemoryStorage(baseURL string, opts ...Option) *MemoryStorage {
 		_ = storage.Load(s.dataDir, "dynamodb", s)
 	}
 
+	go s.ttlReaper()
+
 	return s
+}
+
+// ttlReaper periodically scans tables with TTL enabled and deletes expired items.
+func (m *MemoryStorage) ttlReaper() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.stopTTL:
+			return
+		case <-ticker.C:
+			m.deleteExpiredItems()
+		}
+	}
+}
+
+// deleteExpiredItems removes items whose TTL attribute is before the current time.
+func (m *MemoryStorage) deleteExpiredItems() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now().Unix()
+
+	for _, td := range m.Tables {
+		if !td.Table.TTLEnabled || td.Table.TTLAttributeName == "" {
+			continue
+		}
+
+		ttlAttr := td.Table.TTLAttributeName
+
+		var keysToDelete []string
+
+		for key, item := range td.Items {
+			av, exists := item[ttlAttr]
+			if !exists || av.N == nil {
+				continue
+			}
+
+			ttlVal, err := strconv.ParseInt(*av.N, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			if ttlVal <= now {
+				keysToDelete = append(keysToDelete, key)
+			}
+		}
+
+		for _, key := range keysToDelete {
+			delete(td.Items, key)
+		}
+	}
 }
 
 // MarshalJSON serializes the storage state to JSON.
