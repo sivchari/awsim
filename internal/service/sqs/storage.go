@@ -526,6 +526,13 @@ func (s *MemoryStorage) ReceiveMessage(_ context.Context, queueURL string, maxMe
 			msg.Attributes["ApproximateFirstReceiveTimestamp"] = fmt.Sprintf("%d", now.UnixMilli())
 		}
 
+		// Check if message should be moved to DLQ.
+		if qd.Queue.MaxReceiveCount > 0 && msg.ReceiveCount > qd.Queue.MaxReceiveCount {
+			s.moveToDeadLetterQueue(qd.Queue.DeadLetterTargetArn, msg)
+
+			continue
+		}
+
 		qd.Inflight[msg.ReceiptHandle] = msg
 		result = append(result, msg)
 	}
@@ -596,6 +603,10 @@ func (s *MemoryStorage) GetQueueAttributes(_ context.Context, queueURL string, a
 		"ContentBasedDeduplication":             fmt.Sprintf("%t", q.ContentBasedDeduplication),
 	}
 
+	if q.RedrivePolicy != "" {
+		allAttrs["RedrivePolicy"] = q.RedrivePolicy
+	}
+
 	// Check if "All" is requested.
 	if slices.Contains(attributeNames, "All") {
 		return allAttrs, nil
@@ -643,6 +654,53 @@ func applyQueueAttributes(q *Queue, attrs map[string]string) {
 			_, _ = fmt.Sscanf(val, "%d", &q.ReceiveWaitTimeSeconds)
 		case "ContentBasedDeduplication":
 			q.ContentBasedDeduplication = val == "true"
+		case "RedrivePolicy":
+			q.RedrivePolicy = val
+			parseRedrivePolicy(q, val)
 		}
 	}
+}
+
+// redrivePolicy is used for JSON unmarshaling of RedrivePolicy attribute.
+type redrivePolicy struct {
+	DeadLetterTargetArn string `json:"deadLetterTargetArn"`
+	MaxReceiveCount     string `json:"maxReceiveCount"`
+}
+
+// moveToDeadLetterQueue moves a message to the dead letter queue. Must be called under lock.
+func (s *MemoryStorage) moveToDeadLetterQueue(dlqArn string, msg *Message) {
+	if dlqArn == "" {
+		return
+	}
+
+	// Find the DLQ by ARN.
+	for _, qd := range s.Queues {
+		if qd.Queue.ARN == dlqArn {
+			// Reset message for DLQ.
+			dlqMsg := &Message{
+				MessageID:         msg.MessageID,
+				Body:              msg.Body,
+				MD5OfBody:         msg.MD5OfBody,
+				Attributes:        maps.Clone(msg.Attributes),
+				MessageAttributes: msg.MessageAttributes,
+				SentTimestamp:     msg.SentTimestamp,
+				VisibleAt:         time.Now(),
+				ReceiveCount:      0,
+			}
+
+			qd.Messages = append(qd.Messages, dlqMsg)
+
+			return
+		}
+	}
+}
+
+func parseRedrivePolicy(q *Queue, val string) {
+	var rp redrivePolicy
+	if err := json.Unmarshal([]byte(val), &rp); err != nil {
+		return
+	}
+
+	q.DeadLetterTargetArn = rp.DeadLetterTargetArn
+	_, _ = fmt.Sscanf(rp.MaxReceiveCount, "%d", &q.MaxReceiveCount)
 }
