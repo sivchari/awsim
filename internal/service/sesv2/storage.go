@@ -336,21 +336,25 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Basic validation.
-	if req.Destination == nil ||
-		(len(req.Destination.ToAddresses) == 0 &&
-			len(req.Destination.CcAddresses) == 0 &&
-			len(req.Destination.BccAddresses) == 0) {
-		return "", &IdentityError{
-			Code:    errBadRequest,
-			Message: "Destination is required",
-		}
-	}
-
 	if req.Content == nil {
 		return "", &IdentityError{
 			Code:    errBadRequest,
 			Message: "Content is required",
+		}
+	}
+
+	// Basic validation.
+	// Destination is not required when Content.Raw is set,
+	// because recipients can be extracted from MIME headers.
+	hasDestination := req.Destination != nil &&
+		(len(req.Destination.ToAddresses) > 0 ||
+			len(req.Destination.CcAddresses) > 0 ||
+			len(req.Destination.BccAddresses) > 0)
+
+	if !hasDestination && req.Content.Raw == nil {
+		return "", &IdentityError{
+			Code:    errBadRequest,
+			Message: "Destination is required",
 		}
 	}
 
@@ -361,12 +365,17 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	var (
 		subject, body string
 		rawData       []byte
+		destination   = req.Destination
 	)
 
 	switch {
 	case req.Content.Raw != nil:
 		rawData = req.Content.Raw.Data
 		subject, body = extractRawEmailContent(rawData)
+
+		if !hasDestination {
+			destination = extractRawEmailDestination(rawData)
+		}
 	case req.Content.Simple != nil:
 		subject, body = extractSimpleEmailContent(req.Content.Simple)
 	}
@@ -375,7 +384,7 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 	sentEmail := &SentEmail{
 		MessageID:            messageID,
 		FromEmailAddress:     req.FromEmailAddress,
-		Destination:          req.Destination,
+		Destination:          destination,
 		Subject:              subject,
 		Body:                 body,
 		RawData:              rawData,
@@ -394,6 +403,45 @@ func (s *MemoryStorage) GetSentEmails(_ context.Context) ([]*SentEmail, error) {
 	defer s.mu.RUnlock()
 
 	return s.SentEmails, nil
+}
+
+// extractRawEmailDestination parses an RFC 2822 MIME message and extracts destination addresses.
+func extractRawEmailDestination(data []byte) *Destination {
+	msg, err := mail.ReadMessage(bytes.NewReader(data))
+	if err != nil {
+		return nil
+	}
+
+	dest := &Destination{}
+
+	if to := msg.Header.Get("To"); to != "" {
+		addrs, err := mail.ParseAddressList(to)
+		if err == nil {
+			for _, a := range addrs {
+				dest.ToAddresses = append(dest.ToAddresses, a.Address)
+			}
+		}
+	}
+
+	if cc := msg.Header.Get("Cc"); cc != "" {
+		addrs, err := mail.ParseAddressList(cc)
+		if err == nil {
+			for _, a := range addrs {
+				dest.CcAddresses = append(dest.CcAddresses, a.Address)
+			}
+		}
+	}
+
+	if bcc := msg.Header.Get("Bcc"); bcc != "" {
+		addrs, err := mail.ParseAddressList(bcc)
+		if err == nil {
+			for _, a := range addrs {
+				dest.BccAddresses = append(dest.BccAddresses, a.Address)
+			}
+		}
+	}
+
+	return dest
 }
 
 // extractRawEmailContent parses an RFC 2822 MIME message and extracts subject and body.

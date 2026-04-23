@@ -321,6 +321,56 @@ func TestSESv2_SendRawEmail(t *testing.T) {
 	golden.New(t, golden.WithIgnoreFields("MessageId", "SentAt")).Assert(t.Name(), raw)
 }
 
+func TestSESv2_SendRawEmailWithoutDestination(t *testing.T) {
+	client := newSESv2Client(t)
+	ctx := t.Context()
+
+	// Create email identity first.
+	emailIdentity := "raw-no-dest@example.com"
+	_, _ = client.CreateEmailIdentity(ctx, &sesv2.CreateEmailIdentityInput{
+		EmailIdentity: aws.String(emailIdentity),
+	})
+
+	// Build raw MIME message with recipients in headers only.
+	rawMessage := "From: raw-no-dest@example.com\r\n" +
+		"To: to-recipient@example.com\r\n" +
+		"Cc: cc-recipient@example.com\r\n" +
+		"Subject: Raw No Destination Test\r\n" +
+		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"\r\n" +
+		"Raw email without explicit Destination"
+
+	// Send raw email without Destination.
+	_, err := client.SendEmail(ctx, &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(emailIdentity),
+		Content: &types.EmailContent{
+			Raw: &types.RawMessage{
+				Data: []byte(rawMessage),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify sent email via kumo-specific endpoint.
+	resp, err := http.Get("http://localhost:4566/kumo/ses/v2/sent-emails")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		SentEmails []json.RawMessage `json:"SentEmails"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := findSentEmail(t, result.SentEmails, emailIdentity, "Raw No Destination Test")
+	golden.New(t, golden.WithIgnoreFields("MessageId", "SentAt")).Assert(t.Name(), raw)
+}
+
 func TestSESv2_EmailIdentityNotFound(t *testing.T) {
 	client := newSESv2Client(t)
 	ctx := t.Context()
