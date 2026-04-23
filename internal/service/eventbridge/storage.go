@@ -1,9 +1,13 @@
 package eventbridge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +51,16 @@ type Storage interface {
 	PutEvents(ctx context.Context, entries []PutEventsRequestEntry) ([]PutEventsResultEntry, error)
 	GetDeliveredEvents(ctx context.Context) []DeliveredEvent
 
+	// Connection operations.
+	CreateConnection(ctx context.Context, req *CreateConnectionRequest) (*Connection, error)
+	DescribeConnection(ctx context.Context, name string) (*Connection, error)
+	DeleteConnection(ctx context.Context, name string) (*Connection, error)
+
+	// API Destination operations.
+	CreateAPIDestination(ctx context.Context, req *CreateAPIDestinationRequest) (*APIDestination, error)
+	DescribeAPIDestination(ctx context.Context, name string) (*APIDestination, error)
+	DeleteAPIDestination(ctx context.Context, name string) error
+
 	// DispatchAction dispatches the request to the appropriate handler.
 	DispatchAction(action string) bool
 }
@@ -73,20 +87,26 @@ type MemoryStorage struct {
 	EventBuses      map[string]*EventBus            `json:"eventBuses"`
 	Rules           map[string]map[string]*Rule     `json:"rules"`
 	Targets         map[string]map[string][]*Target `json:"targets"`
+	Connections     map[string]*Connection          `json:"connections"`
+	APIDestinations map[string]*APIDestination      `json:"apiDestinations"`
 	DeliveredEvents []DeliveredEvent                `json:"deliveredEvents"`
 	region          string
 	accountID       string
 	dataDir         string
+	logger          *slog.Logger
 }
 
 // NewMemoryStorage creates a new in-memory storage.
 func NewMemoryStorage(opts ...Option) *MemoryStorage {
 	s := &MemoryStorage{
-		EventBuses: make(map[string]*EventBus),
-		Rules:      make(map[string]map[string]*Rule),
-		Targets:    make(map[string]map[string][]*Target),
-		region:     "us-east-1",
-		accountID:  "000000000000",
+		EventBuses:      make(map[string]*EventBus),
+		Rules:           make(map[string]map[string]*Rule),
+		Targets:         make(map[string]map[string][]*Target),
+		Connections:     make(map[string]*Connection),
+		APIDestinations: make(map[string]*APIDestination),
+		region:          "us-east-1",
+		accountID:       "000000000000",
+		logger:          slog.New(slog.NewTextHandler(os.Stdout, nil)),
 	}
 	for _, o := range opts {
 		o(s)
@@ -411,11 +431,12 @@ func (s *MemoryStorage) PutTargets(_ context.Context, eventBusName, ruleName str
 
 	for _, t := range targets {
 		target := &Target{
-			ID:        t.ID,
-			Arn:       t.Arn,
-			RoleArn:   t.RoleArn,
-			Input:     t.Input,
-			InputPath: t.InputPath,
+			ID:             t.ID,
+			Arn:            t.Arn,
+			RoleArn:        t.RoleArn,
+			Input:          t.Input,
+			InputPath:      t.InputPath,
+			HTTPParameters: t.HTTPParameters,
 		}
 
 		// Find and update existing target or add new one.
@@ -526,7 +547,7 @@ func (s *MemoryStorage) PutEvents(_ context.Context, entries []PutEventsRequestE
 	return results, nil
 }
 
-// matchAndDeliver matches an event against rules and records deliveries. Must be called under lock.
+// matchAndDeliver matches an event against rules, records deliveries, and performs HTTP delivery for API destinations. Must be called under lock.
 func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry *PutEventsRequestEntry) {
 	rules, exists := s.Rules[eventBusName]
 	if !exists {
@@ -562,7 +583,90 @@ func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry *Put
 				TargetArn:    target.Arn,
 				Time:         eventTime,
 			})
+
+			// Deliver to API Destination via HTTP if the target ARN is an API destination.
+			if dest := s.resolveAPIDestination(target.Arn); dest != nil {
+				go s.deliverToHTTP(dest, target, entry)
+			}
 		}
+	}
+}
+
+// deliverToHTTP sends an event to an API Destination's HTTP endpoint.
+func (s *MemoryStorage) deliverToHTTP(dest *APIDestination, target *Target, entry *PutEventsRequestEntry) {
+	endpoint := dest.InvocationEndpoint
+	method := dest.HTTPMethod
+
+	if method == "" {
+		method = http.MethodPost
+	}
+
+	// Build the event payload.
+	payload := map[string]any{
+		"version":     "0",
+		"id":          uuid.New().String(),
+		"source":      entry.Source,
+		"detail-type": entry.DetailType,
+		"detail":      json.RawMessage(entry.Detail),
+		"region":      s.region,
+		"account":     s.accountID,
+		"time":        time.Now().Format(time.RFC3339),
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Error("failed to marshal event for HTTP delivery", "error", err)
+
+		return
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), method, endpoint, bytes.NewReader(body))
+	if err != nil {
+		s.logger.Error("failed to create HTTP request for API destination", "error", err, "endpoint", endpoint)
+
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Amazon/EventBridge/ApiDestinations")
+	applyHTTPParameters(req, target.HTTPParameters)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.logger.Error("failed to deliver event to API destination", "error", err, "endpoint", endpoint)
+
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	s.logger.Info("delivered event to API destination",
+		"endpoint", endpoint,
+		"status", resp.StatusCode,
+		"source", entry.Source,
+		"detail_type", entry.DetailType,
+	)
+}
+
+// applyHTTPParameters applies HTTP parameters from a target to an HTTP request.
+func applyHTTPParameters(req *http.Request, params *HTTPParameters) {
+	if params == nil {
+		return
+	}
+
+	for k, v := range params.HeaderParameters {
+		req.Header.Set(k, v)
+	}
+
+	if len(params.QueryStringParameters) > 0 {
+		q := req.URL.Query()
+		for k, v := range params.QueryStringParameters {
+			q.Set(k, v)
+		}
+
+		req.URL.RawQuery = q.Encode()
 	}
 }
 
@@ -575,6 +679,130 @@ func (s *MemoryStorage) GetDeliveredEvents(_ context.Context) []DeliveredEvent {
 	copy(result, s.DeliveredEvents)
 
 	return result
+}
+
+// CreateConnection creates a new connection.
+func (s *MemoryStorage) CreateConnection(_ context.Context, req *CreateConnectionRequest) (*Connection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.Connections[req.Name]; exists {
+		return nil, &ServiceError{Code: errEventBusAlreadyExists, Message: "Connection already exists"}
+	}
+
+	now := time.Now()
+	conn := &Connection{
+		Name:               req.Name,
+		Arn:                fmt.Sprintf("arn:aws:events:%s:%s:connection/%s", s.region, s.accountID, req.Name),
+		ConnectionState:    "AUTHORIZED",
+		AuthorizationType:  req.AuthorizationType,
+		AuthParameters:     req.AuthParameters,
+		CreationTime:       now,
+		LastModifiedTime:   now,
+		LastAuthorizedTime: now,
+	}
+
+	s.Connections[req.Name] = conn
+
+	return conn, nil
+}
+
+// DescribeConnection describes a connection.
+func (s *MemoryStorage) DescribeConnection(_ context.Context, name string) (*Connection, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	conn, exists := s.Connections[name]
+	if !exists {
+		return nil, &ServiceError{Code: errEventBusNotFound, Message: "Connection not found"}
+	}
+
+	return conn, nil
+}
+
+// DeleteConnection deletes a connection.
+func (s *MemoryStorage) DeleteConnection(_ context.Context, name string) (*Connection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conn, exists := s.Connections[name]
+	if !exists {
+		return nil, &ServiceError{Code: errEventBusNotFound, Message: "Connection not found"}
+	}
+
+	delete(s.Connections, name)
+
+	return conn, nil
+}
+
+// CreateAPIDestination creates a new API destination.
+func (s *MemoryStorage) CreateAPIDestination(_ context.Context, req *CreateAPIDestinationRequest) (*APIDestination, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.APIDestinations[req.Name]; exists {
+		return nil, &ServiceError{Code: errEventBusAlreadyExists, Message: "API destination already exists"}
+	}
+
+	rateLimit := req.InvocationRateLimitPerSecond
+	if rateLimit == 0 {
+		rateLimit = 300
+	}
+
+	now := time.Now()
+	dest := &APIDestination{
+		Name:                         req.Name,
+		Arn:                          fmt.Sprintf("arn:aws:events:%s:%s:api-destination/%s", s.region, s.accountID, req.Name),
+		ConnectionArn:                req.ConnectionArn,
+		InvocationEndpoint:           req.InvocationEndpoint,
+		HTTPMethod:                   req.HTTPMethod,
+		InvocationRateLimitPerSecond: rateLimit,
+		APIDestinationState:          "ACTIVE",
+		CreationTime:                 now,
+		LastModifiedTime:             now,
+	}
+
+	s.APIDestinations[req.Name] = dest
+
+	return dest, nil
+}
+
+// DescribeAPIDestination describes an API destination.
+func (s *MemoryStorage) DescribeAPIDestination(_ context.Context, name string) (*APIDestination, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dest, exists := s.APIDestinations[name]
+	if !exists {
+		return nil, &ServiceError{Code: errEventBusNotFound, Message: "API destination not found"}
+	}
+
+	return dest, nil
+}
+
+// DeleteAPIDestination deletes an API destination.
+func (s *MemoryStorage) DeleteAPIDestination(_ context.Context, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.APIDestinations[name]; !exists {
+		return &ServiceError{Code: errEventBusNotFound, Message: "API destination not found"}
+	}
+
+	delete(s.APIDestinations, name)
+
+	return nil
+}
+
+// resolveAPIDestination finds the API destination and its endpoint from a target ARN.
+func (s *MemoryStorage) resolveAPIDestination(targetArn string) *APIDestination {
+	for _, dest := range s.APIDestinations {
+		if dest.Arn == targetArn {
+			return dest
+		}
+	}
+
+	return nil
 }
 
 // DispatchAction checks if the action is valid.

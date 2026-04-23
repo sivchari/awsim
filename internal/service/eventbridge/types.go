@@ -48,11 +48,12 @@ type Rule struct {
 
 // Target represents a rule target.
 type Target struct {
-	ID        string `json:"id"`
-	Arn       string `json:"arn"`
-	RoleArn   string `json:"roleArn,omitempty"`
-	Input     string `json:"input,omitempty"`
-	InputPath string `json:"inputPath,omitempty"`
+	ID             string          `json:"id"`
+	Arn            string          `json:"arn"`
+	RoleArn        string          `json:"roleArn,omitempty"`
+	Input          string          `json:"input,omitempty"`
+	InputPath      string          `json:"inputPath,omitempty"`
+	HTTPParameters *HTTPParameters `json:"httpParameters,omitempty"`
 }
 
 // PutEventsRequestEntry represents an entry in PutEvents request.
@@ -196,11 +197,12 @@ type ListRulesResponse struct {
 
 // TargetInput represents a target in API requests.
 type TargetInput struct {
-	ID        string `json:"Id"`
-	Arn       string `json:"Arn"`
-	RoleArn   string `json:"RoleArn,omitempty"`
-	Input     string `json:"Input,omitempty"`
-	InputPath string `json:"InputPath,omitempty"`
+	ID             string          `json:"Id"`
+	Arn            string          `json:"Arn"`
+	RoleArn        string          `json:"RoleArn,omitempty"`
+	Input          string          `json:"Input,omitempty"`
+	InputPath      string          `json:"InputPath,omitempty"`
+	HTTPParameters *HTTPParameters `json:"HttpParameters,omitempty"`
 }
 
 // PutTargetsRequest is the request for PutTargets.
@@ -265,11 +267,12 @@ type ListTargetsByRuleRequest struct {
 
 // TargetOutput represents a target in API responses.
 type TargetOutput struct {
-	ID        string `json:"Id,omitempty"`
-	Arn       string `json:"Arn,omitempty"`
-	RoleArn   string `json:"RoleArn,omitempty"`
-	Input     string `json:"Input,omitempty"`
-	InputPath string `json:"InputPath,omitempty"`
+	ID             string          `json:"Id,omitempty"`
+	Arn            string          `json:"Arn,omitempty"`
+	RoleArn        string          `json:"RoleArn,omitempty"`
+	Input          string          `json:"Input,omitempty"`
+	InputPath      string          `json:"InputPath,omitempty"`
+	HTTPParameters *HTTPParameters `json:"HttpParameters,omitempty"`
 }
 
 // ListTargetsByRuleResponse is the response for ListTargetsByRule.
@@ -295,6 +298,172 @@ type DeliveredEvent struct {
 	TargetID     string `json:"TargetId"`
 	TargetArn    string `json:"TargetArn"`
 	Time         string `json:"Time,omitempty"`
+}
+
+// Connection represents an EventBridge connection.
+type Connection struct {
+	Name               string         `json:"name"`
+	Arn                string         `json:"arn"`
+	ConnectionState    string         `json:"connectionState"`
+	AuthorizationType  string         `json:"authorizationType"`
+	AuthParameters     AuthParameters `json:"authParameters,omitempty"`
+	CreationTime       time.Time      `json:"creationTime"`
+	LastModifiedTime   time.Time      `json:"lastModifiedTime"`
+	LastAuthorizedTime time.Time      `json:"lastAuthorizedTime"`
+}
+
+// AuthParameters represents connection auth parameters.
+type AuthParameters struct {
+	APIKeyAuthParameters     *APIKeyAuthParameters     `json:"ApiKeyAuthParameters,omitempty"`
+	BasicAuthParameters      *BasicAuthParameters      `json:"BasicAuthParameters,omitempty"`
+	OAuthParameters          *OAuthParameters          `json:"OAuthParameters,omitempty"`
+	InvocationHTTPParameters *InvocationHTTPParameters `json:"InvocationHttpParameters,omitempty"`
+}
+
+// APIKeyAuthParameters represents API key auth parameters.
+type APIKeyAuthParameters struct {
+	APIKeyName  string `json:"ApiKeyName"`
+	APIKeyValue string `json:"ApiKeyValue"`
+}
+
+// BasicAuthParameters represents basic auth parameters.
+type BasicAuthParameters struct {
+	Username string `json:"Username"`
+	Password string `json:"Password"`
+}
+
+// OAuthParameters represents OAuth auth parameters.
+type OAuthParameters struct {
+	AuthorizationEndpoint string                 `json:"AuthorizationEndpoint"`
+	HTTPMethod            string                 `json:"HttpMethod"`
+	ClientParameters      *OAuthClientParameters `json:"ClientParameters,omitempty"`
+}
+
+// OAuthClientParameters represents OAuth client parameters.
+type OAuthClientParameters struct {
+	ClientID     string `json:"ClientID"`
+	ClientSecret string `json:"ClientSecret"`
+}
+
+// InvocationHTTPParameters represents HTTP parameters for invocation.
+type InvocationHTTPParameters struct {
+	HeaderParameters      []ConnectionHTTPParameter `json:"HeaderParameters,omitempty"`
+	QueryStringParameters []ConnectionHTTPParameter `json:"QueryStringParameters,omitempty"`
+	BodyParameters        []ConnectionHTTPParameter `json:"BodyParameters,omitempty"`
+}
+
+// ConnectionHTTPParameter represents an HTTP parameter.
+type ConnectionHTTPParameter struct {
+	Key      string `json:"Key"`
+	Value    string `json:"Value"`
+	IsSecret bool   `json:"IsValueSecret"`
+}
+
+// CreateConnectionRequest is the request for CreateConnection.
+type CreateConnectionRequest struct {
+	Name              string         `json:"Name"`
+	AuthorizationType string         `json:"AuthorizationType"`
+	AuthParameters    AuthParameters `json:"AuthParameters"`
+	Description       string         `json:"Description,omitempty"`
+}
+
+// CreateConnectionResponse is the response for CreateConnection.
+type CreateConnectionResponse struct {
+	ConnectionArn    string  `json:"ConnectionArn"`
+	ConnectionState  string  `json:"ConnectionState"`
+	CreationTime     float64 `json:"CreationTime"`
+	LastModifiedTime float64 `json:"LastModifiedTime"`
+}
+
+// DescribeConnectionRequest is the request for DescribeConnection.
+type DescribeConnectionRequest struct {
+	Name string `json:"Name"`
+}
+
+// DescribeConnectionResponse is the response for DescribeConnection.
+type DescribeConnectionResponse struct {
+	Name               string  `json:"Name"`
+	ConnectionArn      string  `json:"ConnectionArn"`
+	ConnectionState    string  `json:"ConnectionState"`
+	AuthorizationType  string  `json:"AuthorizationType"`
+	CreationTime       float64 `json:"CreationTime"`
+	LastModifiedTime   float64 `json:"LastModifiedTime"`
+	LastAuthorizedTime float64 `json:"LastAuthorizedTime"`
+}
+
+// DeleteConnectionRequest is the request for DeleteConnection.
+type DeleteConnectionRequest struct {
+	Name string `json:"Name"`
+}
+
+// DeleteConnectionResponse is the response for DeleteConnection.
+type DeleteConnectionResponse struct {
+	ConnectionArn   string `json:"ConnectionArn"`
+	ConnectionState string `json:"ConnectionState"`
+}
+
+// APIDestination represents an EventBridge API destination.
+type APIDestination struct {
+	Name                         string    `json:"name"`
+	Arn                          string    `json:"arn"`
+	ConnectionArn                string    `json:"connectionArn"`
+	InvocationEndpoint           string    `json:"invocationEndpoint"`
+	HTTPMethod                   string    `json:"httpMethod"`
+	InvocationRateLimitPerSecond int32     `json:"invocationRateLimitPerSecond"`
+	APIDestinationState          string    `json:"apiDestinationState"`
+	CreationTime                 time.Time `json:"creationTime"`
+	LastModifiedTime             time.Time `json:"lastModifiedTime"`
+}
+
+// CreateAPIDestinationRequest is the request for CreateApiDestination.
+type CreateAPIDestinationRequest struct {
+	Name                         string `json:"Name"`
+	ConnectionArn                string `json:"ConnectionArn"`
+	InvocationEndpoint           string `json:"InvocationEndpoint"`
+	HTTPMethod                   string `json:"HttpMethod"`
+	InvocationRateLimitPerSecond int32  `json:"InvocationRateLimitPerSecond,omitempty"`
+	Description                  string `json:"Description,omitempty"`
+}
+
+// CreateAPIDestinationResponse is the response for CreateApiDestination.
+type CreateAPIDestinationResponse struct {
+	APIDestinationArn   string  `json:"ApiDestinationArn"`
+	APIDestinationState string  `json:"ApiDestinationState"`
+	CreationTime        float64 `json:"CreationTime"`
+	LastModifiedTime    float64 `json:"LastModifiedTime"`
+}
+
+// DescribeAPIDestinationRequest is the request for DescribeApiDestination.
+type DescribeAPIDestinationRequest struct {
+	Name string `json:"Name"`
+}
+
+// DescribeAPIDestinationResponse is the response for DescribeApiDestination.
+type DescribeAPIDestinationResponse struct {
+	Name                         string  `json:"Name"`
+	APIDestinationArn            string  `json:"ApiDestinationArn"`
+	ConnectionArn                string  `json:"ConnectionArn"`
+	InvocationEndpoint           string  `json:"InvocationEndpoint"`
+	HTTPMethod                   string  `json:"HttpMethod"`
+	InvocationRateLimitPerSecond int32   `json:"InvocationRateLimitPerSecond"`
+	APIDestinationState          string  `json:"ApiDestinationState"`
+	CreationTime                 float64 `json:"CreationTime"`
+	LastModifiedTime             float64 `json:"LastModifiedTime"`
+}
+
+// DeleteAPIDestinationRequest is the request for DeleteApiDestination.
+type DeleteAPIDestinationRequest struct {
+	Name string `json:"Name"`
+}
+
+// DeleteAPIDestinationResponse is the response for DeleteApiDestination.
+type DeleteAPIDestinationResponse struct{}
+
+// HTTPParameters represents HTTP parameters in a target.
+type HTTPParameters struct {
+	PathParameterValues   []string          `json:"PathParameterValues,omitempty"`
+	HeaderParameters      map[string]string `json:"HeaderParameters,omitempty"`
+	QueryStringParameters map[string]string `json:"QueryStringParameters,omitempty"`
 }
 
 // ServiceError represents a service-level error.
