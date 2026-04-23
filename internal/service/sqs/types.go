@@ -20,6 +20,9 @@ type Queue struct {
 	ReceiveWaitTimeSeconds    int
 	FifoQueue                 bool
 	ContentBasedDeduplication bool
+	RedrivePolicy             string // JSON string: {"deadLetterTargetArn":"...","maxReceiveCount":"N"}
+	MaxReceiveCount           int    // Parsed from RedrivePolicy
+	DeadLetterTargetArn       string // Parsed from RedrivePolicy
 }
 
 // Message represents an SQS message.
