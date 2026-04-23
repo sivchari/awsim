@@ -2,6 +2,7 @@ package sesv2
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -95,8 +96,8 @@ func TestSendEmail_SimpleEmailWithoutDestination_ShouldFail(t *testing.T) {
 		t.Fatal("expected error for simple email without destination")
 	}
 
-	identityErr, ok := err.(*IdentityError)
-	if !ok {
+	var identityErr *IdentityError
+	if !errors.As(err, &identityErr) {
 		t.Fatalf("expected IdentityError, got %T", err)
 	}
 
