@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -839,34 +840,322 @@ func (m *MemoryStorage) attributeValuesEqual(a, b AttributeValue) bool {
 }
 
 // applyUpdateExpression applies an update expression to an item.
+// Supports SET, ADD, DELETE, and REMOVE clauses.
 func (m *MemoryStorage) applyUpdateExpression(item Item, updateExpr string, exprNames map[string]string, exprValues map[string]AttributeValue) Item {
-	// Very simplified update expression parsing.
-	// Only supports "SET attr = :val" pattern.
+	// Replace expression attribute names.
 	expr := updateExpr
 	for placeholder, name := range exprNames {
 		expr = strings.ReplaceAll(expr, placeholder, name)
 	}
 
-	// Parse SET clause.
-	if strings.HasPrefix(strings.ToUpper(expr), "SET ") {
-		setClause := strings.TrimPrefix(expr, "SET ")
-		setClause = strings.TrimPrefix(setClause, "set ")
+	// Split expression into clauses (SET, ADD, DELETE, REMOVE).
+	clauses := parseUpdateClauses(expr)
 
-		assignments := strings.Split(setClause, ",")
-		for _, assignment := range assignments {
-			parts := strings.SplitN(strings.TrimSpace(assignment), "=", 2)
-			if len(parts) == 2 {
-				attrName := strings.TrimSpace(parts[0])
-				valuePlaceholder := strings.TrimSpace(parts[1])
+	for _, clause := range clauses {
+		switch clause.action {
+		case "SET":
+			item = applySetClause(item, clause.body, exprValues)
+		case "ADD":
+			item = applyAddClause(item, clause.body, exprValues)
+		case "DELETE":
+			item = applyDeleteClause(item, clause.body, exprValues)
+		case "REMOVE":
+			item = applyRemoveClause(item, clause.body)
+		}
+	}
 
-				if val, ok := exprValues[valuePlaceholder]; ok {
-					item[attrName] = val
+	return item
+}
+
+type updateClause struct {
+	action string // SET, ADD, DELETE, REMOVE
+	body   string
+}
+
+// parseUpdateClauses splits an update expression into individual clauses.
+func parseUpdateClauses(expr string) []updateClause {
+	keywords := []string{"SET", "ADD", "DELETE", "REMOVE"}
+	upper := strings.ToUpper(expr)
+
+	type pos struct {
+		idx    int
+		action string
+	}
+
+	var positions []pos
+
+	for _, kw := range keywords {
+		idx := 0
+
+		for {
+			found := strings.Index(upper[idx:], kw)
+			if found == -1 {
+				break
+			}
+
+			absIdx := idx + found
+
+			// Ensure it's a keyword boundary (start of string or preceded by space).
+			if absIdx == 0 || upper[absIdx-1] == ' ' {
+				// Ensure it's followed by a space or end of string.
+				endIdx := absIdx + len(kw)
+				if endIdx >= len(upper) || upper[endIdx] == ' ' {
+					positions = append(positions, pos{idx: absIdx, action: kw})
 				}
+			}
+
+			idx = absIdx + len(kw)
+		}
+	}
+
+	// Sort by position.
+	sort.Slice(positions, func(i, j int) bool {
+		return positions[i].idx < positions[j].idx
+	})
+
+	clauses := make([]updateClause, 0, len(positions))
+
+	for i, p := range positions {
+		start := p.idx + len(p.action)
+
+		end := len(expr)
+		if i+1 < len(positions) {
+			end = positions[i+1].idx
+		}
+
+		body := strings.TrimSpace(expr[start:end])
+		clauses = append(clauses, updateClause{action: p.action, body: body})
+	}
+
+	return clauses
+}
+
+// applySetClause handles SET attr = :val, SET attr = if_not_exists(attr, :val).
+func applySetClause(item Item, clause string, exprValues map[string]AttributeValue) Item {
+	assignments := strings.Split(clause, ",")
+	for _, assignment := range assignments {
+		parts := strings.SplitN(strings.TrimSpace(assignment), "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		attrName := strings.TrimSpace(parts[0])
+		valueExpr := strings.TrimSpace(parts[1])
+
+		// Handle if_not_exists(attr, :val)
+		if strings.HasPrefix(valueExpr, "if_not_exists(") {
+			applyIfNotExists(item, attrName, valueExpr, exprValues)
+
+			continue
+		}
+
+		if val, ok := exprValues[valueExpr]; ok {
+			item[attrName] = val
+		}
+	}
+
+	return item
+}
+
+// applyIfNotExists handles the if_not_exists(attr, :val) function within a SET clause.
+func applyIfNotExists(item Item, attrName, valueExpr string, exprValues map[string]AttributeValue) {
+	inner := strings.TrimPrefix(valueExpr, "if_not_exists(")
+	inner = strings.TrimSuffix(inner, ")")
+
+	ifParts := strings.SplitN(inner, ",", 2)
+	if len(ifParts) != 2 {
+		return
+	}
+
+	checkAttr := strings.TrimSpace(ifParts[0])
+	if _, exists := item[checkAttr]; exists {
+		return
+	}
+
+	defaultPlaceholder := strings.TrimSpace(ifParts[1])
+
+	if val, ok := exprValues[defaultPlaceholder]; ok {
+		item[attrName] = val
+	}
+}
+
+// applyAddClause handles ADD attr :val.
+// For numbers: atomically increments the value.
+// For sets (SS, NS, BS): adds elements to the set.
+func applyAddClause(item Item, clause string, exprValues map[string]AttributeValue) Item {
+	actions := strings.Split(clause, ",")
+	for _, action := range actions {
+		parts := strings.Fields(strings.TrimSpace(action))
+		if len(parts) != 2 {
+			continue
+		}
+
+		attrName := parts[0]
+		valuePlaceholder := parts[1]
+
+		val, ok := exprValues[valuePlaceholder]
+		if !ok {
+			continue
+		}
+
+		existing, exists := item[attrName]
+		item[attrName] = addAttributeValue(&existing, exists, &val)
+	}
+
+	return item
+}
+
+// addAttributeValue merges a new value into an existing attribute for the ADD operation.
+func addAttributeValue(existing *AttributeValue, exists bool, val *AttributeValue) AttributeValue {
+	switch {
+	case val.N != nil:
+		if !exists || existing.N == nil {
+			return *val
+		}
+
+		result := addNumbers(*existing.N, *val.N)
+
+		return AttributeValue{N: &result}
+
+	case len(val.SS) > 0:
+		if !exists || len(existing.SS) == 0 {
+			return *val
+		}
+
+		return AttributeValue{SS: mergeStringSet(existing.SS, val.SS)}
+
+	case len(val.NS) > 0:
+		if !exists || len(existing.NS) == 0 {
+			return *val
+		}
+
+		return AttributeValue{NS: mergeStringSet(existing.NS, val.NS)}
+
+	case len(val.BS) > 0:
+		if !exists || len(existing.BS) == 0 {
+			return *val
+		}
+
+		return AttributeValue{BS: append(existing.BS, val.BS...)}
+
+	default:
+		return *val
+	}
+}
+
+// applyDeleteClause handles DELETE attr :val.
+// Removes elements from a set (SS, NS, BS).
+func applyDeleteClause(item Item, clause string, exprValues map[string]AttributeValue) Item {
+	actions := strings.Split(clause, ",")
+	for _, action := range actions {
+		parts := strings.Fields(strings.TrimSpace(action))
+		if len(parts) != 2 {
+			continue
+		}
+
+		attrName := parts[0]
+		valuePlaceholder := parts[1]
+
+		val, ok := exprValues[valuePlaceholder]
+		if !ok {
+			continue
+		}
+
+		existing, exists := item[attrName]
+		if !exists {
+			continue
+		}
+
+		switch {
+		// DELETE from StringSet
+		case len(val.SS) > 0 && len(existing.SS) > 0:
+			remaining := subtractStringSet(existing.SS, val.SS)
+			if len(remaining) == 0 {
+				delete(item, attrName)
+			} else {
+				item[attrName] = AttributeValue{SS: remaining}
+			}
+
+		// DELETE from NumberSet
+		case len(val.NS) > 0 && len(existing.NS) > 0:
+			remaining := subtractStringSet(existing.NS, val.NS)
+			if len(remaining) == 0 {
+				delete(item, attrName)
+			} else {
+				item[attrName] = AttributeValue{NS: remaining}
 			}
 		}
 	}
 
 	return item
+}
+
+// applyRemoveClause handles REMOVE attr1, attr2, ...
+func applyRemoveClause(item Item, clause string) Item {
+	attrs := strings.Split(clause, ",")
+	for _, attr := range attrs {
+		delete(item, strings.TrimSpace(attr))
+	}
+
+	return item
+}
+
+// addNumbers adds two DynamoDB number strings.
+func addNumbers(a, b string) string {
+	fa, err1 := strconv.ParseFloat(a, 64)
+	fb, err2 := strconv.ParseFloat(b, 64)
+
+	if err1 != nil || err2 != nil {
+		return a
+	}
+
+	result := fa + fb
+
+	// Return integer format if result is a whole number.
+	if result == float64(int64(result)) {
+		return strconv.FormatInt(int64(result), 10)
+	}
+
+	return strconv.FormatFloat(result, 'f', -1, 64)
+}
+
+// mergeStringSet merges two string slices, removing duplicates.
+func mergeStringSet(existing, additions []string) []string {
+	set := make(map[string]struct{}, len(existing))
+	for _, v := range existing {
+		set[v] = struct{}{}
+	}
+
+	for _, v := range additions {
+		set[v] = struct{}{}
+	}
+
+	result := make([]string, 0, len(set))
+	for v := range set {
+		result = append(result, v)
+	}
+
+	sort.Strings(result)
+
+	return result
+}
+
+// subtractStringSet removes elements in removals from existing.
+func subtractStringSet(existing, removals []string) []string {
+	remove := make(map[string]struct{}, len(removals))
+	for _, v := range removals {
+		remove[v] = struct{}{}
+	}
+
+	var result []string
+
+	for _, v := range existing {
+		if _, ok := remove[v]; !ok {
+			result = append(result, v)
+		}
+	}
+
+	return result
 }
 
 // TransactWriteItems executes a transactional write with all-or-nothing semantics.
