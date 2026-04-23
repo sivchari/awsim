@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.12.0](https://github.com/sivchari/kumo/compare/v0.11.0...v0.12.0) - 2026-04-23
+- feat: support EmailContent.Raw in SES v2 SendEmail by @sivchari in https://github.com/sivchari/kumo/pull/450
+- feat: allow raw email submission without explicit Destination by @sivchari in https://github.com/sivchari/kumo/pull/453
+- feat: support init directory execution on startup by @sivchari in https://github.com/sivchari/kumo/pull/461
+- feat(dynamodb): support ADD and DELETE clauses in UpdateItem by @sivchari in https://github.com/sivchari/kumo/pull/462
+- feat(dynamodb): support Local Secondary Index (LSI) by @sivchari in https://github.com/sivchari/kumo/pull/463
+- feat(dynamodb): support TTL auto-deletion of expired items by @sivchari in https://github.com/sivchari/kumo/pull/464
+- feat(eventbridge): support API Destinations with actual HTTP delivery by @sivchari in https://github.com/sivchari/kumo/pull/465
+- feat(sqs): support RedrivePolicy (Dead Letter Queue) by @sivchari in https://github.com/sivchari/kumo/pull/466
+- feat(s3): stub support for PutBucketNotificationConfiguration and PutBucketCors by @sivchari in https://github.com/sivchari/kumo/pull/467
+- release v0.12.0 by @sivchari in https://github.com/sivchari/kumo/pull/468
+
 ## [v0.11.0](https://github.com/sivchari/kumo/compare/v0.10.0...v0.11.0) - 2026-04-22
 - feat: add DynamoDB ConditionExpression support by @sivchari in https://github.com/sivchari/kumo/pull/442
 - feat: add EventBridge event pattern matching and delivery tracking by @sivchari in https://github.com/sivchari/kumo/pull/445
