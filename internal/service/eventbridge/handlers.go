@@ -15,18 +15,24 @@ type handlerFunc func(http.ResponseWriter, *http.Request)
 // getActionHandlers returns a map of action names to handler functions.
 func (s *Service) getActionHandlers() map[string]handlerFunc {
 	return map[string]handlerFunc{
-		"CreateEventBus":    s.CreateEventBus,
-		"DeleteEventBus":    s.DeleteEventBus,
-		"DescribeEventBus":  s.DescribeEventBus,
-		"ListEventBuses":    s.ListEventBuses,
-		"PutRule":           s.PutRule,
-		"DeleteRule":        s.DeleteRule,
-		"DescribeRule":      s.DescribeRule,
-		"ListRules":         s.ListRules,
-		"PutTargets":        s.PutTargets,
-		"RemoveTargets":     s.RemoveTargets,
-		"ListTargetsByRule": s.ListTargetsByRule,
-		"PutEvents":         s.PutEvents,
+		"CreateEventBus":         s.CreateEventBus,
+		"DeleteEventBus":         s.DeleteEventBus,
+		"DescribeEventBus":       s.DescribeEventBus,
+		"ListEventBuses":         s.ListEventBuses,
+		"PutRule":                s.PutRule,
+		"DeleteRule":             s.DeleteRule,
+		"DescribeRule":           s.DescribeRule,
+		"ListRules":              s.ListRules,
+		"PutTargets":             s.PutTargets,
+		"RemoveTargets":          s.RemoveTargets,
+		"ListTargetsByRule":      s.ListTargetsByRule,
+		"PutEvents":              s.PutEvents,
+		"CreateConnection":       s.CreateConnection,
+		"DescribeConnection":     s.DescribeConnection,
+		"DeleteConnection":       s.DeleteConnection,
+		"CreateApiDestination":   s.CreateAPIDestination,
+		"DescribeApiDestination": s.DescribeAPIDestination,
+		"DeleteApiDestination":   s.DeleteAPIDestination,
 	}
 }
 
@@ -324,11 +330,12 @@ func (s *Service) ListTargetsByRule(w http.ResponseWriter, r *http.Request) {
 
 	for i, target := range targets {
 		outputs[i] = TargetOutput{
-			ID:        target.ID,
-			Arn:       target.Arn,
-			RoleArn:   target.RoleArn,
-			Input:     target.Input,
-			InputPath: target.InputPath,
+			ID:             target.ID,
+			Arn:            target.Arn,
+			RoleArn:        target.RoleArn,
+			Input:          target.Input,
+			InputPath:      target.InputPath,
+			HTTPParameters: target.HTTPParameters,
 		}
 	}
 
@@ -370,6 +377,150 @@ func (s *Service) PutEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeResponse(w, resp)
+}
+
+// CreateConnection handles the CreateConnection API.
+func (s *Service) CreateConnection(w http.ResponseWriter, r *http.Request) {
+	var req CreateConnectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	conn, err := s.storage.CreateConnection(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &CreateConnectionResponse{
+		ConnectionArn:    conn.Arn,
+		ConnectionState:  conn.ConnectionState,
+		CreationTime:     float64(conn.CreationTime.Unix()),
+		LastModifiedTime: float64(conn.LastModifiedTime.Unix()),
+	})
+}
+
+// DescribeConnection handles the DescribeConnection API.
+func (s *Service) DescribeConnection(w http.ResponseWriter, r *http.Request) {
+	var req DescribeConnectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	conn, err := s.storage.DescribeConnection(r.Context(), req.Name)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &DescribeConnectionResponse{
+		Name:               conn.Name,
+		ConnectionArn:      conn.Arn,
+		ConnectionState:    conn.ConnectionState,
+		AuthorizationType:  conn.AuthorizationType,
+		CreationTime:       float64(conn.CreationTime.Unix()),
+		LastModifiedTime:   float64(conn.LastModifiedTime.Unix()),
+		LastAuthorizedTime: float64(conn.LastAuthorizedTime.Unix()),
+	})
+}
+
+// DeleteConnection handles the DeleteConnection API.
+func (s *Service) DeleteConnection(w http.ResponseWriter, r *http.Request) {
+	var req DeleteConnectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	conn, err := s.storage.DeleteConnection(r.Context(), req.Name)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &DeleteConnectionResponse{
+		ConnectionArn:   conn.Arn,
+		ConnectionState: "DELETING",
+	})
+}
+
+// CreateAPIDestination handles the CreateApiDestination API.
+func (s *Service) CreateAPIDestination(w http.ResponseWriter, r *http.Request) {
+	var req CreateAPIDestinationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	dest, err := s.storage.CreateAPIDestination(r.Context(), &req)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &CreateAPIDestinationResponse{
+		APIDestinationArn:   dest.Arn,
+		APIDestinationState: dest.APIDestinationState,
+		CreationTime:        float64(dest.CreationTime.Unix()),
+		LastModifiedTime:    float64(dest.LastModifiedTime.Unix()),
+	})
+}
+
+// DescribeAPIDestination handles the DescribeApiDestination API.
+func (s *Service) DescribeAPIDestination(w http.ResponseWriter, r *http.Request) {
+	var req DescribeAPIDestinationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	dest, err := s.storage.DescribeAPIDestination(r.Context(), req.Name)
+	if err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &DescribeAPIDestinationResponse{
+		Name:                         dest.Name,
+		APIDestinationArn:            dest.Arn,
+		ConnectionArn:                dest.ConnectionArn,
+		InvocationEndpoint:           dest.InvocationEndpoint,
+		HTTPMethod:                   dest.HTTPMethod,
+		InvocationRateLimitPerSecond: dest.InvocationRateLimitPerSecond,
+		APIDestinationState:          dest.APIDestinationState,
+		CreationTime:                 float64(dest.CreationTime.Unix()),
+		LastModifiedTime:             float64(dest.LastModifiedTime.Unix()),
+	})
+}
+
+// DeleteAPIDestination handles the DeleteApiDestination API.
+func (s *Service) DeleteAPIDestination(w http.ResponseWriter, r *http.Request) {
+	var req DeleteAPIDestinationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "ValidationException", "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.storage.DeleteAPIDestination(r.Context(), req.Name); err != nil {
+		handleError(w, err)
+
+		return
+	}
+
+	writeResponse(w, &DeleteAPIDestinationResponse{})
 }
 
 // GetDeliveredEvents returns events that were matched against rules and delivered to targets.
