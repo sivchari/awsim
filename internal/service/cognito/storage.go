@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,8 +23,6 @@ const (
 	errUsernameExists         = "UsernameExistsException"
 	errNotAuthorized          = "NotAuthorizedException"
 	errInvalidParameter       = "InvalidParameterException"
-
-	defaultRegion = "us-east-1"
 )
 
 // Storage defines the Cognito storage interface.
@@ -166,7 +165,8 @@ func (s *MemoryStorage) CreateUserPool(_ context.Context, req *CreateUserPoolReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	poolID := fmt.Sprintf("%s_%s", defaultRegion, uuid.New().String()[:9])
+	id := strings.ReplaceAll(uuid.New().String(), "-", "")[:9]
+	poolID := fmt.Sprintf("%s_%s", req.Region, id)
 	now := time.Now()
 
 	pool := &UserPool{

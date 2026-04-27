@@ -155,6 +155,7 @@ type CreateUserPoolRequest struct {
 	UsernameAttributes     []string                 `json:"UsernameAttributes,omitempty"`
 	MfaConfiguration       string                   `json:"MfaConfiguration,omitempty"`
 	EmailConfiguration     *EmailConfigurationInput `json:"EmailConfiguration,omitempty"`
+	Region                 string                   `json:"-"`
 }
 
 // UserPoolPoliciesInput represents user pool policies in requests.
