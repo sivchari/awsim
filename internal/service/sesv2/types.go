@@ -59,6 +59,7 @@ type SentEmail struct {
 	Destination          *Destination `json:"Destination,omitempty"`
 	Subject              string       `json:"Subject,omitempty"`
 	Body                 string       `json:"Body,omitempty"`
+	HTMLBody             string       `json:"HTMLBody,omitempty"`
 	RawData              []byte       `json:"RawData,omitempty"`
 	ConfigurationSetName string       `json:"ConfigurationSetName,omitempty"`
 	SentAt               time.Time    `json:"SentAt"`

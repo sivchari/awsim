@@ -368,16 +368,20 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 		destination   = req.Destination
 	)
 
+	var (
+		htmlBody string
+	)
+
 	switch {
 	case req.Content.Raw != nil:
 		rawData = req.Content.Raw.Data
-		subject, body = extractRawEmailContent(rawData)
+		subject, body, htmlBody = extractRawEmailContent(rawData)
 
 		if !hasDestination {
 			destination = extractRawEmailDestination(rawData)
 		}
 	case req.Content.Simple != nil:
-		subject, body = extractSimpleEmailContent(req.Content.Simple)
+		subject, body, htmlBody = extractSimpleEmailContent(req.Content.Simple)
 	}
 
 	// Store the sent email.
@@ -387,6 +391,7 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 		Destination:          destination,
 		Subject:              subject,
 		Body:                 body,
+		HTMLBody:             htmlBody,
 		RawData:              rawData,
 		ConfigurationSetName: req.ConfigurationSetName,
 		SentAt:               time.Now(),
@@ -444,11 +449,11 @@ func extractRawEmailDestination(data []byte) *Destination {
 	return dest
 }
 
-// extractRawEmailContent parses an RFC 2822 MIME message and extracts subject and body.
-func extractRawEmailContent(data []byte) (subject, body string) {
+// extractRawEmailContent parses an RFC 2822 MIME message and extracts subject, text body, and HTML body.
+func extractRawEmailContent(data []byte) (subject, textBody, htmlBody string) {
 	msg, err := mail.ReadMessage(bytes.NewReader(data))
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 
 	subject = msg.Header.Get("Subject")
@@ -458,13 +463,18 @@ func extractRawEmailContent(data []byte) (subject, body string) {
 		// Not multipart; read body directly.
 		b, err := io.ReadAll(msg.Body)
 		if err != nil {
-			return subject, ""
+			return subject, "", ""
 		}
 
-		return subject, string(b)
+		content := string(b)
+		if strings.HasPrefix(mediaType, "text/html") {
+			return subject, "", content
+		}
+
+		return subject, content, ""
 	}
 
-	// Multipart message: find text/plain or text/html part.
+	// Multipart message: extract both text/plain and text/html parts.
 	reader := multipart.NewReader(msg.Body, params["boundary"])
 
 	for {
@@ -475,23 +485,26 @@ func extractRawEmailContent(data []byte) (subject, body string) {
 
 		partType, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
 
-		if partType == "text/plain" || partType == "text/html" {
-			b, err := io.ReadAll(part)
-			if err != nil {
-				continue
-			}
+		b, err := io.ReadAll(part)
+		if err != nil {
+			continue
+		}
 
-			return subject, string(b)
+		switch partType {
+		case "text/plain":
+			textBody = string(b)
+		case "text/html":
+			htmlBody = string(b)
 		}
 	}
 
-	return subject, ""
+	return subject, textBody, htmlBody
 }
 
-// extractSimpleEmailContent extracts subject and body from a SimpleEmail.
-func extractSimpleEmailContent(simple *SimpleEmail) (subject, body string) {
+// extractSimpleEmailContent extracts subject, text body, and HTML body from a SimpleEmail.
+func extractSimpleEmailContent(simple *SimpleEmail) (subject, textBody, htmlBody string) {
 	if simple == nil {
-		return "", ""
+		return "", "", ""
 	}
 
 	if simple.Subject != nil {
@@ -499,16 +512,16 @@ func extractSimpleEmailContent(simple *SimpleEmail) (subject, body string) {
 	}
 
 	if simple.Body == nil {
-		return subject, ""
+		return subject, "", ""
 	}
 
 	if simple.Body.Text != nil {
-		return subject, simple.Body.Text.Data
+		textBody = simple.Body.Text.Data
 	}
 
 	if simple.Body.HTML != nil {
-		return subject, simple.Body.HTML.Data
+		htmlBody = simple.Body.HTML.Data
 	}
 
-	return subject, ""
+	return subject, textBody, htmlBody
 }
