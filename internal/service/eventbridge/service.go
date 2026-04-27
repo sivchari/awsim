@@ -9,6 +9,8 @@ import (
 	"github.com/sivchari/kumo/internal/service"
 )
 
+const defaultBaseURL = "http://localhost:4566"
+
 // Compile-time check that Service implements io.Closer.
 var _ io.Closer = (*Service)(nil)
 
@@ -42,7 +44,22 @@ func (s *Service) RegisterRoutes(r service.Router) {
 }
 
 func init() {
+	baseURL := defaultBaseURL
+	if host := os.Getenv("KUMO_HOST"); host != "" {
+		port := os.Getenv("KUMO_PORT")
+		if port == "" {
+			port = "4566"
+		}
+
+		baseURL = fmt.Sprintf("http://%s:%s", host, port)
+	} else if port := os.Getenv("KUMO_PORT"); port != "" {
+		baseURL = fmt.Sprintf("http://localhost:%s", port)
+	}
+
 	var opts []Option
+
+	opts = append(opts, WithBaseURL(baseURL))
+
 	if dir := os.Getenv("KUMO_DATA_DIR"); dir != "" {
 		opts = append(opts, WithDataDir(dir))
 	}
