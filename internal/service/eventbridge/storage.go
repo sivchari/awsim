@@ -75,6 +75,13 @@ func WithDataDir(dir string) Option {
 	}
 }
 
+// WithBaseURL sets the base URL for internal service-to-service communication.
+func WithBaseURL(url string) Option {
+	return func(s *MemoryStorage) {
+		s.baseURL = url
+	}
+}
+
 // Compile-time interface checks.
 var (
 	_ json.Marshaler   = (*MemoryStorage)(nil)
@@ -93,6 +100,7 @@ type MemoryStorage struct {
 	region          string
 	accountID       string
 	dataDir         string
+	baseURL         string
 	logger          *slog.Logger
 }
 
@@ -106,6 +114,7 @@ func NewMemoryStorage(opts ...Option) *MemoryStorage {
 		APIDestinations: make(map[string]*APIDestination),
 		region:          "us-east-1",
 		accountID:       "000000000000",
+		baseURL:         "http://localhost:4566",
 		logger:          slog.New(slog.NewTextHandler(os.Stdout, nil)),
 	}
 	for _, o := range opts {
@@ -729,7 +738,7 @@ func (s *MemoryStorage) deliverToSQS(target *Target, payload []byte) {
 	}
 
 	queueName := parts[len(parts)-1]
-	sqsEndpoint := fmt.Sprintf("http://localhost:4566/000000000000/%s", queueName)
+	sqsEndpoint := fmt.Sprintf("%s/000000000000/%s", s.baseURL, queueName)
 
 	reqBody := map[string]any{
 		"QueueUrl":    sqsEndpoint,
@@ -743,7 +752,7 @@ func (s *MemoryStorage) deliverToSQS(target *Target, payload []byte) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://localhost:4566/", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.baseURL+"/", bytes.NewReader(body))
 	if err != nil {
 		s.logger.Error("failed to create SQS request", "error", err, "queue", queueName)
 
