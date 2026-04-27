@@ -51,6 +51,12 @@ type Storage interface {
 	AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error
 	ListMultipartUploads(ctx context.Context, bucket, prefix string, maxUploads int) ([]*MultipartUpload, error)
 	ListParts(ctx context.Context, bucket, key, uploadID string, maxParts int) ([]*Part, error)
+
+	// Notification and CORS
+	SetEventBridgeNotification(ctx context.Context, bucket string, enabled bool)
+	IsEventBridgeEnabled(ctx context.Context, bucket string) bool
+	SetCORSConfiguration(ctx context.Context, bucket string, rules []CORSRule)
+	GetCORSRules(ctx context.Context, bucket string) []CORSRule
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -78,13 +84,15 @@ type MemoryStorage struct {
 
 // MemoryBucket holds the data for a single S3 bucket.
 type MemoryBucket struct {
-	Name             string                      `json:"name"`
-	CreationDate     time.Time                   `json:"creationDate"`
-	Objects          map[string]*Object          `json:"objects"`          // current/latest version per key
-	Versions         map[string][]*Object        `json:"versions"`         // all versions per key (newest first)
-	VersioningStatus string                      `json:"versioningStatus"` // "", "Enabled", "Suspended"
-	VersionIDCounter uint64                      `json:"versionIdcounter"` // counter for generating version IDs
-	MultipartUploads map[string]*MultipartUpload `json:"-"`                // uploadID -> MultipartUpload
+	Name               string                      `json:"name"`
+	CreationDate       time.Time                   `json:"creationDate"`
+	Objects            map[string]*Object          `json:"objects"`             // current/latest version per key
+	Versions           map[string][]*Object        `json:"versions"`            // all versions per key (newest first)
+	VersioningStatus   string                      `json:"versioningStatus"`    // "", "Enabled", "Suspended"
+	VersionIDCounter   uint64                      `json:"versionIdcounter"`    // counter for generating version IDs
+	MultipartUploads   map[string]*MultipartUpload `json:"-"`                   // uploadID -> MultipartUpload
+	EventBridgeEnabled bool                        `json:"eventBridgeEnabled"`  // EventBridge notification
+	CORSRules          []CORSRule                  `json:"corsRules,omitempty"` // CORS configuration
 }
 
 // NewMemoryStorage creates a new in-memory S3 storage.
@@ -992,4 +1000,48 @@ func calculateMultipartETag(partRequests []PartRequest, parts map[int]*Part) str
 	finalHash := md5.Sum(md5Concat) //nolint:gosec // MD5 is required for S3 ETag calculation per AWS specification
 
 	return fmt.Sprintf("%q", fmt.Sprintf("%s-%d", hex.EncodeToString(finalHash[:]), len(partRequests)))
+}
+
+// SetEventBridgeNotification enables or disables EventBridge notification for a bucket.
+func (s *MemoryStorage) SetEventBridgeNotification(_ context.Context, bucket string, enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if b, exists := s.Buckets[bucket]; exists {
+		b.EventBridgeEnabled = enabled
+	}
+}
+
+// IsEventBridgeEnabled returns whether EventBridge notification is enabled for a bucket.
+func (s *MemoryStorage) IsEventBridgeEnabled(_ context.Context, bucket string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if b, exists := s.Buckets[bucket]; exists {
+		return b.EventBridgeEnabled
+	}
+
+	return false
+}
+
+// SetCORSConfiguration sets the CORS configuration for a bucket.
+func (s *MemoryStorage) SetCORSConfiguration(_ context.Context, bucket string, rules []CORSRule) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if b, exists := s.Buckets[bucket]; exists {
+		b.CORSRules = rules
+	}
+}
+
+// GetCORSRules returns the CORS rules for a bucket.
+func (s *MemoryStorage) GetCORSRules(_ context.Context, bucket string) []CORSRule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if b, exists := s.Buckets[bucket]; exists {
+		return b.CORSRules
+	}
+
+	return nil
 }

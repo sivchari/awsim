@@ -345,6 +345,9 @@ func (s *Service) PutObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+
+	// Emit EventBridge notification if enabled.
+	go s.emitObjectCreatedEvent(context.Background(), bucket, key, obj.Size, obj.ETag)
 }
 
 // GetObject handles GET /{bucket}/{key...} - download an object.
@@ -799,19 +802,13 @@ func (s *Service) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := r.URL.Query()["notification"]; ok {
-		// Stub: accept notification configuration without error.
-		_, _ = io.Copy(io.Discard, r.Body)
-
-		w.WriteHeader(http.StatusOK)
+		s.PutBucketNotificationConfiguration(w, r)
 
 		return
 	}
 
 	if _, ok := r.URL.Query()["cors"]; ok {
-		// Stub: accept CORS configuration without error.
-		_, _ = io.Copy(io.Discard, r.Body)
-
-		w.WriteHeader(http.StatusOK)
+		s.PutBucketCors(w, r)
 
 		return
 	}
@@ -1205,6 +1202,40 @@ func (s *Service) ListParts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeXMLResponse(w, result)
+}
+
+// PutBucketNotificationConfiguration handles PUT /{bucket}?notification.
+func (s *Service) PutBucketNotificationConfiguration(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+
+	var config NotificationConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
+		// Accept even if body is empty or malformed (AWS is lenient).
+		w.WriteHeader(http.StatusOK)
+
+		return
+	}
+
+	enabled := config.EventBridgeConfig != nil
+	s.storage.SetEventBridgeNotification(r.Context(), bucket, enabled)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// PutBucketCors handles PUT /{bucket}?cors.
+func (s *Service) PutBucketCors(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+
+	var config CORSConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
+		writeS3Error(w, r, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
+
+		return
+	}
+
+	s.storage.SetCORSConfiguration(r.Context(), bucket, config.CORSRules)
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleMultipartError handles errors from multipart upload operations.
