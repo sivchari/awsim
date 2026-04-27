@@ -584,27 +584,26 @@ func (s *MemoryStorage) matchAndDeliver(eventID, eventBusName string, entry *Put
 				Time:         eventTime,
 			})
 
+			payload := s.buildEventPayload(eventID, eventBusName, target, entry)
+
 			// Deliver to API Destination via HTTP if the target ARN is an API destination.
 			if dest := s.resolveAPIDestination(target.Arn); dest != nil {
-				go s.deliverToHTTP(dest, target, entry)
+				go s.deliverToHTTP(dest, target, payload)
+			}
+
+			// Deliver to SQS if the target ARN is an SQS queue.
+			if isSQSArn(target.Arn) {
+				go s.deliverToSQS(target, payload)
 			}
 		}
 	}
 }
 
-// deliverToHTTP sends an event to an API Destination's HTTP endpoint.
-func (s *MemoryStorage) deliverToHTTP(dest *APIDestination, target *Target, entry *PutEventsRequestEntry) {
-	endpoint := dest.InvocationEndpoint
-	method := dest.HTTPMethod
-
-	if method == "" {
-		method = http.MethodPost
-	}
-
-	// Build the event payload.
+// buildEventPayload builds the CloudWatch Events envelope for delivery.
+func (s *MemoryStorage) buildEventPayload(eventID, eventBusName string, target *Target, entry *PutEventsRequestEntry) []byte {
 	payload := map[string]any{
 		"version":     "0",
-		"id":          uuid.New().String(),
+		"id":          eventID,
 		"source":      entry.Source,
 		"detail-type": entry.DetailType,
 		"detail":      json.RawMessage(entry.Detail),
@@ -613,14 +612,76 @@ func (s *MemoryStorage) deliverToHTTP(dest *APIDestination, target *Target, entr
 		"time":        time.Now().Format(time.RFC3339),
 	}
 
+	if eventBusName != defaultEventBusName {
+		payload["event-bus-name"] = eventBusName
+	}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
-		s.logger.Error("failed to marshal event for HTTP delivery", "error", err)
+		s.logger.Error("failed to marshal event payload", "error", err)
 
+		return nil
+	}
+
+	// Apply InputPath if set on the target.
+	if target.InputPath != "" {
+		if resolved := resolveInputPath(body, target.InputPath); resolved != nil {
+			return resolved
+		}
+	}
+
+	return body
+}
+
+// resolveInputPath extracts a sub-field from payload using a simple JSONPath expression.
+// Supports paths like "$.detail", "$.detail.payload", "$.source".
+func resolveInputPath(payload []byte, inputPath string) []byte {
+	path := strings.TrimPrefix(inputPath, "$.")
+	if path == "" || path == "$" {
+		return payload
+	}
+
+	parts := strings.Split(path, ".")
+
+	var current any
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return nil
+	}
+
+	for _, part := range parts {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+
+		current, ok = obj[part]
+		if !ok {
+			return nil
+		}
+	}
+
+	result, err := json.Marshal(current)
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+// deliverToHTTP sends an event to an API Destination's HTTP endpoint.
+func (s *MemoryStorage) deliverToHTTP(dest *APIDestination, target *Target, payload []byte) {
+	if payload == nil {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), method, endpoint, bytes.NewReader(body))
+	endpoint := dest.InvocationEndpoint
+	method := dest.HTTPMethod
+
+	if method == "" {
+		method = http.MethodPost
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), method, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		s.logger.Error("failed to create HTTP request for API destination", "error", err, "endpoint", endpoint)
 
@@ -645,8 +706,67 @@ func (s *MemoryStorage) deliverToHTTP(dest *APIDestination, target *Target, entr
 	s.logger.Info("delivered event to API destination",
 		"endpoint", endpoint,
 		"status", resp.StatusCode,
-		"source", entry.Source,
-		"detail_type", entry.DetailType,
+	)
+}
+
+// isSQSArn returns true if the ARN is an SQS queue ARN.
+func isSQSArn(arn string) bool {
+	return strings.Contains(arn, ":sqs:")
+}
+
+// deliverToSQS sends an event to an SQS queue via the local kumo SQS endpoint.
+func (s *MemoryStorage) deliverToSQS(target *Target, payload []byte) {
+	if payload == nil {
+		return
+	}
+
+	// Extract queue name from ARN: arn:aws:sqs:region:account:queue-name
+	parts := strings.Split(target.Arn, ":")
+	if len(parts) < 6 {
+		s.logger.Error("invalid SQS ARN", "arn", target.Arn)
+
+		return
+	}
+
+	queueName := parts[len(parts)-1]
+	sqsEndpoint := fmt.Sprintf("http://localhost:4566/000000000000/%s", queueName)
+
+	reqBody := map[string]any{
+		"QueueUrl":    sqsEndpoint,
+		"MessageBody": string(payload),
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		s.logger.Error("failed to marshal SQS SendMessage request", "error", err)
+
+		return
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://localhost:4566/", bytes.NewReader(body))
+	if err != nil {
+		s.logger.Error("failed to create SQS request", "error", err, "queue", queueName)
+
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/x-amz-json-1.0")
+	req.Header.Set("X-Amz-Target", "AmazonSQS.SendMessage")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.logger.Error("failed to deliver event to SQS", "error", err, "queue", queueName)
+
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	s.logger.Info("delivered event to SQS",
+		"queue", queueName,
+		"status", resp.StatusCode,
 	)
 }
 
