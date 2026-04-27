@@ -45,6 +45,7 @@ func (s *Service) RegisterRoutes(r service.Router) {
 
 func init() {
 	baseURL := defaultBaseURL
+
 	if host := os.Getenv("KUMO_HOST"); host != "" {
 		port := os.Getenv("KUMO_PORT")
 		if port == "" {

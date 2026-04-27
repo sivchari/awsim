@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+//nolint:funlen // Table-driven test with comprehensive InputPath coverage.
 func TestResolveInputPath(t *testing.T) {
 	t.Parallel()
 
