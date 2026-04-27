@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/sivchari/golden"
 )
 
@@ -422,6 +423,194 @@ func TestEventBridge_PutEvents_Delivery(t *testing.T) {
 
 	if !found {
 		t.Fatalf("expected matching event to be delivered to sqs-target, got: %s", string(body))
+	}
+}
+
+func TestEventBridge_PutEvents_SQSDelivery(t *testing.T) {
+	ebClient := newEventBridgeClient(t)
+	sqsClient := newSQSClient(t)
+	ctx := t.Context()
+
+	queueName := "eb-sqs-delivery-test"
+
+	// Create SQS queue.
+	_, err := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create rule matching the event.
+	_, err = ebClient.PutRule(ctx, &eventbridge.PutRuleInput{
+		Name:         aws.String("sqs-delivery-rule"),
+		EventPattern: aws.String(`{"source": ["payment.service"], "detail-type": ["PaymentProcessed"]}`),
+		State:        types.RuleStateEnabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add SQS target.
+	_, err = ebClient.PutTargets(ctx, &eventbridge.PutTargetsInput{
+		Rule: aws.String("sqs-delivery-rule"),
+		Targets: []types.Target{
+			{
+				Id:  aws.String("sqs-delivery-target"),
+				Arn: aws.String("arn:aws:sqs:us-east-1:000000000000:" + queueName),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put matching event.
+	putOutput, err := ebClient.PutEvents(ctx, &eventbridge.PutEventsInput{
+		Entries: []types.PutEventsRequestEntry{
+			{
+				Source:     aws.String("payment.service"),
+				DetailType: aws.String("PaymentProcessed"),
+				Detail:     aws.String(`{"paymentId": "pay-001"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("EventId", "ResultMetadata")).Assert(t.Name()+"_put_events", putOutput)
+
+	// Receive message from SQS to confirm delivery.
+	var recvOutput *sqs.ReceiveMessageOutput
+
+	for range 10 {
+		recvOutput, err = sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:        aws.String("http://localhost:4566/000000000000/" + queueName),
+			WaitTimeSeconds: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(recvOutput.Messages) > 0 {
+			break
+		}
+	}
+
+	if len(recvOutput.Messages) == 0 {
+		t.Fatal("expected event to be delivered to SQS queue, but no message received")
+	}
+
+	// Parse the message body to verify it's a valid EventBridge event envelope.
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(*recvOutput.Messages[0].Body), &envelope); err != nil {
+		t.Fatalf("failed to parse SQS message body as JSON: %v", err)
+	}
+
+	if envelope["source"] != "payment.service" {
+		t.Errorf("expected source=payment.service, got %v", envelope["source"])
+	}
+
+	if envelope["detail-type"] != "PaymentProcessed" {
+		t.Errorf("expected detail-type=PaymentProcessed, got %v", envelope["detail-type"])
+	}
+}
+
+func TestEventBridge_PutEvents_InputPath(t *testing.T) {
+	ebClient := newEventBridgeClient(t)
+	sqsClient := newSQSClient(t)
+	ctx := t.Context()
+
+	queueName := "eb-inputpath-test"
+
+	// Create SQS queue.
+	_, err := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: aws.String(queueName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create rule.
+	_, err = ebClient.PutRule(ctx, &eventbridge.PutRuleInput{
+		Name:         aws.String("inputpath-rule"),
+		EventPattern: aws.String(`{"source": ["notif.service"], "detail-type": ["notifevent"]}`),
+		State:        types.RuleStateEnabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add SQS target with InputPath.
+	putTargetsOutput, err := ebClient.PutTargets(ctx, &eventbridge.PutTargetsInput{
+		Rule: aws.String("inputpath-rule"),
+		Targets: []types.Target{
+			{
+				Id:        aws.String("inputpath-target"),
+				Arn:       aws.String("arn:aws:sqs:us-east-1:000000000000:" + queueName),
+				InputPath: aws.String("$.detail"),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields("ResultMetadata")).Assert(t.Name()+"_put_targets", putTargetsOutput)
+
+	// Put matching event.
+	_, err = ebClient.PutEvents(ctx, &eventbridge.PutEventsInput{
+		Entries: []types.PutEventsRequestEntry{
+			{
+				Source:     aws.String("notif.service"),
+				DetailType: aws.String("notifevent"),
+				Detail:     aws.String(`{"message": "hello", "userId": "u-001"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Receive message from SQS.
+	var recvOutput *sqs.ReceiveMessageOutput
+
+	for range 10 {
+		recvOutput, err = sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:        aws.String("http://localhost:4566/000000000000/" + queueName),
+			WaitTimeSeconds: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(recvOutput.Messages) > 0 {
+			break
+		}
+	}
+
+	if len(recvOutput.Messages) == 0 {
+		t.Fatal("expected event to be delivered to SQS queue, but no message received")
+	}
+
+	// Verify that InputPath was applied: message body should be the detail only.
+	var detail map[string]any
+	if err := json.Unmarshal([]byte(*recvOutput.Messages[0].Body), &detail); err != nil {
+		t.Fatalf("failed to parse SQS message body: %v (body: %s)", err, *recvOutput.Messages[0].Body)
+	}
+
+	if detail["message"] != "hello" {
+		t.Errorf("expected message=hello, got %v", detail["message"])
+	}
+
+	if detail["userId"] != "u-001" {
+		t.Errorf("expected userId=u-001, got %v", detail["userId"])
+	}
+
+	// Verify envelope fields are NOT present (InputPath extracts only $.detail).
+	if _, hasVersion := detail["version"]; hasVersion {
+		t.Errorf("expected InputPath to strip envelope, but found 'version' in: %s", *recvOutput.Messages[0].Body)
 	}
 }
 
