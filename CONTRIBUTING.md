@@ -1,11 +1,11 @@
-# Contributing to awsim
+# Contributing to kumo
 
-Thank you for your interest in contributing to awsim!
+Thank you for your interest in contributing to kumo!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/awsim.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/kumo.git`
 3. Create a feature branch: `git checkout -b feat/your-feature`
 4. Make your changes
 5. Run tests: `make test`
@@ -35,8 +35,8 @@ make lint
 ## Project Structure
 
 ```
-awsim/
-├── cmd/awsim/          # Application entry point
+kumo/
+├── cmd/kumo/           # Application entry point
 ├── internal/
 │   ├── server/         # HTTP server and routing
 │   ├── service/        # AWS service implementations
@@ -56,7 +56,7 @@ awsim/
    - `handlers.go` - HTTP handlers for API operations
    - `types.go` - Request/response types
    - `storage.go` - In-memory storage (if needed)
-3. Register the service in `cmd/awsim/main.go`
+3. Register the service in `cmd/kumo/main.go`
 4. Add integration tests in `test/integration/`
 5. Update README.md with the new service
 
@@ -111,15 +111,15 @@ make test
 ```
 
 ### Integration Tests
-Integration tests require the awsim server running:
+Integration tests require the kumo server running:
 ```bash
-# Start awsim with Docker
+# Start kumo with Docker
 docker compose up -d
 
 # Run integration tests
 make test-integration
 
-# Stop awsim
+# Stop kumo
 docker compose down
 ```
 
