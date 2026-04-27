@@ -20,6 +20,80 @@ const (
 	timeFormatHTTP = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
+// applyCORSHeaders sets CORS response headers if the bucket has CORS configured and the request Origin matches.
+func (s *Service) applyCORSHeaders(w http.ResponseWriter, r *http.Request, bucket string) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return
+	}
+
+	rules := s.storage.GetCORSRules(r.Context(), bucket)
+	if len(rules) == 0 {
+		return
+	}
+
+	for _, rule := range rules {
+		if !matchOrigin(origin, rule.AllowedOrigins) {
+			continue
+		}
+
+		if !matchMethod(r.Method, rule.AllowedMethods) {
+			continue
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(rule.AllowedMethods, ", "))
+
+		if len(rule.AllowedHeaders) > 0 {
+			w.Header().Set("Access-Control-Allow-Headers", strings.Join(rule.AllowedHeaders, ", "))
+		}
+
+		if len(rule.ExposeHeaders) > 0 {
+			w.Header().Set("Access-Control-Expose-Headers", strings.Join(rule.ExposeHeaders, ", "))
+		}
+
+		if rule.MaxAgeSeconds > 0 {
+			w.Header().Set("Access-Control-Max-Age", strconv.Itoa(rule.MaxAgeSeconds))
+		}
+
+		return
+	}
+}
+
+func matchOrigin(origin string, allowed []string) bool {
+	for _, a := range allowed {
+		if a == "*" || a == origin {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchMethod(method string, allowed []string) bool {
+	for _, a := range allowed {
+		if strings.EqualFold(a, method) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// HandleCORSPreflight handles OPTIONS requests for CORS preflight.
+// For preflight, the actual method is in Access-Control-Request-Method header.
+func (s *Service) HandleCORSPreflight(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+
+	// Override method for CORS matching: use the requested method from the preflight header.
+	if reqMethod := r.Header.Get("Access-Control-Request-Method"); reqMethod != "" {
+		r.Method = reqMethod
+	}
+
+	s.applyCORSHeaders(w, r, bucket)
+	w.WriteHeader(http.StatusOK)
+}
+
 // Route Dispatchers - dispatch based on query parameters
 
 // handleBucketGet dispatches GET /{bucket} requests based on query parameters.
@@ -58,6 +132,8 @@ func (s *Service) handleBucketPost(w http.ResponseWriter, r *http.Request) {
 
 // handleObjectPut dispatches PUT /{bucket}/{key} requests based on query parameters.
 func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
+	s.applyCORSHeaders(w, r, r.PathValue("bucket"))
+
 	if r.URL.Query().Get("uploadId") != "" && r.URL.Query().Get("partNumber") != "" {
 		s.UploadPart(w, r)
 
@@ -69,6 +145,8 @@ func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 
 // handleObjectGet dispatches GET /{bucket}/{key} requests based on query parameters.
 func (s *Service) handleObjectGet(w http.ResponseWriter, r *http.Request) {
+	s.applyCORSHeaders(w, r, r.PathValue("bucket"))
+
 	if r.URL.Query().Get("uploadId") != "" {
 		s.ListParts(w, r)
 

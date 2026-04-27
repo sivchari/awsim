@@ -75,6 +75,9 @@ func (s *Service) RegisterRoutes(r service.Router) {
 	r.Handle("DELETE", "/{bucket}/{key...}", s.handleObjectDelete)
 	r.Handle("HEAD", "/{bucket}/{key...}", s.HeadObject)
 	r.Handle("POST", "/{bucket}/{key...}", s.handleObjectPost)
+
+	// CORS preflight
+	r.Handle("OPTIONS", "/{bucket}/{key...}", s.HandleCORSPreflight)
 }
 
 // Close saves the storage state if persistence is enabled.
