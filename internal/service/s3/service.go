@@ -95,13 +95,9 @@ func (s *Service) emitObjectCreatedEvent(ctx context.Context, bucket, key string
 	}
 
 	detail := map[string]any{
-		"version": "0",
-		"bucket":  map[string]string{"name": bucket},
-		"object": map[string]any{
-			"key":  key,
-			"size": size,
-			"etag": etag,
-		},
+		"version":    "0",
+		"bucket":     map[string]string{"name": bucket},
+		"object":     map[string]any{"key": key, "size": size, "etag": etag},
 		"request-id": uuid.New().String(),
 	}
 
@@ -112,23 +108,17 @@ func (s *Service) emitObjectCreatedEvent(ctx context.Context, bucket, key string
 		return
 	}
 
-	entry := map[string]any{
-		"Entries": []map[string]any{
-			{
-				"Source":     "aws.s3",
-				"DetailType": "Object Created",
-				"Detail":     string(detailJSON),
-			},
-		},
-	}
+	body, _ := json.Marshal(map[string]any{
+		"Entries": []map[string]any{{
+			"Source": "aws.s3", "DetailType": "Object Created", "Detail": string(detailJSON),
+		}},
+	})
 
-	body, err := json.Marshal(entry)
-	if err != nil {
-		s.logger.Error("failed to marshal PutEvents request", "error", err)
+	s.putEvents(ctx, body, bucket, key)
+}
 
-		return
-	}
-
+// putEvents sends a PutEvents request to the internal EventBridge endpoint.
+func (s *Service) putEvents(ctx context.Context, body []byte, bucket, key string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/", bytes.NewReader(body))
 	if err != nil {
 		s.logger.Error("failed to create EventBridge request", "error", err)
@@ -139,9 +129,7 @@ func (s *Service) emitObjectCreatedEvent(ctx context.Context, bucket, key string
 	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
 	req.Header.Set("X-Amz-Target", "AWSEvents.PutEvents")
 
-	client := &http.Client{Timeout: 5 * time.Second}
-
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		s.logger.Error("failed to emit S3 event to EventBridge", "error", err)
 
@@ -150,9 +138,5 @@ func (s *Service) emitObjectCreatedEvent(ctx context.Context, bucket, key string
 
 	defer func() { _ = resp.Body.Close() }()
 
-	s.logger.Info("emitted S3 Object Created event",
-		"bucket", bucket,
-		"key", key,
-		"status", resp.StatusCode,
-	)
+	s.logger.Info("emitted S3 Object Created event", "bucket", bucket, "key", key, "status", resp.StatusCode)
 }
