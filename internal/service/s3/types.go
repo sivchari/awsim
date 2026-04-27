@@ -281,3 +281,27 @@ type CopyPartResult struct {
 	LastModified string   `xml:"LastModified"`
 	ETag         string   `xml:"ETag"`
 }
+
+// NotificationConfiguration represents S3 bucket notification configuration.
+type NotificationConfiguration struct {
+	XMLName           xml.Name           `xml:"NotificationConfiguration"`
+	EventBridgeConfig *EventBridgeConfig `xml:"EventBridgeConfiguration,omitempty"`
+}
+
+// EventBridgeConfig represents EventBridge notification configuration.
+type EventBridgeConfig struct{}
+
+// CORSConfiguration represents S3 bucket CORS configuration (XML request body).
+type CORSConfiguration struct {
+	XMLName   xml.Name   `xml:"CORSConfiguration"`
+	CORSRules []CORSRule `xml:"CORSRule"`
+}
+
+// CORSRule represents a single CORS rule.
+type CORSRule struct {
+	AllowedHeaders []string `json:"allowedHeaders,omitempty" xml:"AllowedHeader"`
+	AllowedMethods []string `json:"allowedMethods"           xml:"AllowedMethod"`
+	AllowedOrigins []string `json:"allowedOrigins"           xml:"AllowedOrigin"`
+	ExposeHeaders  []string `json:"exposeHeaders,omitempty"  xml:"ExposeHeader"`
+	MaxAgeSeconds  int      `json:"maxAgeSeconds,omitempty"  xml:"MaxAgeSeconds"`
+}
