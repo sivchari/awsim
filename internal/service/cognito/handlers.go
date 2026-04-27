@@ -58,6 +58,15 @@ func (s *Service) CreateUserPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	region, err := extractRegion(r)
+	if err != nil {
+		writeError(w, "ValidationException", err.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	req.Region = region
+
 	pool, err := s.storage.CreateUserPool(r.Context(), &req)
 	if err != nil {
 		handleError(w, err)
@@ -562,4 +571,28 @@ func getErrorStatus(code string) int {
 	default:
 		return http.StatusBadRequest
 	}
+}
+
+// extractRegion extracts the AWS region from the Authorization header.
+// The header format is: AWS4-HMAC-SHA256 Credential=AKID/DATE/REGION/SERVICE/aws4_request, ...
+func extractRegion(r *http.Request) (string, error) {
+	auth := r.Header.Get("Authorization")
+
+	credIdx := strings.Index(auth, "Credential=")
+	if credIdx == -1 {
+		return "", errors.New("missing Credential in Authorization header")
+	}
+
+	credVal := auth[credIdx+len("Credential="):]
+	if commaIdx := strings.Index(credVal, ","); commaIdx != -1 {
+		credVal = credVal[:commaIdx]
+	}
+
+	// Credential=AKID/DATE/REGION/SERVICE/aws4_request
+	parts := strings.Split(credVal, "/")
+	if len(parts) < 3 {
+		return "", errors.New("invalid Credential format in Authorization header")
+	}
+
+	return parts[2], nil
 }
