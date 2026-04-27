@@ -363,13 +363,9 @@ func (s *MemoryStorage) SendEmail(_ context.Context, req *SendEmailRequest) (str
 
 	// Extract content based on email type.
 	var (
-		subject, body string
-		rawData       []byte
-		destination   = req.Destination
-	)
-
-	var (
-		htmlBody string
+		subject, body, htmlBody string
+		rawData                 []byte
+		destination             = req.Destination
 	)
 
 	switch {
