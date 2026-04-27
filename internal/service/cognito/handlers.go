@@ -588,7 +588,7 @@ func extractRegion(r *http.Request) (string, error) {
 		credVal = credVal[:commaIdx]
 	}
 
-	// Credential=AKID/DATE/REGION/SERVICE/aws4_request
+	// Format: AKID/DATE/REGION/SERVICE/aws4_request
 	parts := strings.Split(credVal, "/")
 	if len(parts) < 3 {
 		return "", errors.New("invalid Credential format in Authorization header")
