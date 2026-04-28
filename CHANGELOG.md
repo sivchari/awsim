@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.13.0](https://github.com/sivchari/kumo/compare/v0.12.0...v0.13.0) - 2026-04-28
+- fix(cognito): generate valid UserPoolId format by @sivchari in https://github.com/sivchari/kumo/pull/471
+- feat(sesv2): support reading sent email HTML body by @sivchari in https://github.com/sivchari/kumo/pull/472
+- feat(eventbridge): deliver events to SQS targets and apply InputPath by @sivchari in https://github.com/sivchari/kumo/pull/474
+- docs: rename awsim to kumo in CONTRIBUTING.md by @v420v in https://github.com/sivchari/kumo/pull/475
+- feat(s3): emit EventBridge events on PutObject and store notification/CORS config by @sivchari in https://github.com/sivchari/kumo/pull/476
+- feat(s3): add CORS response headers and OPTIONS preflight support by @sivchari in https://github.com/sivchari/kumo/pull/477
+- release v0.13.0 by @sivchari in https://github.com/sivchari/kumo/pull/479
+
 ## [v0.12.0](https://github.com/sivchari/kumo/compare/v0.11.0...v0.12.0) - 2026-04-23
 - feat: support EmailContent.Raw in SES v2 SendEmail by @sivchari in https://github.com/sivchari/kumo/pull/450
 - feat: allow raw email submission without explicit Destination by @sivchari in https://github.com/sivchari/kumo/pull/453
