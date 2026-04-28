@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.14.0](https://github.com/sivchari/kumo/compare/v0.13.0...v0.14.0) - 2026-04-28
+- feat(s3): implement CopyObject by @sivchari in https://github.com/sivchari/kumo/pull/480
+- release v0.14.0 by @sivchari in https://github.com/sivchari/kumo/pull/482
+
 ## [v0.13.0](https://github.com/sivchari/kumo/compare/v0.12.0...v0.13.0) - 2026-04-28
 - fix(cognito): generate valid UserPoolId format by @sivchari in https://github.com/sivchari/kumo/pull/471
 - feat(sesv2): support reading sent email HTML body by @sivchari in https://github.com/sivchari/kumo/pull/472
