@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
@@ -136,6 +137,12 @@ func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Query().Get("uploadId") != "" && r.URL.Query().Get("partNumber") != "" {
 		s.UploadPart(w, r)
+
+		return
+	}
+
+	if r.Header.Get("X-Amz-Copy-Source") != "" {
+		s.CopyObject(w, r)
 
 		return
 	}
@@ -426,6 +433,64 @@ func (s *Service) PutObject(w http.ResponseWriter, r *http.Request) {
 
 	// Emit EventBridge notification if enabled.
 	go s.emitObjectCreatedEvent(context.Background(), bucket, key, obj.Size, obj.ETag)
+}
+
+// CopyObject handles PUT /{bucket}/{key} with X-Amz-Copy-Source header.
+func (s *Service) CopyObject(w http.ResponseWriter, r *http.Request) {
+	dstBucket := r.PathValue("bucket")
+	dstKey := r.PathValue("key")
+
+	copySource := r.Header.Get("X-Amz-Copy-Source")
+	srcBucket, srcKey := parseCopySource(copySource)
+
+	if srcBucket == "" || srcKey == "" {
+		writeS3Error(w, r, "InvalidArgument", "Invalid copy source", http.StatusBadRequest)
+
+		return
+	}
+
+	srcObj, err := s.storage.GetObject(r.Context(), srcBucket, srcKey)
+	if err != nil {
+		handleGetObjectError(w, r, err)
+
+		return
+	}
+
+	dstObj, err := s.storage.PutObject(r.Context(), dstBucket, dstKey, bytes.NewReader(srcObj.Body), srcObj.Metadata)
+	if err != nil {
+		var bucketErr *BucketError
+		if errors.As(err, &bucketErr) {
+			writeS3Error(w, r, bucketErr.Code, bucketErr.Message, http.StatusNotFound)
+
+			return
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	result := CopyObjectResult{
+		ETag:         dstObj.ETag,
+		LastModified: dstObj.LastModified.Format(timeFormatISO),
+	}
+
+	writeXMLResponse(w, result)
+
+	go s.emitObjectCreatedEvent(context.Background(), dstBucket, dstKey, dstObj.Size, dstObj.ETag)
+}
+
+// parseCopySource parses the X-Amz-Copy-Source header value.
+// Format: /bucket/key or bucket/key (URL-encoded).
+func parseCopySource(source string) (bucket, key string) {
+	source = strings.TrimPrefix(source, "/")
+
+	idx := strings.IndexByte(source, '/')
+	if idx < 0 {
+		return "", ""
+	}
+
+	return source[:idx], source[idx+1:]
 }
 
 // GetObject handles GET /{bucket}/{key...} - download an object.

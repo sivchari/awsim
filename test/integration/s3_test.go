@@ -1298,3 +1298,42 @@ func TestS3_DeleteObjects(t *testing.T) {
 		t.Errorf("expected 0 objects after delete, got %d", len(listOutput.Contents))
 	}
 }
+
+func TestS3_CopyObject(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucketName := "test-copy-object-bucket"
+
+	// Create bucket.
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put source object.
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String("source.txt"),
+		Body:   bytes.NewReader([]byte("copy me")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Copy object within same bucket.
+	copyOutput, err := client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(bucketName),
+		Key:        aws.String("dest.txt"),
+		CopySource: aws.String(bucketName + "/source.txt"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	golden.New(t, golden.WithIgnoreFields(
+		"ETag", "LastModified", "ResultMetadata",
+		"ServerSideEncryption", "CopySourceVersionId",
+	)).Assert(t.Name(), copyOutput)
+}

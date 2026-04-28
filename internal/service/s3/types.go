@@ -274,6 +274,13 @@ type PartInfo struct {
 	Size         int64  `xml:"Size"`
 }
 
+// CopyObjectResult is the response for CopyObject.
+type CopyObjectResult struct {
+	XMLName      xml.Name `xml:"CopyObjectResult"`
+	ETag         string   `xml:"ETag"`
+	LastModified string   `xml:"LastModified"`
+}
+
 // CopyPartResult is the response for UploadPartCopy.
 type CopyPartResult struct {
 	XMLName      xml.Name `xml:"CopyPartResult"`
