@@ -128,12 +128,48 @@ func TestQueryDispatcher_DisambiguatesOverlappingActions(t *testing.T) {
 	}
 }
 
-func TestQueryDispatcher_MissingUserAgent(t *testing.T) {
+func TestQueryDispatcher_MissingUserAgent_UniqueAction(t *testing.T) {
+	t.Parallel()
+
+	d := NewQueryProtocolDispatcher()
+
+	called := false
+
+	d.RegisterAction("CreateDBCluster", "AmazonRDSv19", "rds", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	body := strings.NewReader("Action=CreateDBCluster&Version=2014-10-31")
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rec := httptest.NewRecorder()
+
+	d.ServeHTTP(rec, req)
+
+	// When the action is unique across all services, the dispatcher should
+	// fall back to action-based lookup even without a User-Agent header.
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	if !called {
+		t.Error("expected handler to be called via fallback")
+	}
+}
+
+func TestQueryDispatcher_MissingUserAgent_AmbiguousAction(t *testing.T) {
 	t.Parallel()
 
 	d := NewQueryProtocolDispatcher()
 
 	d.RegisterAction("CreateDBCluster", "AmazonRDSv19", "rds", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	d.RegisterAction("CreateDBCluster", "AmazonNeptuneDataService", "neptune", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -150,8 +186,8 @@ func TestQueryDispatcher_MissingUserAgent(t *testing.T) {
 		t.Errorf("expected status 400, got %d", rec.Code)
 	}
 
-	if !strings.Contains(rec.Body.String(), "MissingServiceIdentifier") {
-		t.Errorf("expected MissingServiceIdentifier error, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "AmbiguousAction") {
+		t.Errorf("expected AmbiguousAction error, got %s", rec.Body.String())
 	}
 }
 

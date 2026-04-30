@@ -76,28 +76,50 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	// Identify the target service from User-Agent header.
 	svcID := parseServiceFromUserAgent(r.Header.Get("User-Agent"))
-	if svcID == "" {
-		writeQueryError(w, "MissingServiceIdentifier",
-			"User-Agent header with api/ identifier is required for Query protocol routing")
 
-		return
-	}
+	var entry queryHandlerEntry
 
-	// Look up handler by service identifier and action.
-	actions, ok := d.actionHandlers[svcID]
-	if !ok {
-		writeQueryError(w, "UnknownService",
-			"Unknown service: "+svcID)
+	if svcID != "" {
+		// Look up handler by service identifier and action.
+		actions, ok := d.actionHandlers[svcID]
+		if !ok {
+			writeQueryError(w, "UnknownService",
+				"Unknown service: "+svcID)
 
-		return
-	}
+			return
+		}
 
-	entry, ok := actions[action]
-	if !ok {
-		writeQueryError(w, "UnknownAction",
-			"Action "+action+" is not supported for service "+svcID)
+		entry, ok = actions[action]
+		if !ok {
+			writeQueryError(w, "UnknownAction",
+				"Action "+action+" is not supported for service "+svcID)
 
-		return
+			return
+		}
+	} else {
+		// Fallback: search all services for a unique action match.
+		var found bool
+
+		for _, actions := range d.actionHandlers {
+			if e, ok := actions[action]; ok {
+				if found {
+					writeQueryError(w, "AmbiguousAction",
+						"Action "+action+" matches multiple services; send a User-Agent with api/ identifier")
+
+					return
+				}
+
+				entry = e
+				found = true
+			}
+		}
+
+		if !found {
+			writeQueryError(w, "UnknownAction",
+				"Action "+action+" is not supported")
+
+			return
+		}
 	}
 
 	// Convert form data to JSON and dispatch.
