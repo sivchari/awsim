@@ -1,6 +1,9 @@
 package eventbridge
 
 import (
+	"encoding/json"
+	"fmt"
+	"math"
 	"time"
 )
 
@@ -56,13 +59,47 @@ type Target struct {
 	HTTPParameters *HTTPParameters `json:"httpParameters,omitempty"`
 }
 
+// EpochTime wraps time.Time to support JSON unmarshalling from both
+// epoch seconds (number) and RFC3339 strings.
+// AWS SDK v2 for Go serialises the Time field as epoch seconds.
+type EpochTime struct {
+	time.Time
+}
+
+// UnmarshalJSON handles epoch seconds (float64) and RFC3339 string formats.
+func (t *EpochTime) UnmarshalJSON(data []byte) error {
+	// Try as a number first (epoch seconds).
+	var epoch float64
+	if err := json.Unmarshal(data, &epoch); err == nil {
+		sec, frac := math.Modf(epoch)
+		t.Time = time.Unix(int64(sec), int64(frac*1e9))
+
+		return nil
+	}
+
+	// Fall back to standard time.Time parsing (RFC3339).
+	var stdTime time.Time
+	if err := json.Unmarshal(data, &stdTime); err != nil {
+		return fmt.Errorf("cannot parse time %s: %w", string(data), err)
+	}
+
+	t.Time = stdTime
+
+	return nil
+}
+
+// MarshalJSON serialises as an RFC3339 string for consistency.
+func (t EpochTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Time)
+}
+
 // PutEventsRequestEntry represents an entry in PutEvents request.
 type PutEventsRequestEntry struct {
 	Source       string     `json:"Source,omitempty"`
 	DetailType   string     `json:"DetailType,omitempty"`
 	Detail       string     `json:"Detail,omitempty"`
 	EventBusName string     `json:"EventBusName,omitempty"`
-	Time         *time.Time `json:"Time,omitempty"`
+	Time         *EpochTime `json:"Time,omitempty"`
 	Resources    []string   `json:"Resources,omitempty"`
 }
 
