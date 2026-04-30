@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -39,10 +40,14 @@ func newKMSCreateKeyCmd() *cobra.Command {
 
 			out, err := client.CreateKey(cmd.Context(), &kms.CreateKeyInput{})
 			if err != nil {
-				return err
+				return fmt.Errorf("create-key failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 }
@@ -67,8 +72,11 @@ func newKMSCreateAliasCmd() *cobra.Command {
 				TargetKeyId: aws.String(targetKeyID),
 				AliasName:   aws.String(aliasName),
 			})
+			if err != nil {
+				return fmt.Errorf("create-alias failed: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
