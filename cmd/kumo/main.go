@@ -3,8 +3,13 @@ package main
 
 import (
 	"log"
+	"os"
 
+	"github.com/spf13/cobra"
+
+	kumocli "github.com/sivchari/kumo/cli"
 	"github.com/sivchari/kumo/internal/server"
+
 	// Register services via init().
 	_ "github.com/sivchari/kumo/internal/service/acm"
 	_ "github.com/sivchari/kumo/internal/service/amplify"
@@ -86,10 +91,37 @@ import (
 )
 
 func main() {
+	root := kumocli.NewRootCmd()
+
+	// Add serve command for backward compatibility.
+	// Running `kumo` without subcommands also starts the server.
+	serveCmd := &cobra.Command{
+		Use:   "serve",
+		Short: "Start the kumo server",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runServer()
+		},
+	}
+
+	root.AddCommand(serveCmd)
+
+	// If no subcommand is given, start the server (backward compatible).
+	if len(os.Args) == 1 {
+		if err := runServer(); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runServer() error {
 	cfg := server.DefaultConfig()
 	srv := server.New(cfg)
 
-	if err := srv.Run(); err != nil {
-		log.Fatal(err)
-	}
+	return srv.Run()
 }
