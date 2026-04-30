@@ -27,6 +27,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&region, "region", "ap-northeast-1", "AWS region")
 
 	cmd.AddCommand(
+		newACMCmd(),
 		newS3Cmd(),
 		newS3APICmd(),
 		newDynamoDBCmd(),
