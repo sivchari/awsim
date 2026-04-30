@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -92,39 +91,31 @@ import (
 func main() {
 	root := kumocli.NewRootCmd()
 
-	// Add serve command for backward compatibility.
-	// Running `kumo` without subcommands also starts the server.
+	// Root command starts the server when no CLI subcommand is matched.
+	// Docker uses `kumo --host 0.0.0.0 --port 4566`, so we accept these flags.
+	root.RunE = func(_ *cobra.Command, _ []string) error {
+		cfg := server.DefaultConfig()
+		srv := server.New(cfg)
+
+		if err := srv.Run(); err != nil {
+			return fmt.Errorf("server failed: %w", err)
+		}
+
+		return nil
+	}
+
+	root.Flags().String("host", "", "Server host (use KUMO_HOST env var)")
+	root.Flags().String("port", "", "Server port (use KUMO_PORT env var)")
+
 	serveCmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the kumo server",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return runServer()
-		},
+		RunE:  root.RunE,
 	}
 
 	root.AddCommand(serveCmd)
 
-	// If no subcommand is given, start the server (backward compatible).
-	if len(os.Args) == 1 {
-		if err := runServer(); err != nil {
-			log.Fatal(err)
-		}
-
-		return
-	}
-
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
-}
-
-func runServer() error {
-	cfg := server.DefaultConfig()
-	srv := server.New(cfg)
-
-	if err := srv.Run(); err != nil {
-		return fmt.Errorf("server failed: %w", err)
-	}
-
-	return nil
 }
