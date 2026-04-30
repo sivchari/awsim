@@ -90,7 +90,12 @@ func (t *EpochTime) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON serialises as an RFC3339 string for consistency.
 func (t EpochTime) MarshalJSON() ([]byte, error) {
-	return json.Marshal(t.Time)
+	data, err := json.Marshal(t.Time)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal time: %w", err)
+	}
+
+	return data, nil
 }
 
 // PutEventsRequestEntry represents an entry in PutEvents request.
