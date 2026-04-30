@@ -562,7 +562,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name: "size comparison",
-			item: Item{"pk": {S: ptr("1")}, "items": {L: []AttributeValue{{S: ptr("a")}, {S: ptr("b")}, {S: ptr("c")}}}},
+			item: Item{"pk": {S: ptr("1")}, "items": {L: []*AttributeValue{{S: ptr("a")}, {S: ptr("b")}, {S: ptr("c")}}}},
 			cond: ConditionInput{
 				Expression: "size(items) > :min",
 				ExprValues: map[string]AttributeValue{
@@ -573,7 +573,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name: "size comparison fails",
-			item: Item{"pk": {S: ptr("1")}, "items": {L: []AttributeValue{{S: ptr("a")}}}},
+			item: Item{"pk": {S: ptr("1")}, "items": {L: []*AttributeValue{{S: ptr("a")}}}},
 			cond: ConditionInput{
 				Expression: "size(items) > :min",
 				ExprValues: map[string]AttributeValue{
@@ -604,7 +604,7 @@ func TestEvaluateCondition(t *testing.T) {
 		},
 		{
 			name: "nested path attribute_exists",
-			item: Item{"pk": {S: ptr("1")}, "meta": {M: map[string]AttributeValue{"version": {N: ptr("1")}}}},
+			item: Item{"pk": {S: ptr("1")}, "meta": {M: map[string]*AttributeValue{"version": {N: ptr("1")}}}},
 			cond: ConditionInput{
 				Expression: "attribute_exists(meta.version)",
 			},

@@ -245,7 +245,7 @@ func evalContains(av AttributeValue, operand AttributeValue) bool {
 	// List contains value.
 	if av.L != nil {
 		for _, elem := range av.L {
-			if attributeValuesEqualStatic(elem, operand) {
+			if attributeValuesEqualStatic(*elem, operand) {
 				return true
 			}
 		}
@@ -474,10 +474,12 @@ func resolveItemPath(item Item, path string) (AttributeValue, bool) {
 			return AttributeValue{}, false
 		}
 
-		val, ok = val.M[part]
-		if !ok {
+		ptr, ok := val.M[part]
+		if !ok || ptr == nil {
 			return AttributeValue{}, false
 		}
+
+		val = *ptr
 	}
 
 	return val, true
