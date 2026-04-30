@@ -790,20 +790,22 @@ func (m *MemoryStorage) copyAttributeValue(av AttributeValue) AttributeValue {
 	}
 
 	if av.M != nil {
-		mapCopy := make(map[string]AttributeValue)
+		mapCopy := make(map[string]*AttributeValue)
 
 		for k, v := range av.M {
-			mapCopy[k] = m.copyAttributeValue(v)
+			copied := m.copyAttributeValue(*v)
+			mapCopy[k] = &copied //nolint:gosec // copied is a fresh value per iteration
 		}
 
 		result.M = mapCopy
 	}
 
 	if av.L != nil {
-		listCopy := make([]AttributeValue, len(av.L))
+		listCopy := make([]*AttributeValue, len(av.L))
 
 		for i, v := range av.L {
-			listCopy[i] = m.copyAttributeValue(v)
+			copied := m.copyAttributeValue(*v)
+			listCopy[i] = &copied //nolint:gosec // copied is a fresh value per iteration
 		}
 
 		result.L = listCopy

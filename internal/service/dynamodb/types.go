@@ -21,21 +21,19 @@ const (
 )
 
 // AttributeValue represents a DynamoDB attribute value.
-// Only one field should be set at a time.
-// AttributeValue represents a DynamoDB attribute value.
-// Custom MarshalJSON preserves empty lists/maps/sets (e.g. "L": []) instead of
-// omitting them, which is required for correct round-trip serialization.
+// Custom MarshalJSON/UnmarshalJSON handle serialization to preserve empty
+// collections (e.g. "L": [], "SS": []) and omit nil fields.
 type AttributeValue struct {
-	S    *string                   `json:"S,omitempty"`
-	N    *string                   `json:"N,omitempty"`
-	B    []byte                    `json:"B,omitempty"`
-	SS   []string                  `json:"-"`
-	NS   []string                  `json:"-"`
-	BS   [][]byte                  `json:"-"`
-	M    map[string]AttributeValue `json:"-"`
-	L    []AttributeValue          `json:"-"`
-	NULL *bool                     `json:"NULL,omitempty"`
-	BOOL *bool                     `json:"BOOL,omitempty"`
+	S    *string
+	N    *string
+	B    []byte
+	SS   []string
+	NS   []string
+	BS   [][]byte
+	M    map[string]*AttributeValue
+	L    []*AttributeValue
+	NULL *bool
+	BOOL *bool
 }
 
 // MarshalJSON serializes AttributeValue, preserving empty slices/maps.
@@ -92,18 +90,17 @@ func (av *AttributeValue) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON deserializes AttributeValue.
 func (av *AttributeValue) UnmarshalJSON(data []byte) error {
-	// Use a raw struct to avoid infinite recursion.
 	var raw struct {
-		S    *string                   `json:"S"`
-		N    *string                   `json:"N"`
-		B    []byte                    `json:"B"`
-		SS   []string                  `json:"SS"`
-		NS   []string                  `json:"NS"`
-		BS   [][]byte                  `json:"BS"`
-		M    map[string]AttributeValue `json:"M"`
-		L    []AttributeValue          `json:"L"`
-		NULL *bool                     `json:"NULL"`
-		BOOL *bool                     `json:"BOOL"`
+		S    *string                    `json:"S"`
+		N    *string                    `json:"N"`
+		B    []byte                     `json:"B"`
+		SS   []string                   `json:"SS"`
+		NS   []string                   `json:"NS"`
+		BS   [][]byte                   `json:"BS"`
+		M    map[string]*AttributeValue `json:"M"`
+		L    []*AttributeValue          `json:"L"`
+		NULL *bool                      `json:"NULL"`
+		BOOL *bool                      `json:"BOOL"`
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
