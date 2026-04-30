@@ -28,6 +28,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		newACMCmd(),
+		newAmplifyCmd(),
 		newS3Cmd(),
 		newS3APICmd(),
 		newDynamoDBCmd(),
