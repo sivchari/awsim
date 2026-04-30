@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.14.1](https://github.com/sivchari/kumo/compare/v0.14.0...v0.14.1) - 2026-04-30
+- fix(dynamodb): handle space between function name and parenthesis in ConditionExpression by @sivchari in https://github.com/sivchari/kumo/pull/484
+- fix(server): fallback Query protocol routing when User-Agent lacks service identifier by @sivchari in https://github.com/sivchari/kumo/pull/483
+- fix(eventbridge): accept epoch seconds in PutEvents Time field by @sivchari in https://github.com/sivchari/kumo/pull/485
+- release v0.14.1 by @sivchari in https://github.com/sivchari/kumo/pull/487
+
 ## [v0.14.0](https://github.com/sivchari/kumo/compare/v0.13.0...v0.14.0) - 2026-04-28
 - feat(s3): implement CopyObject by @sivchari in https://github.com/sivchari/kumo/pull/480
 - release v0.14.0 by @sivchari in https://github.com/sivchari/kumo/pull/482
