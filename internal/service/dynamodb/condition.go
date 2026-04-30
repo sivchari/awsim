@@ -132,6 +132,11 @@ func parsePrimary(expr string, item Item, values map[string]AttributeValue) (boo
 		if strings.HasPrefix(trimmed, fn+"(") {
 			return parseFunctionCall(fn, trimmed[len(fn):], item, values)
 		}
+
+		// Handle optional space between function name and parenthesis: fn (args).
+		if strings.HasPrefix(trimmed, fn+" (") {
+			return parseFunctionCall(fn, strings.TrimSpace(trimmed[len(fn):]), item, values)
+		}
 	}
 
 	// size() function used in comparison: size(path) op value
