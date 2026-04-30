@@ -2,6 +2,7 @@
 package dynamodb
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -20,17 +21,101 @@ const (
 
 // AttributeValue represents a DynamoDB attribute value.
 // Only one field should be set at a time.
+// AttributeValue represents a DynamoDB attribute value.
+// Custom MarshalJSON preserves empty lists/maps/sets (e.g. "L": []) instead of
+// omitting them, which is required for correct round-trip serialization.
 type AttributeValue struct {
 	S    *string                   `json:"S,omitempty"`
 	N    *string                   `json:"N,omitempty"`
 	B    []byte                    `json:"B,omitempty"`
-	SS   []string                  `json:"SS,omitempty"`
-	NS   []string                  `json:"NS,omitempty"`
-	BS   [][]byte                  `json:"BS,omitempty"`
-	M    map[string]AttributeValue `json:"M,omitempty"`
-	L    []AttributeValue          `json:"L,omitempty"`
+	SS   []string                  `json:"-"`
+	NS   []string                  `json:"-"`
+	BS   [][]byte                  `json:"-"`
+	M    map[string]AttributeValue `json:"-"`
+	L    []AttributeValue          `json:"-"`
 	NULL *bool                     `json:"NULL,omitempty"`
 	BOOL *bool                     `json:"BOOL,omitempty"`
+}
+
+// MarshalJSON serializes AttributeValue, preserving empty slices/maps.
+func (av AttributeValue) MarshalJSON() ([]byte, error) {
+	m := make(map[string]any)
+
+	if av.S != nil {
+		m["S"] = av.S
+	}
+
+	if av.N != nil {
+		m["N"] = av.N
+	}
+
+	if av.B != nil {
+		m["B"] = av.B
+	}
+
+	if av.SS != nil {
+		m["SS"] = av.SS
+	}
+
+	if av.NS != nil {
+		m["NS"] = av.NS
+	}
+
+	if av.BS != nil {
+		m["BS"] = av.BS
+	}
+
+	if av.M != nil {
+		m["M"] = av.M
+	}
+
+	if av.L != nil {
+		m["L"] = av.L
+	}
+
+	if av.NULL != nil {
+		m["NULL"] = av.NULL
+	}
+
+	if av.BOOL != nil {
+		m["BOOL"] = av.BOOL
+	}
+
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON deserializes AttributeValue.
+func (av *AttributeValue) UnmarshalJSON(data []byte) error {
+	// Use a raw struct to avoid infinite recursion.
+	var raw struct {
+		S    *string                   `json:"S"`
+		N    *string                   `json:"N"`
+		B    []byte                    `json:"B"`
+		SS   []string                  `json:"SS"`
+		NS   []string                  `json:"NS"`
+		BS   [][]byte                  `json:"BS"`
+		M    map[string]AttributeValue `json:"M"`
+		L    []AttributeValue          `json:"L"`
+		NULL *bool                     `json:"NULL"`
+		BOOL *bool                     `json:"BOOL"`
+	}
+
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err //nolint:wrapcheck // internal deserialization
+	}
+
+	av.S = raw.S
+	av.N = raw.N
+	av.B = raw.B
+	av.SS = raw.SS
+	av.NS = raw.NS
+	av.BS = raw.BS
+	av.M = raw.M
+	av.L = raw.L
+	av.NULL = raw.NULL
+	av.BOOL = raw.BOOL
+
+	return nil
 }
 
 // KeySchemaElement represents a key schema element.
