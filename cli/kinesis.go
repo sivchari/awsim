@@ -21,6 +21,7 @@ func newKinesisCmd() *cobra.Command {
 
 func newKinesisCreateStreamCmd() *cobra.Command {
 	var streamName string
+
 	var shardCount int32
 
 	cmd := &cobra.Command{

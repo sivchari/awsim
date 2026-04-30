@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -48,10 +49,14 @@ func newEventsCreateEventBusCmd() *cobra.Command {
 				Name: aws.String(name),
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("create-event-bus failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -82,10 +87,11 @@ func newEventsCreateConnectionCmd() *cobra.Command {
 			}
 
 			if authParamsJSON != "" {
+				//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 				var params struct {
 					APIKeyAuthParameters *struct {
-						ApiKeyName  string `json:"ApiKeyName"`
-						ApiKeyValue string `json:"ApiKeyValue"`
+						APIKeyName  string `json:"ApiKeyName"`
+						APIKeyValue string `json:"ApiKeyValue"`
 					} `json:"ApiKeyAuthParameters"`
 				}
 
@@ -94,8 +100,8 @@ func newEventsCreateConnectionCmd() *cobra.Command {
 				if params.APIKeyAuthParameters != nil {
 					input.AuthParameters = &ebTypes.CreateConnectionAuthRequestParameters{
 						ApiKeyAuthParameters: &ebTypes.CreateConnectionApiKeyAuthRequestParameters{
-							ApiKeyName:  aws.String(params.APIKeyAuthParameters.ApiKeyName),
-							ApiKeyValue: aws.String(params.APIKeyAuthParameters.ApiKeyValue),
+							ApiKeyName:  aws.String(params.APIKeyAuthParameters.APIKeyName),
+							ApiKeyValue: aws.String(params.APIKeyAuthParameters.APIKeyValue),
 						},
 					}
 				}
@@ -103,10 +109,14 @@ func newEventsCreateConnectionCmd() *cobra.Command {
 
 			out, err := client.CreateConnection(cmd.Context(), input)
 			if err != nil {
-				return err
+				return fmt.Errorf("create-connection failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -137,7 +147,7 @@ func newEventsDescribeConnectionCmd() *cobra.Command {
 				Name: aws.String(name),
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("describe-connection failed: %w", err)
 			}
 
 			// Handle --query and --output for AWS CLI compatibility.
@@ -149,7 +159,11 @@ func newEventsDescribeConnectionCmd() *cobra.Command {
 				return nil
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -162,6 +176,7 @@ func newEventsDescribeConnectionCmd() *cobra.Command {
 
 func newEventsCreateAPIDestinationCmd() *cobra.Command {
 	var name, connArn, endpoint, method string
+
 	var rateLimit int32
 
 	cmd := &cobra.Command{
@@ -185,10 +200,14 @@ func newEventsCreateAPIDestinationCmd() *cobra.Command {
 				InvocationRateLimitPerSecond: aws.Int32(rateLimit),
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("create-api-destination failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -233,10 +252,14 @@ func newEventsPutRuleCmd() *cobra.Command {
 
 			out, err := client.PutRule(cmd.Context(), input)
 			if err != nil {
-				return err
+				return fmt.Errorf("put-rule failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -276,10 +299,14 @@ func newEventsPutTargetsCmd() *cobra.Command {
 
 			out, err := client.PutTargets(cmd.Context(), input)
 			if err != nil {
-				return err
+				return fmt.Errorf("put-targets failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -291,6 +318,7 @@ func newEventsPutTargetsCmd() *cobra.Command {
 }
 
 func parseTargets(s string) []ebTypes.Target {
+	//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 	var raw []struct {
 		ID             string `json:"Id"`
 		Arn            string `json:"Arn"`
@@ -302,7 +330,7 @@ func parseTargets(s string) []ebTypes.Target {
 
 	_ = json.Unmarshal([]byte(s), &raw)
 
-	var targets []ebTypes.Target
+	targets := make([]ebTypes.Target, 0, len(raw))
 
 	for _, t := range raw {
 		target := ebTypes.Target{

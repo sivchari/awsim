@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -9,9 +10,7 @@ import (
 
 	kumocli "github.com/sivchari/kumo/cli"
 	"github.com/sivchari/kumo/internal/server"
-
-	// Register services via init().
-	_ "github.com/sivchari/kumo/internal/service/acm"
+	_ "github.com/sivchari/kumo/internal/service/acm" // Register services via init().
 	_ "github.com/sivchari/kumo/internal/service/amplify"
 	_ "github.com/sivchari/kumo/internal/service/apigateway"
 	_ "github.com/sivchari/kumo/internal/service/appmesh"
@@ -123,5 +122,9 @@ func runServer() error {
 	cfg := server.DefaultConfig()
 	srv := server.New(cfg)
 
-	return srv.Run()
+	if err := srv.Run(); err != nil {
+		return fmt.Errorf("server failed: %w", err)
+	}
+
+	return nil
 }

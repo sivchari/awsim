@@ -76,10 +76,14 @@ func newDynamoDBCreateTableCmd() *cobra.Command {
 
 			out, err := client.CreateTable(cmd.Context(), input)
 			if err != nil {
-				return err
+				return fmt.Errorf("create-table failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 
@@ -113,6 +117,7 @@ func newDynamoDBUpdateTimeToLiveCmd() *cobra.Command {
 				o.BaseEndpoint = aws.String(endpointURL)
 			})
 
+			//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 			var ttl struct {
 				Enabled       string `json:"Enabled"`
 				AttributeName string `json:"AttributeName"`
@@ -127,8 +132,11 @@ func newDynamoDBUpdateTimeToLiveCmd() *cobra.Command {
 					AttributeName: aws.String(ttl.AttributeName),
 				},
 			})
+			if err != nil {
+				return fmt.Errorf("update-time-to-live failed: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
@@ -140,9 +148,10 @@ func newDynamoDBUpdateTimeToLiveCmd() *cobra.Command {
 }
 
 func parseAttributeDefinitions(s string) []ddbTypes.AttributeDefinition {
-	var defs []ddbTypes.AttributeDefinition
+	fields := strings.Fields(s)
+	defs := make([]ddbTypes.AttributeDefinition, 0, len(fields))
 
-	for _, field := range strings.Fields(s) {
+	for _, field := range fields {
 		m := parseKV(field)
 		defs = append(defs, ddbTypes.AttributeDefinition{
 			AttributeName: aws.String(m["AttributeName"]),
@@ -154,9 +163,10 @@ func parseAttributeDefinitions(s string) []ddbTypes.AttributeDefinition {
 }
 
 func parseKeySchema(s string) []ddbTypes.KeySchemaElement {
-	var schema []ddbTypes.KeySchemaElement
+	fields := strings.Fields(s)
+	schema := make([]ddbTypes.KeySchemaElement, 0, len(fields))
 
-	for _, field := range strings.Fields(s) {
+	for _, field := range fields {
 		m := parseKV(field)
 		schema = append(schema, ddbTypes.KeySchemaElement{
 			AttributeName: aws.String(m["AttributeName"]),
@@ -172,8 +182,8 @@ func parseProvisionedThroughput(s string) *ddbTypes.ProvisionedThroughput {
 
 	var rcu, wcu int64
 
-	fmt.Sscanf(m["ReadCapacityUnits"], "%d", &rcu)
-	fmt.Sscanf(m["WriteCapacityUnits"], "%d", &wcu)
+	_, _ = fmt.Sscanf(m["ReadCapacityUnits"], "%d", &rcu)
+	_, _ = fmt.Sscanf(m["WriteCapacityUnits"], "%d", &wcu)
 
 	return &ddbTypes.ProvisionedThroughput{
 		ReadCapacityUnits:  aws.Int64(rcu),
@@ -182,6 +192,7 @@ func parseProvisionedThroughput(s string) *ddbTypes.ProvisionedThroughput {
 }
 
 func parseGSI(s string) []ddbTypes.GlobalSecondaryIndex {
+	//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 	var raw []struct {
 		IndexName string `json:"IndexName"`
 		KeySchema []struct {
@@ -199,7 +210,7 @@ func parseGSI(s string) []ddbTypes.GlobalSecondaryIndex {
 
 	_ = json.Unmarshal([]byte(s), &raw)
 
-	var gsis []ddbTypes.GlobalSecondaryIndex
+	gsis := make([]ddbTypes.GlobalSecondaryIndex, 0, len(raw))
 
 	for _, g := range raw {
 		gsi := ddbTypes.GlobalSecondaryIndex{
@@ -228,6 +239,7 @@ func parseGSI(s string) []ddbTypes.GlobalSecondaryIndex {
 }
 
 func parseLSI(s string) []ddbTypes.LocalSecondaryIndex {
+	//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 	var raw []struct {
 		IndexName string `json:"IndexName"`
 		KeySchema []struct {
@@ -241,7 +253,7 @@ func parseLSI(s string) []ddbTypes.LocalSecondaryIndex {
 
 	_ = json.Unmarshal([]byte(s), &raw)
 
-	var lsis []ddbTypes.LocalSecondaryIndex
+	lsis := make([]ddbTypes.LocalSecondaryIndex, 0, len(raw))
 
 	for _, l := range raw {
 		lsi := ddbTypes.LocalSecondaryIndex{

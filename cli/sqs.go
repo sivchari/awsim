@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -50,10 +51,14 @@ func newSQSCreateQueueCmd() *cobra.Command {
 
 			out, err := client.CreateQueue(cmd.Context(), input)
 			if err != nil {
-				return err
+				return fmt.Errorf("create-queue failed: %w", err)
 			}
 
-			return json.NewEncoder(os.Stdout).Encode(out)
+			if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+				return fmt.Errorf("failed to encode output: %w", err)
+			}
+
+			return nil
 		},
 	}
 

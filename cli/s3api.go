@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -47,8 +48,11 @@ func newS3APIPutObjectCmd() *cobra.Command {
 				Key:    aws.String(key),
 				Body:   strings.NewReader(""),
 			})
+			if err != nil {
+				return fmt.Errorf("put-object failed: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
@@ -75,6 +79,7 @@ func newS3APIPutBucketNotificationConfigurationCmd() *cobra.Command {
 				o.UsePathStyle = true
 			})
 
+			//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 			var nc struct {
 				EventBridgeConfiguration *struct{} `json:"EventBridgeConfiguration"`
 			}
@@ -91,8 +96,11 @@ func newS3APIPutBucketNotificationConfigurationCmd() *cobra.Command {
 			}
 
 			_, err = client.PutBucketNotificationConfiguration(cmd.Context(), input)
+			if err != nil {
+				return fmt.Errorf("put-bucket-notification-configuration failed: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
@@ -119,6 +127,7 @@ func newS3APIPutBucketCorsCmd() *cobra.Command {
 				o.UsePathStyle = true
 			})
 
+			//nolint:tagliatelle // AWS CLI JSON format uses PascalCase.
 			var input struct {
 				CORSRules []struct {
 					AllowedHeaders []string `json:"AllowedHeaders"`
@@ -129,7 +138,7 @@ func newS3APIPutBucketCorsCmd() *cobra.Command {
 
 			_ = json.Unmarshal([]byte(corsConfig), &input)
 
-			var rules []s3Types.CORSRule
+			rules := make([]s3Types.CORSRule, 0, len(input.CORSRules))
 			for _, r := range input.CORSRules {
 				rules = append(rules, s3Types.CORSRule{
 					AllowedHeaders: r.AllowedHeaders,
@@ -142,8 +151,11 @@ func newS3APIPutBucketCorsCmd() *cobra.Command {
 				Bucket:            aws.String(bucket),
 				CORSConfiguration: &s3Types.CORSConfiguration{CORSRules: rules},
 			})
+			if err != nil {
+				return fmt.Errorf("put-bucket-cors failed: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
