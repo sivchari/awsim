@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.14.3](https://github.com/sivchari/kumo/compare/v0.14.2...v0.14.3) - 2026-04-30
+- fix(dynamodb): use pointer types for M and L fields in AttributeValue by @sivchari in https://github.com/sivchari/kumo/pull/491
+- release v0.14.3 by @sivchari in https://github.com/sivchari/kumo/pull/492
+
 ## [v0.14.2](https://github.com/sivchari/kumo/compare/v0.14.1...v0.14.2) - 2026-04-30
 - fix(dynamodb): preserve empty lists/maps/sets in AttributeValue serialization by @sivchari in https://github.com/sivchari/kumo/pull/488
 - release v0.14.2 by @sivchari in https://github.com/sivchari/kumo/pull/489
