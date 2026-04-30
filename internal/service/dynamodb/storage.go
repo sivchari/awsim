@@ -794,7 +794,7 @@ func (m *MemoryStorage) copyAttributeValue(av AttributeValue) AttributeValue {
 
 		for k, v := range av.M {
 			copied := m.copyAttributeValue(*v)
-			mapCopy[k] = &copied //nolint:gosec // copied is a fresh value per iteration
+			mapCopy[k] = &copied
 		}
 
 		result.M = mapCopy
@@ -805,7 +805,7 @@ func (m *MemoryStorage) copyAttributeValue(av AttributeValue) AttributeValue {
 
 		for i, v := range av.L {
 			copied := m.copyAttributeValue(*v)
-			listCopy[i] = &copied //nolint:gosec // copied is a fresh value per iteration
+			listCopy[i] = &copied
 		}
 
 		result.L = listCopy
