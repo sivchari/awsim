@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.14.2](https://github.com/sivchari/kumo/compare/v0.14.1...v0.14.2) - 2026-04-30
+- fix(dynamodb): preserve empty lists/maps/sets in AttributeValue serialization by @sivchari in https://github.com/sivchari/kumo/pull/488
+- release v0.14.2 by @sivchari in https://github.com/sivchari/kumo/pull/489
+
 ## [v0.14.1](https://github.com/sivchari/kumo/compare/v0.14.0...v0.14.1) - 2026-04-30
 - fix(dynamodb): handle space between function name and parenthesis in ConditionExpression by @sivchari in https://github.com/sivchari/kumo/pull/484
 - fix(server): fallback Query protocol routing when User-Agent lacks service identifier by @sivchari in https://github.com/sivchari/kumo/pull/483
