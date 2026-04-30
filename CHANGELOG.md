@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.15.0](https://github.com/sivchari/kumo/compare/v0.14.3...v0.15.0) - 2026-04-30
+- feat(cli): add AWS-compatible CLI subcommands for resource management by @sivchari in https://github.com/sivchari/kumo/pull/494
+- release v0.15.0 by @sivchari in https://github.com/sivchari/kumo/pull/496
+
 ## [v0.14.3](https://github.com/sivchari/kumo/compare/v0.14.2...v0.14.3) - 2026-04-30
 - fix(dynamodb): use pointer types for M and L fields in AttributeValue by @sivchari in https://github.com/sivchari/kumo/pull/491
 - release v0.14.3 by @sivchari in https://github.com/sivchari/kumo/pull/492
