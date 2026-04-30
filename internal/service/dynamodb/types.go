@@ -3,7 +3,6 @@ package dynamodb
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -39,7 +38,7 @@ type AttributeValue struct {
 }
 
 // MarshalJSON serializes AttributeValue, preserving empty slices/maps.
-func (av *AttributeValue) MarshalJSON() ([]byte, error) {
+func (av AttributeValue) MarshalJSON() ([]byte, error) {
 	m := make(map[string]any)
 
 	if av.S != nil {
@@ -82,12 +81,7 @@ func (av *AttributeValue) MarshalJSON() ([]byte, error) {
 		m["BOOL"] = av.BOOL
 	}
 
-	data, err := json.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal attribute value: %w", err)
-	}
-
-	return data, nil
+	return json.Marshal(m)
 }
 
 // UnmarshalJSON deserializes AttributeValue.
