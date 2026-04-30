@@ -77,49 +77,11 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	// Identify the target service from User-Agent header.
 	svcID := parseServiceFromUserAgent(r.Header.Get("User-Agent"))
 
-	var entry queryHandlerEntry
+	entry, err := d.resolveHandler(svcID, action)
+	if err != nil {
+		writeQueryError(w, err.code, err.message)
 
-	if svcID != "" {
-		// Look up handler by service identifier and action.
-		actions, ok := d.actionHandlers[svcID]
-		if !ok {
-			writeQueryError(w, "UnknownService",
-				"Unknown service: "+svcID)
-
-			return
-		}
-
-		entry, ok = actions[action]
-		if !ok {
-			writeQueryError(w, "UnknownAction",
-				"Action "+action+" is not supported for service "+svcID)
-
-			return
-		}
-	} else {
-		// Fallback: search all services for a unique action match.
-		var found bool
-
-		for _, actions := range d.actionHandlers {
-			if e, ok := actions[action]; ok {
-				if found {
-					writeQueryError(w, "AmbiguousAction",
-						"Action "+action+" matches multiple services; send a User-Agent with api/ identifier")
-
-					return
-				}
-
-				entry = e
-				found = true
-			}
-		}
-
-		if !found {
-			writeQueryError(w, "UnknownAction",
-				"Action "+action+" is not supported")
-
-			return
-		}
+		return
 	}
 
 	// Convert form data to JSON and dispatch.
@@ -129,6 +91,58 @@ func (d *QueryProtocolDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	r.Header.Set("Content-Type", "application/x-amz-json-1.0")
 	r.Header.Set("X-Amz-Target", entry.servicePrefix+"."+action)
 	entry.handler(w, r)
+}
+
+// queryResolveError represents an error during handler resolution.
+type queryResolveError struct {
+	code    string
+	message string
+}
+
+// resolveHandler finds the handler for the given service ID and action.
+func (d *QueryProtocolDispatcher) resolveHandler(svcID, action string) (queryHandlerEntry, *queryResolveError) {
+	if svcID != "" {
+		return d.resolveByService(svcID, action)
+	}
+
+	return d.resolveByFallback(action)
+}
+
+func (d *QueryProtocolDispatcher) resolveByService(svcID, action string) (queryHandlerEntry, *queryResolveError) {
+	actions, ok := d.actionHandlers[svcID]
+	if !ok {
+		return queryHandlerEntry{}, &queryResolveError{"UnknownService", "Unknown service: " + svcID}
+	}
+
+	entry, ok := actions[action]
+	if !ok {
+		return queryHandlerEntry{}, &queryResolveError{"UnknownAction", "Action " + action + " is not supported for service " + svcID}
+	}
+
+	return entry, nil
+}
+
+func (d *QueryProtocolDispatcher) resolveByFallback(action string) (queryHandlerEntry, *queryResolveError) {
+	var entry queryHandlerEntry
+
+	var found bool
+
+	for _, actions := range d.actionHandlers {
+		if e, ok := actions[action]; ok {
+			if found {
+				return queryHandlerEntry{}, &queryResolveError{"AmbiguousAction", "Action " + action + " matches multiple services; send a User-Agent with api/ identifier"}
+			}
+
+			entry = e
+			found = true
+		}
+	}
+
+	if !found {
+		return queryHandlerEntry{}, &queryResolveError{"UnknownAction", "Action " + action + " is not supported"}
+	}
+
+	return entry, nil
 }
 
 // parseServiceFromUserAgent extracts the service identifier from the AWS SDK v2 User-Agent header.
