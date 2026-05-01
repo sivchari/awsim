@@ -308,6 +308,11 @@ func (s *Service) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert legacy AttributeUpdates to UpdateExpression if needed.
+	if req.UpdateExpression == "" && len(req.AttributeUpdates) > 0 {
+		convertAttributeUpdates(&req)
+	}
+
 	cond := ConditionInput{
 		Expression: req.ConditionExpression,
 		ExprNames:  req.ExpressionAttributeNames,
@@ -839,4 +844,50 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handler(w, r)
+}
+
+// convertAttributeUpdates converts legacy AttributeUpdates to UpdateExpression.
+func convertAttributeUpdates(req *UpdateItemRequest) {
+	if req.ExpressionAttributeNames == nil {
+		req.ExpressionAttributeNames = make(map[string]string)
+	}
+
+	if req.ExpressionAttributeValues == nil {
+		req.ExpressionAttributeValues = make(map[string]AttributeValue)
+	}
+
+	var setParts, removeParts, addParts []string
+	idx := 0
+
+	for attr, update := range req.AttributeUpdates {
+		nameKey := fmt.Sprintf("#au%d", idx)
+		valueKey := fmt.Sprintf(":au%d", idx)
+		req.ExpressionAttributeNames[nameKey] = attr
+
+		switch strings.ToUpper(update.Action) {
+		case "PUT", "":
+			req.ExpressionAttributeValues[valueKey] = update.Value
+			setParts = append(setParts, nameKey+" = "+valueKey)
+		case "DELETE":
+			removeParts = append(removeParts, nameKey)
+		case "ADD":
+			req.ExpressionAttributeValues[valueKey] = update.Value
+			addParts = append(addParts, nameKey+" "+valueKey)
+		}
+
+		idx++
+	}
+
+	var parts []string
+	if len(setParts) > 0 {
+		parts = append(parts, "SET "+strings.Join(setParts, ", "))
+	}
+	if len(removeParts) > 0 {
+		parts = append(parts, "REMOVE "+strings.Join(removeParts, ", "))
+	}
+	if len(addParts) > 0 {
+		parts = append(parts, "ADD "+strings.Join(addParts, ", "))
+	}
+
+	req.UpdateExpression = strings.Join(parts, " ")
 }
