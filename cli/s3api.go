@@ -58,6 +58,7 @@ func newS3APIPutObjectCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&bucket, "bucket", "", "Bucket name")
 	cmd.Flags().StringVar(&key, "key", "", "Object key")
+	cmd.Flags().Int64("content-length", 0, "Content length (ignored)")
 
 	return cmd
 }

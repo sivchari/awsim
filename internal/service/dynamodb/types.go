@@ -332,15 +332,22 @@ type DeleteItemResponse struct {
 	Attributes Item `json:"Attributes,omitempty"`
 }
 
+// AttributeValueUpdate represents a legacy AttributeUpdates entry.
+type AttributeValueUpdate struct {
+	Action string         `json:"Action"` // PUT, DELETE, ADD
+	Value  AttributeValue `json:"Value"`
+}
+
 // UpdateItemRequest is the request for UpdateItem.
 type UpdateItemRequest struct {
-	TableName                 string                    `json:"TableName"`
-	Key                       Item                      `json:"Key"`
-	UpdateExpression          string                    `json:"UpdateExpression,omitempty"`
-	ConditionExpression       string                    `json:"ConditionExpression,omitempty"`
-	ExpressionAttributeNames  map[string]string         `json:"ExpressionAttributeNames,omitempty"`
-	ExpressionAttributeValues map[string]AttributeValue `json:"ExpressionAttributeValues,omitempty"`
-	ReturnValues              string                    `json:"ReturnValues,omitempty"`
+	TableName                 string                          `json:"TableName"`
+	Key                       Item                            `json:"Key"`
+	UpdateExpression          string                          `json:"UpdateExpression,omitempty"`
+	ConditionExpression       string                          `json:"ConditionExpression,omitempty"`
+	ExpressionAttributeNames  map[string]string               `json:"ExpressionAttributeNames,omitempty"`
+	ExpressionAttributeValues map[string]AttributeValue       `json:"ExpressionAttributeValues,omitempty"`
+	AttributeUpdates          map[string]AttributeValueUpdate `json:"AttributeUpdates,omitempty"`
+	ReturnValues              string                          `json:"ReturnValues,omitempty"`
 }
 
 // UpdateItemResponse is the response for UpdateItem.
