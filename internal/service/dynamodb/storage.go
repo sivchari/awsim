@@ -585,9 +585,27 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 		results = append(results, m.copyItem(item))
 	}
 
-	// Sort results.
+	// Sort results by sort key (DynamoDB Query always returns sorted by sort key).
+	var sortKeyName string
+
+	for _, ks := range keySchema {
+		if ks.KeyType == "RANGE" {
+			sortKeyName = ks.AttributeName
+
+			break
+		}
+	}
+
+	if sortKeyName != "" {
+		sort.Slice(results, func(i, j int) bool {
+			vi := results[i][sortKeyName]
+			vj := results[j][sortKeyName]
+
+			return m.compareForSort(vi, vj)
+		})
+	}
+
 	if !scanForward {
-		// Reverse order.
 		for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
 			results[i], results[j] = results[j], results[i]
 		}
@@ -1465,4 +1483,22 @@ func (m *MemoryStorage) DescribeTimeToLive(_ context.Context, tableName string) 
 	}
 
 	return td.Table.TTLAttributeName, td.Table.TTLEnabled, nil
+}
+
+// compareForSort compares two AttributeValues for sorting (S or N type).
+func (m *MemoryStorage) compareForSort(a, b AttributeValue) bool {
+	if a.S != nil && b.S != nil {
+		return *a.S < *b.S
+	}
+
+	if a.N != nil && b.N != nil {
+		var an, bn float64
+
+		_, _ = fmt.Sscanf(*a.N, "%f", &an)
+		_, _ = fmt.Sscanf(*b.N, "%f", &bn)
+
+		return an < bn
+	}
+
+	return false
 }

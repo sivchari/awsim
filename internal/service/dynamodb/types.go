@@ -37,7 +37,9 @@ type AttributeValue struct {
 }
 
 // MarshalJSON serializes AttributeValue, preserving empty slices/maps.
-func (av *AttributeValue) MarshalJSON() ([]byte, error) {
+//
+//nolint:gocritic // hugeParam: value receiver is required so json.Marshal works on map[string]AttributeValue (Item type).
+func (av AttributeValue) MarshalJSON() ([]byte, error) {
 	m := make(map[string]any)
 
 	if av.S != nil {

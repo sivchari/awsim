@@ -30,8 +30,8 @@ func newDynamoDBCmd() *cobra.Command {
 func newDynamoDBCreateTableCmd() *cobra.Command {
 	var (
 		tableName      string
-		attrDefs       string
-		keySchema      string
+		attrDefs       []string
+		keySchema      []string
 		billingMode    string
 		provThroughput string
 		gsiJSON        string
@@ -88,8 +88,8 @@ func newDynamoDBCreateTableCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&tableName, "table-name", "", "Table name")
-	cmd.Flags().StringVar(&attrDefs, "attribute-definitions", "", "Attribute definitions (space-separated key=value pairs)")
-	cmd.Flags().StringVar(&keySchema, "key-schema", "", "Key schema (space-separated key=value pairs)")
+	cmd.Flags().StringArrayVar(&attrDefs, "attribute-definitions", nil, "Attribute definitions (key=value pairs)")
+	cmd.Flags().StringArrayVar(&keySchema, "key-schema", nil, "Key schema (key=value pairs)")
 	cmd.Flags().StringVar(&billingMode, "billing-mode", "", "Billing mode (PROVISIONED or PAY_PER_REQUEST)")
 	cmd.Flags().StringVar(&provThroughput, "provisioned-throughput", "", "Provisioned throughput (key=value)")
 	cmd.Flags().StringVar(&gsiJSON, "global-secondary-indexes", "", "Global secondary indexes (JSON)")
@@ -147,12 +147,11 @@ func newDynamoDBUpdateTimeToLiveCmd() *cobra.Command {
 	return cmd
 }
 
-func parseAttributeDefinitions(s string) []ddbTypes.AttributeDefinition {
-	fields := strings.Fields(s)
-	defs := make([]ddbTypes.AttributeDefinition, 0, len(fields))
+func parseAttributeDefinitions(args []string) []ddbTypes.AttributeDefinition {
+	defs := make([]ddbTypes.AttributeDefinition, 0, len(args))
 
-	for _, field := range fields {
-		m := parseKV(field)
+	for _, arg := range args {
+		m := parseKV(arg)
 		defs = append(defs, ddbTypes.AttributeDefinition{
 			AttributeName: aws.String(m["AttributeName"]),
 			AttributeType: ddbTypes.ScalarAttributeType(m["AttributeType"]),
@@ -162,12 +161,11 @@ func parseAttributeDefinitions(s string) []ddbTypes.AttributeDefinition {
 	return defs
 }
 
-func parseKeySchema(s string) []ddbTypes.KeySchemaElement {
-	fields := strings.Fields(s)
-	schema := make([]ddbTypes.KeySchemaElement, 0, len(fields))
+func parseKeySchema(args []string) []ddbTypes.KeySchemaElement {
+	schema := make([]ddbTypes.KeySchemaElement, 0, len(args))
 
-	for _, field := range fields {
-		m := parseKV(field)
+	for _, arg := range args {
+		m := parseKV(arg)
 		schema = append(schema, ddbTypes.KeySchemaElement{
 			AttributeName: aws.String(m["AttributeName"]),
 			KeyType:       ddbTypes.KeyType(m["KeyType"]),
