@@ -21,6 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/amplify v1.38.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/apigateway v1.39.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/appmesh v1.35.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/appsync v1.53.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.25 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
