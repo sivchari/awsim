@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.16.0](https://github.com/sivchari/kumo/compare/v0.15.0...v0.16.0) - 2026-05-01
+- feat(cli): add ACM subcommands by @sivchari in https://github.com/sivchari/kumo/pull/497
+- feat(cli): add Amplify subcommands by @sivchari in https://github.com/sivchari/kumo/pull/499
+- feat(cli): add API Gateway subcommands by @sivchari in https://github.com/sivchari/kumo/pull/500
+- feat(cli): add App Mesh subcommands by @sivchari in https://github.com/sivchari/kumo/pull/501
+- feat(cli): add AppSync subcommands by @sivchari in https://github.com/sivchari/kumo/pull/502
+- feat(cli): add Athena subcommands by @sivchari in https://github.com/sivchari/kumo/pull/503
+- feat(cli): add Backup subcommands by @sivchari in https://github.com/sivchari/kumo/pull/504
+- feat(dynamodb): support legacy AttributeUpdates in UpdateItem by @sivchari in https://github.com/sivchari/kumo/pull/505
+- release v0.16.0 by @sivchari in https://github.com/sivchari/kumo/pull/506
+
 ## [v0.15.0](https://github.com/sivchari/kumo/compare/v0.14.3...v0.15.0) - 2026-04-30
 - feat(cli): add AWS-compatible CLI subcommands for resource management by @sivchari in https://github.com/sivchari/kumo/pull/494
 - release v0.15.0 by @sivchari in https://github.com/sivchari/kumo/pull/496
