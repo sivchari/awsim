@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.16.1](https://github.com/sivchari/kumo/compare/v0.16.0...v0.16.1) - 2026-05-01
+- fix(dynamodb): sort Query results by sort key and fix MarshalJSON for Item type by @sivchari in https://github.com/sivchari/kumo/pull/507
+
 ## [v0.16.0](https://github.com/sivchari/kumo/compare/v0.15.0...v0.16.0) - 2026-05-01
 - feat(cli): add ACM subcommands by @sivchari in https://github.com/sivchari/kumo/pull/497
 - feat(cli): add Amplify subcommands by @sivchari in https://github.com/sivchari/kumo/pull/499
