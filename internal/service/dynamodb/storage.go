@@ -601,7 +601,7 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 			vi := results[i][sortKeyName]
 			vj := results[j][sortKeyName]
 
-			return m.compareForSort(vi, vj)
+			return m.compareForSort(&vi, &vj)
 		})
 	}
 
@@ -1486,7 +1486,7 @@ func (m *MemoryStorage) DescribeTimeToLive(_ context.Context, tableName string) 
 }
 
 // compareForSort compares two AttributeValues for sorting (S or N type).
-func (m *MemoryStorage) compareForSort(a, b AttributeValue) bool {
+func (m *MemoryStorage) compareForSort(a, b *AttributeValue) bool {
 	if a.S != nil && b.S != nil {
 		return *a.S < *b.S
 	}
