@@ -859,6 +859,7 @@ func convertAttributeUpdates(req *UpdateItemRequest) {
 	var setParts, removeParts, addParts []string
 
 	idx := 0
+
 	for attr := range req.AttributeUpdates {
 		update := req.AttributeUpdates[attr]
 		nameKey := fmt.Sprintf("#au%d", idx)
