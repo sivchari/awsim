@@ -857,9 +857,10 @@ func convertAttributeUpdates(req *UpdateItemRequest) {
 	}
 
 	var setParts, removeParts, addParts []string
-	idx := 0
 
-	for attr, update := range req.AttributeUpdates {
+	idx := 0
+	for attr := range req.AttributeUpdates {
+		update := req.AttributeUpdates[attr]
 		nameKey := fmt.Sprintf("#au%d", idx)
 		valueKey := fmt.Sprintf(":au%d", idx)
 		req.ExpressionAttributeNames[nameKey] = attr
@@ -867,11 +868,13 @@ func convertAttributeUpdates(req *UpdateItemRequest) {
 		switch strings.ToUpper(update.Action) {
 		case "PUT", "":
 			req.ExpressionAttributeValues[valueKey] = update.Value
+
 			setParts = append(setParts, nameKey+" = "+valueKey)
 		case "DELETE":
 			removeParts = append(removeParts, nameKey)
 		case "ADD":
 			req.ExpressionAttributeValues[valueKey] = update.Value
+
 			addParts = append(addParts, nameKey+" "+valueKey)
 		}
 
@@ -879,12 +882,15 @@ func convertAttributeUpdates(req *UpdateItemRequest) {
 	}
 
 	var parts []string
+
 	if len(setParts) > 0 {
 		parts = append(parts, "SET "+strings.Join(setParts, ", "))
 	}
+
 	if len(removeParts) > 0 {
 		parts = append(parts, "REMOVE "+strings.Join(removeParts, ", "))
 	}
+
 	if len(addParts) > 0 {
 		parts = append(parts, "ADD "+strings.Join(addParts, ", "))
 	}
