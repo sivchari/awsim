@@ -30,6 +30,8 @@ github.com/aws/aws-sdk-go-v2/service/appmesh v1.35.14 h1:31mnzduRd3FyuGCwgdMfPAu
 github.com/aws/aws-sdk-go-v2/service/appmesh v1.35.14/go.mod h1:u/RTn1872BcpTxDnsQXi0AO8nxMch/46nlr3/loCpu8=
 github.com/aws/aws-sdk-go-v2/service/appsync v1.53.7 h1:SjkXYNc15FoovS9k6ML7dO7pkXE3ns66RXwL+rfQVl8=
 github.com/aws/aws-sdk-go-v2/service/appsync v1.53.7/go.mod h1:RcoBov7Pw38ViMxlthKRr1GLgHPPseA+kY2bupWVm10=
+github.com/aws/aws-sdk-go-v2/service/athena v1.57.6 h1:QPDxHlfHmozXUj9rmUyxQiOLVEJL3qX4x56CrwAtytM=
+github.com/aws/aws-sdk-go-v2/service/athena v1.57.6/go.mod h1:3QLTFWWkK+tGp4LD0ClX5Ib75MWE5H66vBat1N9f8Os=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.3 h1:XgjzLEE8CrNYnr4Xmi1W5PfKsKMjp4Pu1rWkJNO43JI=
 github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.3/go.mod h1:r7sfLXEN8RUA89tAHy1E7lCtVOOWIkqVy/FbnUdxW1E=
 github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.25 h1:9PZbyFSCN/E0TnqXqnvYJRhu7yQJv31vHG/vyuirbCY=

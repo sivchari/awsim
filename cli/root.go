@@ -32,6 +32,7 @@ func NewRootCmd() *cobra.Command {
 		newAPIGatewayCmd(),
 		newAppMeshCmd(),
 		newAppSyncCmd(),
+		newAthenaCmd(),
 		newS3Cmd(),
 		newS3APICmd(),
 		newDynamoDBCmd(),
