@@ -1018,12 +1018,76 @@ func applySetClause(item Item, clause string, exprValues map[string]AttributeVal
 			continue
 		}
 
+		// Handle arithmetic: path + :val or path - :val
+		if val, ok := evaluateSetArithmetic(item, valueExpr, exprValues); ok {
+			item[attrName] = val
+
+			continue
+		}
+
 		if val, ok := exprValues[valueExpr]; ok {
 			item[attrName] = val
 		}
 	}
 
 	return item
+}
+
+// evaluateSetArithmetic handles "path + :val" and "path - :val" expressions.
+func evaluateSetArithmetic(item Item, expr string, exprValues map[string]AttributeValue) (AttributeValue, bool) {
+	for _, op := range []string{" + ", " - "} {
+		idx := strings.Index(expr, op)
+		if idx == -1 {
+			continue
+		}
+
+		leftToken := strings.TrimSpace(expr[:idx])
+		rightToken := strings.TrimSpace(expr[idx+len(op):])
+
+		left := resolveSetOperand(item, leftToken, exprValues)
+		right := resolveSetOperand(item, rightToken, exprValues)
+
+		if left.N == nil || right.N == nil {
+			return AttributeValue{}, false
+		}
+
+		leftNum, err1 := strconv.ParseFloat(*left.N, 64)
+		rightNum, err2 := strconv.ParseFloat(*right.N, 64)
+
+		if err1 != nil || err2 != nil {
+			return AttributeValue{}, false
+		}
+
+		var result float64
+		if op == " + " {
+			result = leftNum + rightNum
+		} else {
+			result = leftNum - rightNum
+		}
+
+		resultStr := strconv.FormatFloat(result, 'f', -1, 64)
+
+		return AttributeValue{N: &resultStr}, true
+	}
+
+	return AttributeValue{}, false
+}
+
+// resolveSetOperand resolves a token to an AttributeValue for SET expressions.
+func resolveSetOperand(item Item, token string, exprValues map[string]AttributeValue) AttributeValue {
+	if strings.HasPrefix(token, ":") {
+		if val, ok := exprValues[token]; ok {
+			return val
+		}
+
+		return AttributeValue{}
+	}
+
+	if val, ok := item[token]; ok {
+		return val
+	}
+
+	return AttributeValue{}
 }
 
 // applyIfNotExists handles the if_not_exists(attr, :val) function within a SET clause.
