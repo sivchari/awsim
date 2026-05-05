@@ -1001,7 +1001,7 @@ func parseUpdateClauses(expr string) []updateClause {
 
 // applySetClause handles SET attr = :val, SET attr = if_not_exists(attr, :val).
 func applySetClause(item Item, clause string, exprValues map[string]AttributeValue) Item {
-	assignments := strings.Split(clause, ",")
+	assignments := splitAssignments(clause)
 	for _, assignment := range assignments {
 		parts := strings.SplitN(strings.TrimSpace(assignment), "=", 2)
 		if len(parts) != 2 {
@@ -1011,14 +1011,14 @@ func applySetClause(item Item, clause string, exprValues map[string]AttributeVal
 		attrName := strings.TrimSpace(parts[0])
 		valueExpr := strings.TrimSpace(parts[1])
 
-		// Handle if_not_exists(attr, :val)
-		if strings.HasPrefix(valueExpr, "if_not_exists(") {
+		// Handle if_not_exists(attr, :val) — but only if not combined with arithmetic.
+		if strings.HasPrefix(valueExpr, "if_not_exists(") && !containsArithmeticOp(valueExpr) {
 			applyIfNotExists(item, attrName, valueExpr, exprValues)
 
 			continue
 		}
 
-		// Handle arithmetic: path + :val or path - :val
+		// Handle arithmetic: path + :val, path - :val, if_not_exists(...) + :val
 		if val, ok := evaluateSetArithmetic(item, valueExpr, exprValues); ok {
 			item[attrName] = val
 
@@ -1031,6 +1031,52 @@ func applySetClause(item Item, clause string, exprValues map[string]AttributeVal
 	}
 
 	return item
+}
+
+// splitAssignments splits a SET clause into individual assignments, respecting parentheses.
+func splitAssignments(clause string) []string {
+	var result []string
+
+	depth := 0
+	start := 0
+
+	for i, ch := range clause {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				result = append(result, clause[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	result = append(result, clause[start:])
+
+	return result
+}
+
+// containsArithmeticOp checks if expression contains + or - operators outside of parentheses.
+func containsArithmeticOp(expr string) bool {
+	depth := 0
+
+	for i, ch := range expr {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '+', '-':
+			if depth == 0 && i > 0 && expr[i-1] == ' ' {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // evaluateSetArithmetic handles "path + :val" and "path - :val" expressions.
@@ -1074,7 +1120,13 @@ func evaluateSetArithmetic(item Item, expr string, exprValues map[string]Attribu
 }
 
 // resolveSetOperand resolves a token to an AttributeValue for SET expressions.
+// Supports: :placeholder, path, and if_not_exists(path, :default).
 func resolveSetOperand(item Item, token string, exprValues map[string]AttributeValue) AttributeValue {
+	// Handle if_not_exists(path, :default)
+	if strings.HasPrefix(token, "if_not_exists(") {
+		return resolveIfNotExists(item, token, exprValues)
+	}
+
 	if strings.HasPrefix(token, ":") {
 		if val, ok := exprValues[token]; ok {
 			return val
@@ -1084,6 +1136,30 @@ func resolveSetOperand(item Item, token string, exprValues map[string]AttributeV
 	}
 
 	if val, ok := item[token]; ok {
+		return val
+	}
+
+	return AttributeValue{}
+}
+
+// resolveIfNotExists evaluates if_not_exists(path, :default) and returns the resolved value.
+func resolveIfNotExists(item Item, token string, exprValues map[string]AttributeValue) AttributeValue {
+	inner := strings.TrimPrefix(token, "if_not_exists(")
+	inner = strings.TrimSuffix(inner, ")")
+
+	parts := strings.SplitN(inner, ",", 2)
+	if len(parts) != 2 {
+		return AttributeValue{}
+	}
+
+	path := strings.TrimSpace(parts[0])
+	defaultPlaceholder := strings.TrimSpace(parts[1])
+
+	if val, ok := item[path]; ok {
+		return val
+	}
+
+	if val, ok := exprValues[defaultPlaceholder]; ok {
 		return val
 	}
 
