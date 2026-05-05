@@ -142,6 +142,61 @@ func (s *Service) ListTopics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Request) {
+	var req TopicAttributesRequest
+	if err := readJSONRequest(r, &req); err != nil {
+		writeTopicError(w, errInvalidParameter, "Failed to parse request body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.TopicARN == "" {
+		writeTopicError(w, errInvalidParameter, "TopicArn is required", http.StatusBadRequest)
+
+		return
+	}
+
+	// Get the attributes
+	attributes, err := s.storage.GetTopicAttributes(r.Context(), req.TopicARN)
+	if err != nil {
+		var sErr *TopicError
+		if errors.As(err, &sErr) {
+			status := http.StatusBadRequest
+			if sErr.Code == errNotFound {
+				status = http.StatusNotFound
+			}
+
+			writeTopicError(w, sErr.Code, sErr.Message, status)
+
+			return
+		}
+
+		writeTopicError(w, errInternalServiceError, "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	var entries []XMLEntry
+
+	// Construct each XML Entry from attributes
+	for k, v := range attributes {
+		entries = append(entries, XMLEntry{Key: k, Value: v})
+	}
+
+	writeXMLResponse(w, XMLGetTopicAttributesResponse{
+		Xmlns: snsXMLNS,
+		GetTopicAttributesResult: XMLGetTopicAttributesResult{
+			Attributes: XMLAttributes{
+				Entry: entries,
+			},
+		},
+		ResponseMetadata: ResponseMetadata{
+			RequestID: uuid.New().String(),
+		},
+	})
+
+}
+
 // Subscribe handles the Subscribe action.
 func (s *Service) Subscribe(w http.ResponseWriter, r *http.Request) {
 	var req SubscribeRequest
@@ -460,6 +515,8 @@ func (s *Service) DispatchAction(w http.ResponseWriter, r *http.Request) {
 		s.ListSubscriptions(w, r)
 	case "ListSubscriptionsByTopic":
 		s.ListSubscriptionsByTopic(w, r)
+	case "GetTopicAttributes":
+		s.GetTopicAttributesHandler(w, r)
 	default:
 		writeTopicError(w, errInvalidAction, "The action "+action+" is not valid", http.StatusBadRequest)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type Storage interface {
 	Publish(ctx context.Context, topicARN, message, subject string, attributes map[string]MessageAttribute) (string, error)
 	ListSubscriptions(ctx context.Context, nextToken string) ([]*Subscription, string, error)
 	ListSubscriptionsByTopic(ctx context.Context, topicARN, nextToken string) ([]*Subscription, string, error)
+	GetTopicAttributes(ctx context.Context, topicARN string) (map[string]string, error)
 }
 
 // Option is a configuration option for MemoryStorage.
@@ -470,4 +472,26 @@ func (m *MemoryStorage) buildSubscriptionARN(topicARN string) string {
 
 	return fmt.Sprintf("arn:aws:sns:%s:%s:%s:%s",
 		defaultRegion, defaultAccountID, topicName, uuid.New().String())
+}
+
+// Get Topic Attributes.
+func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (map[string]string, error){
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	topic, exists := m.Topics[topicARN]
+	if !exists {
+		return nil, &TopicError{
+			Code:    "NotFound",
+			Message: fmt.Sprintf("Topic does not exist: %s", topicARN),
+		}
+	}
+	
+	// Initialize the attributes map
+	attributes := make(map[string]string)
+
+	// Copy the attributes for thread safety
+	maps.Copy(attributes, topic.Attributes)
+
+	return attributes, nil
 }
