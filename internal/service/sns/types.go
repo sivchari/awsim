@@ -167,7 +167,7 @@ type XMLCreateTopicResult struct {
 	TopicArn string `xml:"TopicArn"`
 }
 
-// XMLGetTopicAttributesResponse is the XML response for GetTopicAttributes
+// XMLGetTopicAttributesResponse is the XML response for GetTopicAttributes.
 type XMLGetTopicAttributesResponse struct {
 	XMLName                  struct{}                    `xml:"GetTopicAttributesResponse"`
 	Xmlns                    string                      `xml:"xmlns,attr"`
@@ -175,14 +175,17 @@ type XMLGetTopicAttributesResponse struct {
 	ResponseMetadata         ResponseMetadata            `xml:"ResponseMetadata"`
 }
 
+// XMLGetTopicAttributesResult is the XML result for GetTopicAttributesResult.
 type XMLGetTopicAttributesResult struct {
 	Attributes XMLAttributes `xml:"Attributes"`
 }
 
+// XMLAttributes is the wrapper for each entry.
 type XMLAttributes struct {
 	Entry []XMLEntry `xml:"entry"`
 }
 
+// XMLEntry contanins key and value pairs to align with AWS requirements.
 type XMLEntry struct {
 	Key   string `xml:"key"`
 	Value string `xml:"value"`

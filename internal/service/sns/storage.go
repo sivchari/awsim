@@ -474,8 +474,8 @@ func (m *MemoryStorage) buildSubscriptionARN(topicARN string) string {
 		defaultRegion, defaultAccountID, topicName, uuid.New().String())
 }
 
-// Get Topic Attributes.
-func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (map[string]string, error){
+// GetTopicAttributes returns the attribute of a topic.
+func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (map[string]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -486,7 +486,6 @@ func (m *MemoryStorage) GetTopicAttributes(_ context.Context, topicARN string) (
 			Message: fmt.Sprintf("Topic does not exist: %s", topicARN),
 		}
 	}
-	
 	// Initialize the attributes map
 	attributes := make(map[string]string)
 

@@ -142,6 +142,7 @@ func (s *Service) ListTopics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetTopicAttributesHandler handles the GetTopicAttributes action.
 func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Request) {
 	var req TopicAttributesRequest
 	if err := readJSONRequest(r, &req); err != nil {
@@ -194,7 +195,6 @@ func (s *Service) GetTopicAttributesHandler(w http.ResponseWriter, r *http.Reque
 			RequestID: uuid.New().String(),
 		},
 	})
-
 }
 
 // Subscribe handles the Subscribe action.
