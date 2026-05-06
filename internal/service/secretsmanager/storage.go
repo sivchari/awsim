@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -481,21 +482,53 @@ func (m *MemoryStorage) findSecret(secretID string) *Secret {
 		return secret
 	}
 
-	// Try by ARN.
+	// Try by ARN (exact match).
 	for _, secret := range m.Secrets {
 		if secret.ARN == secretID {
 			return secret
 		}
 	}
 
+	// Try by partial ARN match.
+	// AWS supports lookup by ARN with a different random suffix.
+	// Match by checking if the stored secret's ARN prefix (before the random suffix) matches.
+	if strings.HasPrefix(secretID, "arn:aws:secretsmanager:") {
+		secretNamePart := extractAfterSecretColon(secretID)
+
+		for _, secret := range m.Secrets {
+			storedNamePart := extractAfterSecretColon(secret.ARN)
+			// Compare the name portion: both should start with the same secret name.
+			// The stored ARN has format NAME-6chars, the input ARN has NAME-Xchars.
+			// Match if they share the same NAME prefix (everything up to the secret name).
+			if storedNamePart != "" && secretNamePart != "" &&
+				strings.HasPrefix(secretNamePart, secret.Name+"-") {
+				return secret
+			}
+		}
+	}
+
 	return nil
+}
+
+// extractAfterSecretColon extracts the portion after ":secret:" in an ARN.
+func extractAfterSecretColon(arn string) string {
+	parts := strings.SplitN(arn, ":secret:", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
+	return parts[1]
 }
 
 // buildARN builds an ARN for a secret.
 func (m *MemoryStorage) buildARN(name string) string {
-	// Extract region from baseURL if possible, otherwise use default.
-	region := defaultRegion
+	region := os.Getenv("AWS_DEFAULT_REGION")
+	if region == "" {
+		region = defaultRegion
+	}
+
+	suffix := uuid.New().String()[:6]
 
 	return fmt.Sprintf("arn:aws:secretsmanager:%s:%s:secret:%s-%s",
-		region, defaultAccountID, name, strings.ReplaceAll(uuid.New().String()[:6], "-", ""))
+		region, defaultAccountID, name, suffix)
 }
