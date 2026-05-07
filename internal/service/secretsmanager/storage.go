@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -485,6 +486,19 @@ func (m *MemoryStorage) findSecret(secretID string) *Secret {
 	for _, secret := range m.Secrets {
 		if secret.ARN == secretID {
 			return secret
+		}
+	}
+
+	// Try by partial ARN (without random suffix).
+	// AWS allows GetSecretValue with "arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME"
+	// even though the full ARN is "arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME-SUFFIX".
+	if strings.HasPrefix(secretID, "arn:aws:secretsmanager:") {
+		parts := strings.SplitN(secretID, ":secret:", 2)
+		if len(parts) == 2 {
+			name := parts[1]
+			if secret, exists := m.Secrets[name]; exists {
+				return secret
+			}
 		}
 	}
 
