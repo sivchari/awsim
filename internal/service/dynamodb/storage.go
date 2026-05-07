@@ -558,6 +558,12 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 	// Parse key condition to extract partition key value.
 	partitionKeyValue := m.extractPartitionKeyValue(keyCondExpr, partitionKeyName, exprNames, exprValues)
 
+	// Resolve expression attribute names in key condition.
+	resolvedKeyCondExpr := keyCondExpr
+	for placeholder, name := range exprNames {
+		resolvedKeyCondExpr = strings.ReplaceAll(resolvedKeyCondExpr, placeholder, name)
+	}
+
 	// Collect matching items.
 	var results []Item
 
@@ -577,7 +583,20 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 			}
 		}
 
-		// Apply filter expression (simplified).
+		// Evaluate full key condition expression (includes RANGE key conditions like >=, BETWEEN, begins_with).
+		if resolvedKeyCondExpr != "" {
+			keyCond := ConditionInput{
+				Expression: resolvedKeyCondExpr,
+				ExprValues: exprValues,
+			}
+
+			ok, _ := evaluateCondition(item, keyCond)
+			if !ok {
+				continue
+			}
+		}
+
+		// Apply filter expression.
 		if filterExpr != "" && !m.evaluateFilterExpression(item, filterExpr, exprNames, exprValues) {
 			continue
 		}
