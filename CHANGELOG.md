@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.17.0](https://github.com/sivchari/kumo/compare/v0.16.1...v0.17.0) - 2026-05-07
+- feat(dynamodb): support arithmetic expressions in SET clause by @sivchari in https://github.com/sivchari/kumo/pull/510
+- fix(secretsmanager): support partial ARN lookup and use AWS_DEFAULT_REGION by @sivchari in https://github.com/sivchari/kumo/pull/514
+- feat(sqs): implement long polling for ReceiveMessage by @sivchari in https://github.com/sivchari/kumo/pull/515
+- feat(sfn): add SendTaskSuccess, SendTaskFailure, SendTaskHeartbeat stubs by @sivchari in https://github.com/sivchari/kumo/pull/516
+- fix(secretsmanager): remove partial ARN match for AWS compatibility by @sivchari in https://github.com/sivchari/kumo/pull/518
+- fix(sfn,lambda): use AWS_DEFAULT_REGION and fix Lambda routing by @sivchari in https://github.com/sivchari/kumo/pull/520
+- release v0.17.0 by @sivchari in https://github.com/sivchari/kumo/pull/519
+
 ## [v0.16.1](https://github.com/sivchari/kumo/compare/v0.16.0...v0.16.1) - 2026-05-01
 - fix(dynamodb): sort Query results by sort key and fix MarshalJSON for Item type by @sivchari in https://github.com/sivchari/kumo/pull/507
 
