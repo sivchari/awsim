@@ -24,6 +24,9 @@ func (s *Service) getActionHandlers() map[string]handlerFunc {
 		"DescribeExecution":    s.DescribeExecution,
 		"ListExecutions":       s.ListExecutions,
 		"GetExecutionHistory":  s.GetExecutionHistory,
+		"SendTaskSuccess":      s.SendTaskSuccess,
+		"SendTaskFailure":      s.SendTaskFailure,
+		"SendTaskHeartbeat":    s.SendTaskHeartbeat,
 	}
 }
 
@@ -378,4 +381,22 @@ func getErrorStatus(code string) int {
 	default:
 		return http.StatusBadRequest
 	}
+}
+
+// SendTaskSuccess handles the SendTaskSuccess API.
+// Since kumo does not manage task tokens, it always returns InvalidToken.
+func (s *Service) SendTaskSuccess(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, "InvalidToken", "Invalid token", http.StatusBadRequest)
+}
+
+// SendTaskFailure handles the SendTaskFailure API.
+// Since kumo does not manage task tokens, it always returns InvalidToken.
+func (s *Service) SendTaskFailure(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, "InvalidToken", "Invalid token", http.StatusBadRequest)
+}
+
+// SendTaskHeartbeat handles the SendTaskHeartbeat API.
+// Since kumo does not manage task tokens, it always returns InvalidToken.
+func (s *Service) SendTaskHeartbeat(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, "InvalidToken", "Invalid token", http.StatusBadRequest)
 }
