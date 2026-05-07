@@ -95,6 +95,7 @@ type QueueData struct {
 	Inflight           map[string]*Message           `json:"-"`               // receiptHandle -> message
 	DeduplicationCache map[string]DeduplicationEntry `json:"-"`               // deduplicationID -> entry (FIFO only)
 	SequenceCounter    uint64                        `json:"sequenceCounter"` // Per-queue sequence number (FIFO only)
+	notify             chan struct{}                 // signals new message arrival for long polling
 }
 
 // NewMemoryStorage creates a new in-memory SQS storage.
@@ -235,6 +236,7 @@ func (s *MemoryStorage) CreateQueue(_ context.Context, name string, attributes, 
 		Queue:    queue,
 		Messages: make([]*Message, 0),
 		Inflight: make(map[string]*Message),
+		notify:   make(chan struct{}, 1),
 	}
 
 	if isFifo {
@@ -482,17 +484,60 @@ func (s *MemoryStorage) SendMessage(_ context.Context, queueURL, body string, de
 
 	qd.Messages = append(qd.Messages, msg)
 
+	// Notify long-polling receivers.
+	select {
+	case qd.notify <- struct{}{}:
+	default:
+	}
+
 	return msg, nil
 }
 
 // ReceiveMessage receives messages from a queue.
-func (s *MemoryStorage) ReceiveMessage(_ context.Context, queueURL string, maxMessages, visibilityTimeout, _ int) ([]*Message, error) {
+// If waitTimeSeconds > 0 and no messages are available, it waits for messages to arrive (long polling).
+func (s *MemoryStorage) ReceiveMessage(ctx context.Context, queueURL string, maxMessages, visibilityTimeout, waitTimeSeconds int) ([]*Message, error) {
+	// Try to receive messages immediately.
+	result, notify, err := s.receiveMessagesLocked(queueURL, maxMessages, visibilityTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) > 0 || waitTimeSeconds <= 0 {
+		return result, nil
+	}
+
+	// Long polling: wait for messages or timeout.
+	timer := time.NewTimer(time.Duration(waitTimeSeconds) * time.Second)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("receive message cancelled: %w", ctx.Err())
+		case <-timer.C:
+			return []*Message{}, nil
+		case <-notify:
+			result, _, err = s.receiveMessagesLocked(queueURL, maxMessages, visibilityTimeout)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(result) > 0 {
+				return result, nil
+			}
+		}
+	}
+}
+
+// receiveMessagesLocked attempts to receive messages while holding the lock.
+// Returns the notify channel for long polling if no messages are available.
+func (s *MemoryStorage) receiveMessagesLocked(queueURL string, maxMessages, visibilityTimeout int) ([]*Message, <-chan struct{}, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	_, qd, err := s.resolveQueueData(queueURL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if visibilityTimeout == 0 {
@@ -539,7 +584,7 @@ func (s *MemoryStorage) ReceiveMessage(_ context.Context, queueURL string, maxMe
 
 	qd.Messages = remaining
 
-	return result, nil
+	return result, qd.notify, nil
 }
 
 // DeleteMessage deletes a message from a queue.
