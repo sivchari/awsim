@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.18.0](https://github.com/sivchari/kumo/compare/v0.17.2...v0.18.0) - 2026-05-07
+- sort changelog by @sivchari in https://github.com/sivchari/kumo/pull/536
+- ci: replace manual actions/cache with setup-go built-in cache by @sivchari in https://github.com/sivchari/kumo/pull/538
+- feat(s3): implement PutObjectTagging and GetObjectTagging by @sivchari in https://github.com/sivchari/kumo/pull/539
+- release v0.18.0 by @sivchari in https://github.com/sivchari/kumo/pull/540
+
 ## [v0.17.2](https://github.com/sivchari/kumo/compare/v0.17.1...v0.17.2) - 2026-05-07
 - feat(secretsmanager): support partial ARN lookup per AWS spec by @sivchari in https://github.com/sivchari/kumo/pull/523
 - re-run v0.17.2 release by @sivchari in https://github.com/sivchari/kumo/pull/531
