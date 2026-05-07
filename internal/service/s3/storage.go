@@ -52,6 +52,10 @@ type Storage interface {
 	ListMultipartUploads(ctx context.Context, bucket, prefix string, maxUploads int) ([]*MultipartUpload, error)
 	ListParts(ctx context.Context, bucket, key, uploadID string, maxParts int) ([]*Part, error)
 
+	// Object tagging
+	PutObjectTagging(ctx context.Context, bucket, key string, tags map[string]string) error
+	GetObjectTagging(ctx context.Context, bucket, key string) (map[string]string, error)
+
 	// Notification and CORS
 	SetEventBridgeNotification(ctx context.Context, bucket string, enabled bool)
 	IsEventBridgeEnabled(ctx context.Context, bucket string) bool
@@ -343,6 +347,49 @@ func (s *MemoryStorage) GetObjectVersion(_ context.Context, bucket, key, version
 	}
 
 	return nil, &ObjectError{Code: "NoSuchVersion", Message: "The specified version does not exist.", Key: key}
+}
+
+// PutObjectTagging sets tags on an object.
+func (s *MemoryStorage) PutObjectTagging(_ context.Context, bucket, key string, tags map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bd, exists := s.Buckets[bucket]
+	if !exists {
+		return &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist"}
+	}
+
+	obj, exists := bd.Objects[key]
+	if !exists {
+		return &BucketError{Code: "NoSuchKey", Message: "The specified key does not exist."}
+	}
+
+	obj.Tags = tags
+	bd.Objects[key] = obj
+
+	return nil
+}
+
+// GetObjectTagging retrieves tags from an object.
+func (s *MemoryStorage) GetObjectTagging(_ context.Context, bucket, key string) (map[string]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bd, exists := s.Buckets[bucket]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchBucket", Message: "The specified bucket does not exist"}
+	}
+
+	obj, exists := bd.Objects[key]
+	if !exists {
+		return nil, &BucketError{Code: "NoSuchKey", Message: "The specified key does not exist."}
+	}
+
+	if obj.Tags == nil {
+		return map[string]string{}, nil
+	}
+
+	return obj.Tags, nil
 }
 
 // DeleteObject deletes an object.

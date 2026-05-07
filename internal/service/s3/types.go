@@ -21,8 +21,26 @@ type Object struct {
 	LastModified   time.Time
 	ContentType    string
 	Metadata       map[string]string
+	Tags           map[string]string
 	VersionID      string
 	IsDeleteMarker bool
+}
+
+// Tagging represents the XML structure for S3 object tagging.
+type Tagging struct {
+	XMLName xml.Name `xml:"Tagging"`
+	TagSet  TagSet   `xml:"TagSet"`
+}
+
+// TagSet represents a set of tags.
+type TagSet struct {
+	Tags []Tag `xml:"Tag"`
+}
+
+// Tag represents a single tag key-value pair.
+type Tag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
 }
 
 // XML Response Types

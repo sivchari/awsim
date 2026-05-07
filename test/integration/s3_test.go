@@ -1337,3 +1337,93 @@ func TestS3_CopyObject(t *testing.T) {
 		"ServerSideEncryption", "CopySourceVersionId",
 	)).Assert(t.Name(), copyOutput)
 }
+
+func TestS3_PutAndGetObjectTagging(t *testing.T) {
+	client := newS3Client(t)
+	ctx := t.Context()
+	bucket := "test-tagging-bucket"
+	key := "test-object"
+
+	// Create bucket.
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		})
+		_, _ = client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
+			Bucket: aws.String(bucket),
+		})
+	})
+
+	// Put object.
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   strings.NewReader("original-body"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put tags.
+	_, err = client.PutObjectTagging(ctx, &s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Tagging: &types.Tagging{
+			TagSet: []types.Tag{
+				{Key: aws.String("env"), Value: aws.String("test")},
+				{Key: aws.String("team"), Value: aws.String("platform")},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get tags.
+	tagOutput, err := client.GetObjectTagging(ctx, &s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tagOutput.TagSet) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tagOutput.TagSet))
+	}
+
+	tagMap := make(map[string]string)
+	for _, tag := range tagOutput.TagSet {
+		tagMap[*tag.Key] = *tag.Value
+	}
+
+	if tagMap["env"] != "test" {
+		t.Errorf("tag env = %q, want %q", tagMap["env"], "test")
+	}
+
+	if tagMap["team"] != "platform" {
+		t.Errorf("tag team = %q, want %q", tagMap["team"], "platform")
+	}
+
+	// Verify body not overwritten.
+	getOutput, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := io.ReadAll(getOutput.Body)
+	if string(body) != "original-body" {
+		t.Errorf("body = %q, want %q", string(body), "original-body")
+	}
+}
