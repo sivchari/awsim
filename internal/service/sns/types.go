@@ -59,6 +59,11 @@ type TopicEntry struct {
 	TopicARN string `json:"TopicArn"`
 }
 
+// TopicAttributesRequest is the request for topic attributes.
+type TopicAttributesRequest struct {
+	TopicARN string `json:"TopicArn"`
+}
+
 // SubscribeRequest is the request for Subscribe.
 type SubscribeRequest struct {
 	TopicARN              string            `json:"TopicArn"`
@@ -160,6 +165,30 @@ type XMLCreateTopicResponse struct {
 // XMLCreateTopicResult contains the CreateTopic result.
 type XMLCreateTopicResult struct {
 	TopicArn string `xml:"TopicArn"`
+}
+
+// XMLGetTopicAttributesResponse is the XML response for GetTopicAttributes.
+type XMLGetTopicAttributesResponse struct {
+	XMLName                  struct{}                    `xml:"GetTopicAttributesResponse"`
+	Xmlns                    string                      `xml:"xmlns,attr"`
+	GetTopicAttributesResult XMLGetTopicAttributesResult `xml:"GetTopicAttributesResult"`
+	ResponseMetadata         ResponseMetadata            `xml:"ResponseMetadata"`
+}
+
+// XMLGetTopicAttributesResult is the XML result for GetTopicAttributesResult.
+type XMLGetTopicAttributesResult struct {
+	Attributes XMLAttributes `xml:"Attributes"`
+}
+
+// XMLAttributes is the wrapper for each entry.
+type XMLAttributes struct {
+	Entry []XMLEntry `xml:"entry"`
+}
+
+// XMLEntry contanins key and value pairs to align with AWS requirements.
+type XMLEntry struct {
+	Key   string `xml:"key"`
+	Value string `xml:"value"`
 }
 
 // XMLDeleteTopicResponse is the XML response for DeleteTopic.
