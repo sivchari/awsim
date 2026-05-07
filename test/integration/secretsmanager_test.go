@@ -453,6 +453,71 @@ func TestSecretsManager_VersionStages(t *testing.T) {
 	}
 }
 
+func TestSecretsManager_GetSecretValueByPartialARN(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+	secretName := "test-secret-partial-arn"
+	secretValue := "partial-arn-value"
+
+	// Create secret.
+	_, err := client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
+		Name:         aws.String(secretName),
+		SecretString: aws.String(secretValue),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
+			SecretId:                   aws.String(secretName),
+			ForceDeleteWithoutRecovery: aws.Bool(true),
+		})
+	})
+
+	// Get by partial ARN (without the random suffix that AWS appends).
+	partialARN := "arn:aws:secretsmanager:us-east-1:000000000000:secret:" + secretName
+	getOutput, err := client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(partialARN),
+	})
+	if err != nil {
+		t.Fatalf("GetSecretValue with partial ARN failed: %v", err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "CreatedDate", "ResultMetadata")).Assert(t.Name(), getOutput)
+}
+
+func TestSecretsManager_GetSecretValueByExactARN(t *testing.T) {
+	client := newSecretsManagerClient(t)
+	ctx := t.Context()
+	secretName := "test-secret-exact-arn"
+	secretValue := "exact-arn-value"
+
+	// Create secret and capture the ARN.
+	createOutput, err := client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
+		Name:         aws.String(secretName),
+		SecretString: aws.String(secretValue),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = client.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
+			SecretId:                   aws.String(secretName),
+			ForceDeleteWithoutRecovery: aws.Bool(true),
+		})
+	})
+
+	// Get by exact ARN (with the random suffix).
+	getOutput, err := client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+		SecretId: createOutput.ARN,
+	})
+	if err != nil {
+		t.Fatalf("GetSecretValue with exact ARN failed: %v", err)
+	}
+	golden.New(t, golden.WithIgnoreFields("ARN", "VersionId", "CreatedDate", "ResultMetadata")).Assert(t.Name(), getOutput)
+}
+
 func TestSecretsManager_GetRandomPassword(t *testing.T) {
 	client := newSecretsManagerClient(t)
 	ctx := t.Context()
