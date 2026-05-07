@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.17.1](https://github.com/sivchari/kumo/compare/v0.17.0...v0.17.1) - 2026-05-07
+- fix(dynamodb): apply KeyConditionExpression range key filter and add BETWEEN by @sivchari in https://github.com/sivchari/kumo/pull/521
+
 ## [v0.17.0](https://github.com/sivchari/kumo/compare/v0.16.1...v0.17.0) - 2026-05-07
 - feat(dynamodb): support arithmetic expressions in SET clause by @sivchari in https://github.com/sivchari/kumo/pull/510
 - fix(secretsmanager): support partial ARN lookup and use AWS_DEFAULT_REGION by @sivchari in https://github.com/sivchari/kumo/pull/514
