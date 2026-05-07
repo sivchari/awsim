@@ -7,7 +7,6 @@ import (
 	"os"
 	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -489,35 +488,7 @@ func (m *MemoryStorage) findSecret(secretID string) *Secret {
 		}
 	}
 
-	// Try by partial ARN match.
-	// AWS supports lookup by ARN with a different random suffix.
-	// Match by checking if the stored secret's ARN prefix (before the random suffix) matches.
-	if strings.HasPrefix(secretID, "arn:aws:secretsmanager:") {
-		secretNamePart := extractAfterSecretColon(secretID)
-
-		for _, secret := range m.Secrets {
-			storedNamePart := extractAfterSecretColon(secret.ARN)
-			// Compare the name portion: both should start with the same secret name.
-			// The stored ARN has format NAME-6chars, the input ARN has NAME-Xchars.
-			// Match if they share the same NAME prefix (everything up to the secret name).
-			if storedNamePart != "" && secretNamePart != "" &&
-				strings.HasPrefix(secretNamePart, secret.Name+"-") {
-				return secret
-			}
-		}
-	}
-
 	return nil
-}
-
-// extractAfterSecretColon extracts the portion after ":secret:" in an ARN.
-func extractAfterSecretColon(arn string) string {
-	parts := strings.SplitN(arn, ":secret:", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-
-	return parts[1]
 }
 
 // buildARN builds an ARN for a secret.
