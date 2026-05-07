@@ -162,7 +162,7 @@ func (s *Service) PutItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	returnOld := req.ReturnValues == "ReturnValuesAllOld"
+	returnOld := req.ReturnValues == ReturnValuesAllOld
 
 	cond := ConditionInput{
 		Expression: req.ConditionExpression,
@@ -255,7 +255,7 @@ func (s *Service) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	returnOld := req.ReturnValues == "ReturnValuesAllOld"
+	returnOld := req.ReturnValues == ReturnValuesAllOld
 
 	cond := ConditionInput{
 		Expression: req.ConditionExpression,

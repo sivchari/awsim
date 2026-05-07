@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -78,10 +79,15 @@ type ExecutionData struct {
 
 // NewMemoryStorage creates a new in-memory storage.
 func NewMemoryStorage(opts ...Option) *MemoryStorage {
+	region := os.Getenv("AWS_DEFAULT_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+
 	s := &MemoryStorage{
 		StateMachines: make(map[string]*StateMachine),
 		Executions:    make(map[string]*ExecutionData),
-		region:        "us-east-1",
+		region:        region,
 		accountID:     "000000000000",
 	}
 	for _, o := range opts {

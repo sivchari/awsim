@@ -558,6 +558,12 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 	// Parse key condition to extract partition key value.
 	partitionKeyValue := m.extractPartitionKeyValue(keyCondExpr, partitionKeyName, exprNames, exprValues)
 
+	// Resolve expression attribute names in key condition.
+	resolvedKeyCondExpr := keyCondExpr
+	for placeholder, name := range exprNames {
+		resolvedKeyCondExpr = strings.ReplaceAll(resolvedKeyCondExpr, placeholder, name)
+	}
+
 	// Collect matching items.
 	var results []Item
 
@@ -577,7 +583,20 @@ func (m *MemoryStorage) Query(_ context.Context, tableName, indexName, keyCondEx
 			}
 		}
 
-		// Apply filter expression (simplified).
+		// Evaluate full key condition expression (includes RANGE key conditions like >=, BETWEEN, begins_with).
+		if resolvedKeyCondExpr != "" {
+			keyCond := ConditionInput{
+				Expression: resolvedKeyCondExpr,
+				ExprValues: exprValues,
+			}
+
+			ok, _ := evaluateCondition(item, keyCond)
+			if !ok {
+				continue
+			}
+		}
+
+		// Apply filter expression.
 		if filterExpr != "" && !m.evaluateFilterExpression(item, filterExpr, exprNames, exprValues) {
 			continue
 		}
@@ -1019,7 +1038,7 @@ func parseUpdateClauses(expr string) []updateClause {
 
 // applySetClause handles SET attr = :val, SET attr = if_not_exists(attr, :val).
 func applySetClause(item Item, clause string, exprValues map[string]AttributeValue) Item {
-	assignments := strings.Split(clause, ",")
+	assignments := splitAssignments(clause)
 	for _, assignment := range assignments {
 		parts := strings.SplitN(strings.TrimSpace(assignment), "=", 2)
 		if len(parts) != 2 {
@@ -1029,9 +1048,16 @@ func applySetClause(item Item, clause string, exprValues map[string]AttributeVal
 		attrName := strings.TrimSpace(parts[0])
 		valueExpr := strings.TrimSpace(parts[1])
 
-		// Handle if_not_exists(attr, :val)
-		if strings.HasPrefix(valueExpr, "if_not_exists(") {
+		// Handle if_not_exists(attr, :val) — but only if not combined with arithmetic.
+		if strings.HasPrefix(valueExpr, "if_not_exists(") && !containsArithmeticOp(valueExpr) {
 			applyIfNotExists(item, attrName, valueExpr, exprValues)
+
+			continue
+		}
+
+		// Handle arithmetic: path + :val, path - :val, if_not_exists(...) + :val
+		if val, ok := evaluateSetArithmetic(item, valueExpr, exprValues); ok {
+			item[attrName] = val
 
 			continue
 		}
@@ -1042,6 +1068,139 @@ func applySetClause(item Item, clause string, exprValues map[string]AttributeVal
 	}
 
 	return item
+}
+
+// splitAssignments splits a SET clause into individual assignments, respecting parentheses.
+func splitAssignments(clause string) []string {
+	var result []string
+
+	depth := 0
+	start := 0
+
+	for i, ch := range clause {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				result = append(result, clause[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	result = append(result, clause[start:])
+
+	return result
+}
+
+// containsArithmeticOp checks if expression contains + or - operators outside of parentheses.
+func containsArithmeticOp(expr string) bool {
+	depth := 0
+
+	for i, ch := range expr {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '+', '-':
+			if depth == 0 && i > 0 && expr[i-1] == ' ' {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// evaluateSetArithmetic handles "path + :val" and "path - :val" expressions.
+func evaluateSetArithmetic(item Item, expr string, exprValues map[string]AttributeValue) (AttributeValue, bool) {
+	for _, op := range []string{" + ", " - "} {
+		idx := strings.Index(expr, op)
+		if idx == -1 {
+			continue
+		}
+
+		leftToken := strings.TrimSpace(expr[:idx])
+		rightToken := strings.TrimSpace(expr[idx+len(op):])
+
+		left := resolveSetOperand(item, leftToken, exprValues)
+		right := resolveSetOperand(item, rightToken, exprValues)
+
+		if left.N == nil || right.N == nil {
+			return AttributeValue{}, false
+		}
+
+		leftNum, err1 := strconv.ParseFloat(*left.N, 64)
+		rightNum, err2 := strconv.ParseFloat(*right.N, 64)
+
+		if err1 != nil || err2 != nil {
+			return AttributeValue{}, false
+		}
+
+		var result float64
+		if op == " + " {
+			result = leftNum + rightNum
+		} else {
+			result = leftNum - rightNum
+		}
+
+		resultStr := strconv.FormatFloat(result, 'f', -1, 64)
+
+		return AttributeValue{N: &resultStr}, true
+	}
+
+	return AttributeValue{}, false
+}
+
+// resolveSetOperand resolves a token to an AttributeValue for SET expressions.
+// Supports: :placeholder, path, and if_not_exists(path, :default).
+func resolveSetOperand(item Item, token string, exprValues map[string]AttributeValue) AttributeValue {
+	// Handle if_not_exists(path, :default)
+	if strings.HasPrefix(token, "if_not_exists(") {
+		return resolveIfNotExists(item, token, exprValues)
+	}
+
+	if strings.HasPrefix(token, ":") {
+		if val, ok := exprValues[token]; ok {
+			return val
+		}
+
+		return AttributeValue{}
+	}
+
+	if val, ok := item[token]; ok {
+		return val
+	}
+
+	return AttributeValue{}
+}
+
+// resolveIfNotExists evaluates if_not_exists(path, :default) and returns the resolved value.
+func resolveIfNotExists(item Item, token string, exprValues map[string]AttributeValue) AttributeValue {
+	inner := strings.TrimPrefix(token, "if_not_exists(")
+	inner = strings.TrimSuffix(inner, ")")
+
+	parts := strings.SplitN(inner, ",", 2)
+	if len(parts) != 2 {
+		return AttributeValue{}
+	}
+
+	path := strings.TrimSpace(parts[0])
+	defaultPlaceholder := strings.TrimSpace(parts[1])
+
+	if val, ok := item[path]; ok {
+		return val
+	}
+
+	if val, ok := exprValues[defaultPlaceholder]; ok {
+		return val
+	}
+
+	return AttributeValue{}
 }
 
 // applyIfNotExists handles the if_not_exists(attr, :val) function within a SET clause.
