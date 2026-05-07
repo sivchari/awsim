@@ -351,6 +351,11 @@ func parseComparison(expr string, item Item, values map[string]AttributeValue) (
 
 	rest = strings.TrimSpace(rest)
 
+	// Handle BETWEEN: operand BETWEEN operand AND operand
+	if startsWithKeyword(rest, "BETWEEN") {
+		return parseBetween(leftToken, strings.TrimSpace(rest[7:]), item, values)
+	}
+
 	op, afterOp, err := parseComparisonOp(rest)
 	if err != nil {
 		return false, "", err
@@ -365,6 +370,35 @@ func parseComparison(expr string, item Item, values map[string]AttributeValue) (
 	right := resolveOperand(rightToken, item, values)
 
 	result := compareAttributeValues(left, right, op)
+
+	return result, finalRest, nil
+}
+
+// parseBetween handles "operand BETWEEN lo AND hi".
+func parseBetween(leftToken, rest string, item Item, values map[string]AttributeValue) (bool, string, error) {
+	loToken, rest := nextToken(strings.TrimSpace(rest))
+	if loToken == "" {
+		return false, "", fmt.Errorf("expected low operand in BETWEEN")
+	}
+
+	rest = strings.TrimSpace(rest)
+	if !startsWithKeyword(rest, "AND") {
+		return false, "", fmt.Errorf("expected AND in BETWEEN expression")
+	}
+
+	rest = strings.TrimSpace(rest[3:])
+
+	hiToken, finalRest := nextToken(rest)
+	if hiToken == "" {
+		return false, "", fmt.Errorf("expected high operand in BETWEEN")
+	}
+
+	val := resolveOperand(leftToken, item, values)
+	lo := resolveOperand(loToken, item, values)
+	hi := resolveOperand(hiToken, item, values)
+
+	// val >= lo AND val <= hi
+	result := compareAttributeValues(val, lo, ">=") && compareAttributeValues(val, hi, "<=")
 
 	return result, finalRest, nil
 }
