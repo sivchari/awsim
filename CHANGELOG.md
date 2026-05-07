@@ -5,9 +5,6 @@
 - re-run v0.17.2 release by @sivchari in https://github.com/sivchari/kumo/pull/531
 - ci: add Go module cache to lint and integration test workflows by @sivchari in https://github.com/sivchari/kumo/pull/534
 
-## [v0.17.2](https://github.com/sivchari/kumo/compare/v0.17.1...v0.17.2) - 2026-05-07
-- feat(secretsmanager): support partial ARN lookup per AWS spec by @sivchari in https://github.com/sivchari/kumo/pull/523
-- re-run v0.17.2 release by @sivchari in https://github.com/sivchari/kumo/pull/531
 
 ## [v0.17.1](https://github.com/sivchari/kumo/compare/v0.17.0...v0.17.1) - 2026-05-07
 - fix(dynamodb): apply KeyConditionExpression range key filter and add BETWEEN by @sivchari in https://github.com/sivchari/kumo/pull/521
