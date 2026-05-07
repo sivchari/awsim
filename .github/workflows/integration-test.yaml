@@ -24,6 +24,13 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Build with coverage
         run: |
           mkdir -p bin coverage
