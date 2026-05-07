@@ -135,6 +135,12 @@ func (s *Service) handleBucketPost(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 	s.applyCORSHeaders(w, r, r.PathValue("bucket"))
 
+	if r.URL.Query().Has("tagging") {
+		s.PutObjectTagging(w, r)
+
+		return
+	}
+
 	if r.URL.Query().Get("uploadId") != "" && r.URL.Query().Get("partNumber") != "" {
 		s.UploadPart(w, r)
 
@@ -153,6 +159,12 @@ func (s *Service) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 // handleObjectGet dispatches GET /{bucket}/{key} requests based on query parameters.
 func (s *Service) handleObjectGet(w http.ResponseWriter, r *http.Request) {
 	s.applyCORSHeaders(w, r, r.PathValue("bucket"))
+
+	if r.URL.Query().Has("tagging") {
+		s.GetObjectTagging(w, r)
+
+		return
+	}
 
 	if r.URL.Query().Get("uploadId") != "" {
 		s.ListParts(w, r)
@@ -1403,4 +1415,74 @@ func handleMultipartError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+}
+
+// PutObjectTagging handles PUT /{bucket}/{key}?tagging.
+func (s *Service) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeS3Error(w, r, "InternalError", "Failed to read request body", http.StatusInternalServerError)
+
+		return
+	}
+
+	var tagging Tagging
+	if err := xml.Unmarshal(body, &tagging); err != nil {
+		writeS3Error(w, r, "MalformedXML", "Invalid XML in request body", http.StatusBadRequest)
+
+		return
+	}
+
+	tags := make(map[string]string, len(tagging.TagSet.Tags))
+	for _, tag := range tagging.TagSet.Tags {
+		tags[tag.Key] = tag.Value
+	}
+
+	if err := s.storage.PutObjectTagging(r.Context(), bucket, key, tags); err != nil {
+		var bErr *BucketError
+		if errors.As(err, &bErr) {
+			writeS3Error(w, r, bErr.Code, bErr.Message, http.StatusNotFound)
+
+			return
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetObjectTagging handles GET /{bucket}/{key}?tagging.
+func (s *Service) GetObjectTagging(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	key := r.PathValue("key")
+
+	tags, err := s.storage.GetObjectTagging(r.Context(), bucket, key)
+	if err != nil {
+		var bErr *BucketError
+		if errors.As(err, &bErr) {
+			writeS3Error(w, r, bErr.Code, bErr.Message, http.StatusNotFound)
+
+			return
+		}
+
+		writeS3Error(w, r, "InternalError", "Internal server error", http.StatusInternalServerError)
+
+		return
+	}
+
+	tagging := Tagging{TagSet: TagSet{Tags: make([]Tag, 0, len(tags))}}
+	for k, v := range tags {
+		tagging.TagSet.Tags = append(tagging.TagSet.Tags, Tag{Key: k, Value: v})
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+
+	resp, _ := xml.Marshal(tagging)
+	_, _ = w.Write(resp)
 }
