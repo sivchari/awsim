@@ -42,44 +42,22 @@ func (s *Service) Name() string {
 }
 
 // RegisterRoutes registers the Lambda routes.
-// Note: Routes use /lambda prefix to avoid conflicts with S3 wildcard routes.
+// Routes are registered under both /lambda/... (for SDK BaseEndpoint) and /2015-03-31/... (for CLI).
 func (s *Service) RegisterRoutes(r service.Router) {
-	// CreateFunction: POST /lambda/2015-03-31/functions
-	r.Handle("POST", "/lambda/2015-03-31/functions", s.CreateFunction)
-
-	// ListFunctions: GET /lambda/2015-03-31/functions
-	r.Handle("GET", "/lambda/2015-03-31/functions", s.ListFunctions)
-
-	// GetFunction: GET /lambda/2015-03-31/functions/{FunctionName}
-	r.Handle("GET", "/lambda/2015-03-31/functions/{functionName}", s.GetFunction)
-
-	// DeleteFunction: DELETE /lambda/2015-03-31/functions/{FunctionName}
-	r.Handle("DELETE", "/lambda/2015-03-31/functions/{functionName}", s.DeleteFunction)
-
-	// UpdateFunctionCode: PUT /lambda/2015-03-31/functions/{FunctionName}/code
-	r.Handle("PUT", "/lambda/2015-03-31/functions/{functionName}/code", s.UpdateFunctionCode)
-
-	// UpdateFunctionConfiguration: PUT /lambda/2015-03-31/functions/{FunctionName}/configuration
-	r.Handle("PUT", "/lambda/2015-03-31/functions/{functionName}/configuration", s.UpdateFunctionConfiguration)
-
-	// Invoke: POST /lambda/2015-03-31/functions/{FunctionName}/invocations
-	r.Handle("POST", "/lambda/2015-03-31/functions/{functionName}/invocations", s.Invoke)
-
-	// EventSourceMapping operations
-	// CreateEventSourceMapping: POST /lambda/2015-03-31/event-source-mappings
-	r.Handle("POST", "/lambda/2015-03-31/event-source-mappings", s.CreateEventSourceMapping)
-
-	// ListEventSourceMappings: GET /lambda/2015-03-31/event-source-mappings
-	r.Handle("GET", "/lambda/2015-03-31/event-source-mappings", s.ListEventSourceMappings)
-
-	// GetEventSourceMapping: GET /lambda/2015-03-31/event-source-mappings/{UUID}
-	r.Handle("GET", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.GetEventSourceMapping)
-
-	// UpdateEventSourceMapping: PUT /lambda/2015-03-31/event-source-mappings/{UUID}
-	r.Handle("PUT", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.UpdateEventSourceMapping)
-
-	// DeleteEventSourceMapping: DELETE /lambda/2015-03-31/event-source-mappings/{UUID}
-	r.Handle("DELETE", "/lambda/2015-03-31/event-source-mappings/{uuid}", s.DeleteEventSourceMapping)
+	for _, prefix := range []string{"/lambda", ""} {
+		r.Handle("POST", prefix+"/2015-03-31/functions", s.CreateFunction)
+		r.Handle("GET", prefix+"/2015-03-31/functions", s.ListFunctions)
+		r.Handle("GET", prefix+"/2015-03-31/functions/{functionName}", s.GetFunction)
+		r.Handle("DELETE", prefix+"/2015-03-31/functions/{functionName}", s.DeleteFunction)
+		r.Handle("PUT", prefix+"/2015-03-31/functions/{functionName}/code", s.UpdateFunctionCode)
+		r.Handle("PUT", prefix+"/2015-03-31/functions/{functionName}/configuration", s.UpdateFunctionConfiguration)
+		r.Handle("POST", prefix+"/2015-03-31/functions/{functionName}/invocations", s.Invoke)
+		r.Handle("POST", prefix+"/2015-03-31/event-source-mappings", s.CreateEventSourceMapping)
+		r.Handle("GET", prefix+"/2015-03-31/event-source-mappings", s.ListEventSourceMappings)
+		r.Handle("GET", prefix+"/2015-03-31/event-source-mappings/{uuid}", s.GetEventSourceMapping)
+		r.Handle("PUT", prefix+"/2015-03-31/event-source-mappings/{uuid}", s.UpdateEventSourceMapping)
+		r.Handle("DELETE", prefix+"/2015-03-31/event-source-mappings/{uuid}", s.DeleteEventSourceMapping)
+	}
 }
 
 // Close saves the storage state if persistence is enabled.
